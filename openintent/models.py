@@ -389,7 +389,7 @@ class IntentPortfolio:
     aggregate_status: Optional[AggregateStatus] = None
 
     def to_dict(self) -> dict[str, Any]:
-        result = {
+        result: dict[str, Any] = {
             "id": self.id,
             "name": self.name,
             "description": self.description,

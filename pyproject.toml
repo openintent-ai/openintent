@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openintent"
-version = "0.1.2"
+version = "0.1.3"
 description = "Python SDK for the OpenIntent Coordination Protocol"
 readme = "README.md"
 license = {text = "MIT"}

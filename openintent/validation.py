@@ -5,7 +5,7 @@ Provides validation functions for client-side parameter checking before API call
 """
 
 import re
-from typing import Any
+from typing import Any, Optional
 
 from .exceptions import ValidationError as SDKValidationError
 
@@ -13,7 +13,9 @@ from .exceptions import ValidationError as SDKValidationError
 class InputValidationError(SDKValidationError):
     """Raised when input validation fails before making an API request."""
 
-    def __init__(self, message: str, field: str = None, value: Any = None):
+    def __init__(
+        self, message: str, field: Optional[str] = None, value: Any = None
+    ) -> None:
         super().__init__(message, status_code=None, response=None)
         self.field = field
         self.value = value
@@ -33,7 +35,10 @@ def validate_required(value: Any, field_name: str) -> None:
 
 
 def validate_string_length(
-    value: str, field_name: str, min_length: int = None, max_length: int = None
+    value: str,
+    field_name: str,
+    min_length: Optional[int] = None,
+    max_length: Optional[int] = None,
 ) -> None:
     """Validate string length constraints."""
     if value is None:
@@ -159,7 +164,9 @@ def validate_dict(value: Any, field_name: str) -> None:
         )
 
 
-def validate_list(value: Any, field_name: str, item_type: type = None) -> None:
+def validate_list(
+    value: Any, field_name: str, item_type: Optional[type] = None
+) -> None:
     """Validate that a value is a list with optional item type checking."""
     if value is None:
         return
@@ -231,9 +238,9 @@ def validate_agent_id(value: str, field_name: str = "agent_id") -> None:
 
 def validate_intent_create(
     title: str,
-    creator: str = None,
-    description: str = None,
-    constraints: dict = None,
+    creator: Optional[str] = None,
+    description: Optional[str] = None,
+    constraints: Optional[dict[str, Any]] = None,
 ) -> None:
     """Validate parameters for intent creation."""
     validate_required(title, "title")
@@ -277,7 +284,7 @@ def validate_cost_record(
     agent_id: str,
     cost_type: str,
     amount: float,
-    currency: str = None,
+    currency: Optional[str] = None,
 ) -> None:
     """Validate parameters for cost recording."""
     validate_required(intent_id, "intent_id")
@@ -295,7 +302,7 @@ def validate_subscription(
     intent_id: str,
     subscriber_id: str,
     callback_url: str,
-    event_types: list[str] = None,
+    event_types: Optional[list[str]] = None,
 ) -> None:
     """Validate parameters for subscription creation."""
     validate_required(intent_id, "intent_id")

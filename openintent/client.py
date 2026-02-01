@@ -6,7 +6,7 @@ Provides both synchronous and asynchronous clients with full protocol support.
 
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Generator, Optional
 
 import httpx
 
@@ -146,8 +146,8 @@ class OpenIntentClient:
         self,
         title: str,
         description: str,
-        constraints: list[str] = None,
-        initial_state: dict[str, Any] = None,
+        constraints: Optional[list[str]] = None,
+        initial_state: Optional[dict[str, Any]] = None,
     ) -> Intent:
         """
         Create a new intent.
@@ -187,7 +187,7 @@ class OpenIntentClient:
 
     def list_intents(
         self,
-        status: IntentStatus = None,
+        status: Optional[IntentStatus] = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Intent]:
@@ -202,7 +202,7 @@ class OpenIntentClient:
         Returns:
             List of Intent objects.
         """
-        params = {"limit": limit, "offset": offset}
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
         if status:
             params["status"] = status.value
 
@@ -271,7 +271,7 @@ class OpenIntentClient:
         self,
         intent_id: str,
         event_type: EventType,
-        payload: dict[str, Any] = None,
+        payload: Optional[dict[str, Any]] = None,
     ) -> IntentEvent:
         """
         Append an event to the intent's audit log.
@@ -297,8 +297,8 @@ class OpenIntentClient:
     def get_events(
         self,
         intent_id: str,
-        event_type: EventType = None,
-        since: datetime = None,
+        event_type: Optional[EventType] = None,
+        since: Optional[datetime] = None,
         limit: int = 100,
     ) -> list[IntentEvent]:
         """
@@ -313,7 +313,7 @@ class OpenIntentClient:
         Returns:
             List of IntentEvent objects.
         """
-        params = {"limit": limit}
+        params: dict[str, Any] = {"limit": limit}
         if event_type:
             params["event_type"] = event_type.value
         if since:
@@ -408,7 +408,9 @@ class OpenIntentClient:
         return IntentLease.from_dict(data)
 
     @contextmanager
-    def lease(self, intent_id: str, scope: str, duration_seconds: int = 300):
+    def lease(
+        self, intent_id: str, scope: str, duration_seconds: int = 300
+    ) -> Generator[IntentLease, None, None]:
         """
         Context manager for lease acquisition and release.
 
@@ -420,12 +422,12 @@ class OpenIntentClient:
             # Lease automatically released
             ```
         """
-        lease = self.acquire_lease(intent_id, scope, duration_seconds)
+        acquired_lease = self.acquire_lease(intent_id, scope, duration_seconds)
         try:
-            yield lease
+            yield acquired_lease
         finally:
             try:
-                self.release_lease(intent_id, lease.id)
+                self.release_lease(intent_id, acquired_lease.id)
             except Exception:
                 pass  # Lease may have expired
 
@@ -435,7 +437,7 @@ class OpenIntentClient:
         self,
         intent_id: str,
         reason: str,
-        context: dict[str, Any] = None,
+        context: Optional[dict[str, Any]] = None,
     ) -> ArbitrationRequest:
         """
         Request human arbitration for a conflict or decision.
@@ -504,7 +506,7 @@ class OpenIntentClient:
 
     # ==================== Agent Management ====================
 
-    def assign_agent(self, intent_id: str, agent_id: str = None) -> dict:
+    def assign_agent(self, intent_id: str, agent_id: Optional[str] = None) -> dict:
         """
         Assign an agent to work on an intent.
 
@@ -521,7 +523,7 @@ class OpenIntentClient:
         )
         return self._handle_response(response)
 
-    def unassign_agent(self, intent_id: str, agent_id: str = None) -> None:
+    def unassign_agent(self, intent_id: str, agent_id: Optional[str] = None) -> None:
         """
         Remove an agent from an intent.
 
@@ -536,9 +538,9 @@ class OpenIntentClient:
     def create_portfolio(
         self,
         name: str,
-        description: str = None,
-        governance_policy: dict = None,
-        metadata: dict = None,
+        description: Optional[str] = None,
+        governance_policy: Optional[dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> IntentPortfolio:
         """
         Create a new intent portfolio for multi-intent coordination.
@@ -579,7 +581,7 @@ class OpenIntentClient:
         data = self._handle_response(response)
         return IntentPortfolio.from_dict(data)
 
-    def list_portfolios(self, created_by: str = None) -> list[IntentPortfolio]:
+    def list_portfolios(self, created_by: Optional[str] = None) -> list[IntentPortfolio]:
         """
         List portfolios, optionally filtered by creator.
 
@@ -700,7 +702,7 @@ class OpenIntentClient:
         mime_type: str,
         size: int,
         storage_url: str,
-        metadata: dict = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> IntentAttachment:
         """
         Add a file attachment to an intent.
@@ -764,8 +766,8 @@ class OpenIntentClient:
         cost_type: str,
         amount: int,
         unit: str,
-        provider: str = None,
-        metadata: dict = None,
+        provider: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> IntentCost:
         """
         Record a cost/resource usage for an intent.
@@ -819,7 +821,7 @@ class OpenIntentClient:
         max_retries: int = 3,
         base_delay_ms: int = 1000,
         max_delay_ms: int = 60000,
-        fallback_agent_id: str = None,
+        fallback_agent_id: Optional[str] = None,
         failure_threshold: int = 3,
     ) -> RetryPolicy:
         """
@@ -871,10 +873,10 @@ class OpenIntentClient:
         self,
         intent_id: str,
         attempt_number: int,
-        error_code: str = None,
-        error_message: str = None,
-        retry_scheduled_at: datetime = None,
-        metadata: dict = None,
+        error_code: Optional[str] = None,
+        error_message: Optional[str] = None,
+        retry_scheduled_at: Optional[datetime] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> IntentFailure:
         """
         Record a failure that occurred while processing an intent.
@@ -923,11 +925,11 @@ class OpenIntentClient:
     # RFC-0006: Subscriptions
     def subscribe(
         self,
-        intent_id: str = None,
-        portfolio_id: str = None,
-        event_types: list[str] = None,
-        webhook_url: str = None,
-        expires_at: datetime = None,
+        intent_id: Optional[str] = None,
+        portfolio_id: Optional[str] = None,
+        event_types: Optional[list[str]] = None,
+        webhook_url: Optional[str] = None,
+        expires_at: Optional[datetime] = None,
     ) -> IntentSubscription:
         """
         Subscribe to real-time notifications for an intent or portfolio.
@@ -957,7 +959,7 @@ class OpenIntentClient:
         return IntentSubscription.from_dict(data)
 
     def get_subscriptions(
-        self, intent_id: str = None, portfolio_id: str = None
+        self, intent_id: Optional[str] = None, portfolio_id: Optional[str] = None
     ) -> list[IntentSubscription]:
         """
         Get subscriptions, optionally filtered by intent or portfolio.
@@ -993,10 +995,10 @@ class OpenIntentClient:
         """Close the HTTP client connection."""
         self._client.close()
 
-    def __enter__(self):
+    def __enter__(self) -> "OpenIntentClient":
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: Any) -> None:
         self.close()
 
 
@@ -1087,8 +1089,8 @@ class AsyncOpenIntentClient:
         self,
         title: str,
         description: str,
-        constraints: list[str] = None,
-        initial_state: dict[str, Any] = None,
+        constraints: Optional[list[str]] = None,
+        initial_state: Optional[dict[str, Any]] = None,
     ) -> Intent:
         """Create a new intent."""
         payload = {
@@ -1109,12 +1111,12 @@ class AsyncOpenIntentClient:
 
     async def list_intents(
         self,
-        status: IntentStatus = None,
+        status: Optional[IntentStatus] = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Intent]:
         """List intents with optional filtering."""
-        params = {"limit": limit, "offset": offset}
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
         if status:
             params["status"] = status.value
 
@@ -1156,7 +1158,7 @@ class AsyncOpenIntentClient:
         self,
         intent_id: str,
         event_type: EventType,
-        payload: dict[str, Any] = None,
+        payload: Optional[dict[str, Any]] = None,
     ) -> IntentEvent:
         """Append an event to the intent's audit log."""
         response = await self._client.post(
@@ -1172,12 +1174,12 @@ class AsyncOpenIntentClient:
     async def get_events(
         self,
         intent_id: str,
-        event_type: EventType = None,
-        since: datetime = None,
+        event_type: Optional[EventType] = None,
+        since: Optional[datetime] = None,
         limit: int = 100,
     ) -> list[IntentEvent]:
         """Retrieve events from the intent's audit log."""
-        params = {"limit": limit}
+        params: dict[str, Any] = {"limit": limit}
         if event_type:
             params["event_type"] = event_type.value
         if since:
@@ -1224,7 +1226,7 @@ class AsyncOpenIntentClient:
         self,
         intent_id: str,
         reason: str,
-        context: dict[str, Any] = None,
+        context: Optional[dict[str, Any]] = None,
     ) -> ArbitrationRequest:
         """Request human arbitration for a conflict or decision."""
         response = await self._client.post(
@@ -1262,7 +1264,7 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return [Decision.from_dict(item) for item in data.get("decisions", data)]
 
-    async def assign_agent(self, intent_id: str, agent_id: str = None) -> dict:
+    async def assign_agent(self, intent_id: str, agent_id: Optional[str] = None) -> dict:
         """Assign an agent to work on an intent."""
         response = await self._client.post(
             f"/api/v1/intents/{intent_id}/agents",
@@ -1270,7 +1272,7 @@ class AsyncOpenIntentClient:
         )
         return self._handle_response(response)
 
-    async def unassign_agent(self, intent_id: str, agent_id: str = None) -> None:
+    async def unassign_agent(self, intent_id: str, agent_id: Optional[str] = None) -> None:
         """Remove an agent from an intent."""
         aid = agent_id or self.agent_id
         response = await self._client.delete(
@@ -1281,9 +1283,9 @@ class AsyncOpenIntentClient:
     async def create_portfolio(
         self,
         name: str,
-        description: str = None,
-        governance_policy: dict = None,
-        metadata: dict = None,
+        description: Optional[str] = None,
+        governance_policy: Optional[dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> IntentPortfolio:
         """Create a new intent portfolio for multi-intent coordination."""
         response = await self._client.post(
@@ -1305,7 +1307,7 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return IntentPortfolio.from_dict(data)
 
-    async def list_portfolios(self, created_by: str = None) -> list[IntentPortfolio]:
+    async def list_portfolios(self, created_by: Optional[str] = None) -> list[IntentPortfolio]:
         """List portfolios, optionally filtered by creator."""
         params = {}
         if created_by:
@@ -1415,8 +1417,8 @@ class AsyncOpenIntentClient:
         cost_type: str,
         amount: float,
         unit: str,
-        provider: str = None,
-        metadata: dict[str, Any] = None,
+        provider: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> IntentCost:
         """Record a cost/resource usage for an intent."""
         response = await self._client.post(
@@ -1449,7 +1451,7 @@ class AsyncOpenIntentClient:
         max_retries: int = 3,
         base_delay_ms: int = 1000,
         max_delay_ms: int = 30000,
-        fallback_agent_id: str = None,
+        fallback_agent_id: Optional[str] = None,
     ) -> RetryPolicy:
         """Set retry policy for an intent."""
         response = await self._client.put(
@@ -1479,7 +1481,7 @@ class AsyncOpenIntentClient:
         error_type: str,
         error_message: str,
         recoverable: bool = True,
-        metadata: dict[str, Any] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> IntentFailure:
         """Record a failure for an intent."""
         response = await self._client.post(
@@ -1505,9 +1507,9 @@ class AsyncOpenIntentClient:
     async def subscribe(
         self,
         webhook_url: str,
-        event_types: list[str] = None,
-        intent_id: str = None,
-        portfolio_id: str = None,
+        event_types: Optional[list[str]] = None,
+        intent_id: Optional[str] = None,
+        portfolio_id: Optional[str] = None,
         expires_in_hours: int = 24,
     ) -> IntentSubscription:
         """Subscribe to events for an intent or portfolio."""
@@ -1529,8 +1531,8 @@ class AsyncOpenIntentClient:
 
     async def get_subscriptions(
         self,
-        intent_id: str = None,
-        portfolio_id: str = None,
+        intent_id: Optional[str] = None,
+        portfolio_id: Optional[str] = None,
     ) -> list[IntentSubscription]:
         """Get subscriptions, optionally filtered by intent or portfolio."""
         params = {}
@@ -1569,8 +1571,8 @@ class AsyncOpenIntentClient:
         """Close the HTTP client connection."""
         await self._client.aclose()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "AsyncOpenIntentClient":
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args: Any) -> None:
         await self.close()
