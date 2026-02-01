@@ -40,7 +40,10 @@ class LeaseConflictError(OpenIntentError):
     """Raised when attempting to acquire a lease that's already held."""
 
     def __init__(
-        self, message: str, existing_lease: Optional[dict[str, Any]] = None, **kwargs: Any
+        self,
+        message: str,
+        existing_lease: Optional[dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> None:
         super().__init__(message, **kwargs)
         self.existing_lease = existing_lease

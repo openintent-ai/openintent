@@ -581,7 +581,9 @@ class OpenIntentClient:
         data = self._handle_response(response)
         return IntentPortfolio.from_dict(data)
 
-    def list_portfolios(self, created_by: Optional[str] = None) -> list[IntentPortfolio]:
+    def list_portfolios(
+        self, created_by: Optional[str] = None
+    ) -> list[IntentPortfolio]:
         """
         List portfolios, optionally filtered by creator.
 
@@ -1264,7 +1266,9 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return [Decision.from_dict(item) for item in data.get("decisions", data)]
 
-    async def assign_agent(self, intent_id: str, agent_id: Optional[str] = None) -> dict:
+    async def assign_agent(
+        self, intent_id: str, agent_id: Optional[str] = None
+    ) -> dict:
         """Assign an agent to work on an intent."""
         response = await self._client.post(
             f"/api/v1/intents/{intent_id}/agents",
@@ -1272,7 +1276,9 @@ class AsyncOpenIntentClient:
         )
         return self._handle_response(response)
 
-    async def unassign_agent(self, intent_id: str, agent_id: Optional[str] = None) -> None:
+    async def unassign_agent(
+        self, intent_id: str, agent_id: Optional[str] = None
+    ) -> None:
         """Remove an agent from an intent."""
         aid = agent_id or self.agent_id
         response = await self._client.delete(
@@ -1307,7 +1313,9 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return IntentPortfolio.from_dict(data)
 
-    async def list_portfolios(self, created_by: Optional[str] = None) -> list[IntentPortfolio]:
+    async def list_portfolios(
+        self, created_by: Optional[str] = None
+    ) -> list[IntentPortfolio]:
         """List portfolios, optionally filtered by creator."""
         params = {}
         if created_by:
