@@ -4,48 +4,46 @@ OpenIntent SDK - HTTP client for the OpenIntent Coordination Protocol.
 Provides both synchronous and asynchronous clients with full protocol support.
 """
 
-import json
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Any, Optional
-from contextlib import contextmanager
 
 import httpx
 
+from .exceptions import (
+    ConflictError,
+    LeaseConflictError,
+    NotFoundError,
+    OpenIntentError,
+    ValidationError,
+)
 from .models import (
-    Intent,
-    IntentState,
-    IntentStatus,
-    IntentEvent,
-    EventType,
-    IntentLease,
-    ArbitrationRequest,
-    Decision,
-    IntentPortfolio,
-    PortfolioStatus,
-    PortfolioMembership,
-    MembershipRole,
     AggregateStatus,
+    ArbitrationRequest,
+    CostSummary,
+    Decision,
+    EventType,
+    Intent,
     IntentAttachment,
     IntentCost,
-    CostSummary,
+    IntentEvent,
+    IntentFailure,
+    IntentLease,
+    IntentPortfolio,
+    IntentStatus,
+    IntentSubscription,
+    MembershipRole,
+    PortfolioMembership,
+    PortfolioStatus,
     RetryPolicy,
     RetryStrategy,
-    IntentFailure,
-    IntentSubscription,
-)
-from .exceptions import (
-    OpenIntentError,
-    ConflictError,
-    NotFoundError,
-    LeaseConflictError,
-    ValidationError,
 )
 
 
 class OpenIntentClient:
     """
     Synchronous client for the OpenIntent Coordination Protocol.
-    
+
     Example:
         ```python
         client = OpenIntentClient(
@@ -53,23 +51,23 @@ class OpenIntentClient:
             api_key="your-api-key",
             agent_id="my-agent"
         )
-        
+
         # Create an intent
         intent = client.create_intent(
             title="Research market trends",
             description="Analyze Q4 market data and identify patterns"
         )
-        
+
         # Update state with optimistic concurrency
         client.update_state(intent.id, intent.version, {"progress": 0.5})
-        
+
         # Acquire a lease for exclusive scope access
         with client.lease(intent.id, "analysis") as lease:
             # Perform work within the leased scope
             client.log_event(intent.id, EventType.COMMENT, {"note": "Starting analysis"})
         ```
     """
-    
+
     def __init__(
         self,
         base_url: str,
@@ -89,7 +87,7 @@ class OpenIntentClient:
             },
             timeout=timeout,
         )
-    
+
     def _handle_response(self, response: httpx.Response) -> dict:
         """Handle HTTP response and raise appropriate exceptions."""
         if response.status_code == 404:
@@ -127,23 +125,23 @@ class OpenIntentClient:
                 status_code=response.status_code,
                 response=response.json() if response.content else None,
             )
-        
+
         return response.json() if response.content else {}
-    
+
     # ==================== Discovery ====================
-    
+
     def discover(self) -> dict:
         """
         Discover protocol capabilities via .well-known endpoint.
-        
+
         Returns:
             Protocol metadata including version, endpoints, and capabilities.
         """
         response = self._client.get("/.well-known/openintent.json")
         return self._handle_response(response)
-    
+
     # ==================== Intent CRUD ====================
-    
+
     def create_intent(
         self,
         title: str,
@@ -153,13 +151,13 @@ class OpenIntentClient:
     ) -> Intent:
         """
         Create a new intent.
-        
+
         Args:
             title: Human-readable title for the intent.
             description: Detailed description of the goal.
             constraints: Optional list of constraints.
             initial_state: Optional initial state data.
-        
+
         Returns:
             The created Intent object.
         """
@@ -172,21 +170,21 @@ class OpenIntentClient:
         response = self._client.post("/api/v1/intents", json=payload)
         data = self._handle_response(response)
         return Intent.from_dict(data)
-    
+
     def get_intent(self, intent_id: str) -> Intent:
         """
         Retrieve an intent by ID.
-        
+
         Args:
             intent_id: The unique identifier of the intent.
-        
+
         Returns:
             The Intent object.
         """
         response = self._client.get(f"/api/v1/intents/{intent_id}")
         data = self._handle_response(response)
         return Intent.from_dict(data)
-    
+
     def list_intents(
         self,
         status: IntentStatus = None,
@@ -195,25 +193,25 @@ class OpenIntentClient:
     ) -> list[Intent]:
         """
         List intents with optional filtering.
-        
+
         Args:
             status: Filter by intent status.
             limit: Maximum number of results.
             offset: Pagination offset.
-        
+
         Returns:
             List of Intent objects.
         """
         params = {"limit": limit, "offset": offset}
         if status:
             params["status"] = status.value
-        
+
         response = self._client.get("/api/v1/intents", params=params)
         data = self._handle_response(response)
         return [Intent.from_dict(item) for item in data.get("intents", data)]
-    
+
     # ==================== State Management ====================
-    
+
     def update_state(
         self,
         intent_id: str,
@@ -222,15 +220,15 @@ class OpenIntentClient:
     ) -> Intent:
         """
         Update intent state with optimistic concurrency control.
-        
+
         Args:
             intent_id: The intent to update.
             version: Expected current version (for conflict detection).
             state_patch: Partial state update to merge.
-        
+
         Returns:
             The updated Intent object.
-        
+
         Raises:
             ConflictError: If version doesn't match (another update occurred).
         """
@@ -241,7 +239,7 @@ class OpenIntentClient:
         )
         data = self._handle_response(response)
         return Intent.from_dict(data)
-    
+
     def set_status(
         self,
         intent_id: str,
@@ -250,12 +248,12 @@ class OpenIntentClient:
     ) -> Intent:
         """
         Change intent status.
-        
+
         Args:
             intent_id: The intent to update.
             version: Expected current version.
             status: New status to set.
-        
+
         Returns:
             The updated Intent object.
         """
@@ -266,9 +264,9 @@ class OpenIntentClient:
         )
         data = self._handle_response(response)
         return Intent.from_dict(data)
-    
+
     # ==================== Event Log ====================
-    
+
     def log_event(
         self,
         intent_id: str,
@@ -277,12 +275,12 @@ class OpenIntentClient:
     ) -> IntentEvent:
         """
         Append an event to the intent's audit log.
-        
+
         Args:
             intent_id: The intent to log against.
             event_type: Type of event.
             payload: Event-specific data.
-        
+
         Returns:
             The created IntentEvent object.
         """
@@ -295,7 +293,7 @@ class OpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentEvent.from_dict(data)
-    
+
     def get_events(
         self,
         intent_id: str,
@@ -305,13 +303,13 @@ class OpenIntentClient:
     ) -> list[IntentEvent]:
         """
         Retrieve events from the intent's audit log.
-        
+
         Args:
             intent_id: The intent to query.
             event_type: Optional filter by event type.
             since: Optional filter for events after this time.
             limit: Maximum number of events.
-        
+
         Returns:
             List of IntentEvent objects.
         """
@@ -320,16 +318,16 @@ class OpenIntentClient:
             params["event_type"] = event_type.value
         if since:
             params["since"] = since.isoformat()
-        
+
         response = self._client.get(
             f"/api/v1/intents/{intent_id}/events",
             params=params,
         )
         data = self._handle_response(response)
         return [IntentEvent.from_dict(item) for item in data.get("events", data)]
-    
+
     # ==================== Lease Management ====================
-    
+
     def acquire_lease(
         self,
         intent_id: str,
@@ -338,15 +336,15 @@ class OpenIntentClient:
     ) -> IntentLease:
         """
         Acquire a lease for exclusive access to a scope.
-        
+
         Args:
             intent_id: The intent to lease within.
             scope: The scope to acquire (e.g., "research", "synthesis").
             duration_seconds: How long the lease should last.
-        
+
         Returns:
             The acquired IntentLease object.
-        
+
         Raises:
             LeaseConflictError: If scope is already leased by another agent.
         """
@@ -359,34 +357,32 @@ class OpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentLease.from_dict(data)
-    
+
     def release_lease(self, intent_id: str, lease_id: str) -> None:
         """
         Release a previously acquired lease.
-        
+
         Args:
             intent_id: The intent containing the lease.
             lease_id: The lease to release.
         """
-        response = self._client.delete(
-            f"/api/v1/intents/{intent_id}/leases/{lease_id}"
-        )
+        response = self._client.delete(f"/api/v1/intents/{intent_id}/leases/{lease_id}")
         self._handle_response(response)
-    
+
     def get_leases(self, intent_id: str) -> list[IntentLease]:
         """
         List all active leases for an intent.
-        
+
         Args:
             intent_id: The intent to query.
-        
+
         Returns:
             List of IntentLease objects.
         """
         response = self._client.get(f"/api/v1/intents/{intent_id}/leases")
         data = self._handle_response(response)
         return [IntentLease.from_dict(item) for item in data.get("leases", data)]
-    
+
     def renew_lease(
         self,
         intent_id: str,
@@ -395,12 +391,12 @@ class OpenIntentClient:
     ) -> IntentLease:
         """
         Renew an existing lease to extend its expiration.
-        
+
         Args:
             intent_id: The intent the lease belongs to.
             lease_id: The lease to renew.
             duration_seconds: New duration from now.
-        
+
         Returns:
             The renewed IntentLease object.
         """
@@ -410,12 +406,12 @@ class OpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentLease.from_dict(data)
-    
+
     @contextmanager
     def lease(self, intent_id: str, scope: str, duration_seconds: int = 300):
         """
         Context manager for lease acquisition and release.
-        
+
         Example:
             ```python
             with client.lease(intent_id, "analysis") as lease:
@@ -432,9 +428,9 @@ class OpenIntentClient:
                 self.release_lease(intent_id, lease.id)
             except Exception:
                 pass  # Lease may have expired
-    
+
     # ==================== Governance ====================
-    
+
     def request_arbitration(
         self,
         intent_id: str,
@@ -443,12 +439,12 @@ class OpenIntentClient:
     ) -> ArbitrationRequest:
         """
         Request human arbitration for a conflict or decision.
-        
+
         Args:
             intent_id: The intent requiring arbitration.
             reason: Explanation of why arbitration is needed.
             context: Additional context for the arbitrator.
-        
+
         Returns:
             The created ArbitrationRequest object.
         """
@@ -461,7 +457,7 @@ class OpenIntentClient:
         )
         data = self._handle_response(response)
         return ArbitrationRequest.from_dict(data)
-    
+
     def record_decision(
         self,
         intent_id: str,
@@ -471,13 +467,13 @@ class OpenIntentClient:
     ) -> Decision:
         """
         Record a governance decision.
-        
+
         Args:
             intent_id: The intent the decision applies to.
             decision_type: Type of decision (e.g., "arbitration", "escalation").
             outcome: The decision outcome.
             reasoning: Explanation of the decision.
-        
+
         Returns:
             The created Decision object.
         """
@@ -491,31 +487,31 @@ class OpenIntentClient:
         )
         data = self._handle_response(response)
         return Decision.from_dict(data)
-    
+
     def get_decisions(self, intent_id: str) -> list[Decision]:
         """
         Retrieve all decisions for an intent.
-        
+
         Args:
             intent_id: The intent to query.
-        
+
         Returns:
             List of Decision objects.
         """
         response = self._client.get(f"/api/v1/intents/{intent_id}/decisions")
         data = self._handle_response(response)
         return [Decision.from_dict(item) for item in data.get("decisions", data)]
-    
+
     # ==================== Agent Management ====================
-    
+
     def assign_agent(self, intent_id: str, agent_id: str = None) -> dict:
         """
         Assign an agent to work on an intent.
-        
+
         Args:
             intent_id: The intent to assign to.
             agent_id: Agent to assign (defaults to current agent).
-        
+
         Returns:
             Assignment confirmation.
         """
@@ -524,21 +520,19 @@ class OpenIntentClient:
             json={"agent_id": agent_id or self.agent_id},
         )
         return self._handle_response(response)
-    
+
     def unassign_agent(self, intent_id: str, agent_id: str = None) -> None:
         """
         Remove an agent from an intent.
-        
+
         Args:
             intent_id: The intent to unassign from.
             agent_id: Agent to remove (defaults to current agent).
         """
         aid = agent_id or self.agent_id
-        response = self._client.delete(
-            f"/api/v1/intents/{intent_id}/agents/{aid}"
-        )
+        response = self._client.delete(f"/api/v1/intents/{intent_id}/agents/{aid}")
         self._handle_response(response)
-    
+
     def create_portfolio(
         self,
         name: str,
@@ -548,13 +542,13 @@ class OpenIntentClient:
     ) -> IntentPortfolio:
         """
         Create a new intent portfolio for multi-intent coordination.
-        
+
         Args:
             name: Portfolio name.
             description: Optional description.
             governance_policy: Optional governance rules (e.g., require_all_completed).
             metadata: Optional metadata.
-        
+
         Returns:
             The created portfolio.
         """
@@ -570,28 +564,28 @@ class OpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentPortfolio.from_dict(data)
-    
+
     def get_portfolio(self, portfolio_id: str) -> IntentPortfolio:
         """
         Get a portfolio with its intents and aggregate status.
-        
+
         Args:
             portfolio_id: The portfolio ID.
-        
+
         Returns:
             Portfolio with intents and aggregate status.
         """
         response = self._client.get(f"/api/v1/portfolios/{portfolio_id}")
         data = self._handle_response(response)
         return IntentPortfolio.from_dict(data)
-    
+
     def list_portfolios(self, created_by: str = None) -> list[IntentPortfolio]:
         """
         List portfolios, optionally filtered by creator.
-        
+
         Args:
             created_by: Optional filter by creator.
-        
+
         Returns:
             List of portfolios.
         """
@@ -601,15 +595,17 @@ class OpenIntentClient:
         response = self._client.get("/api/v1/portfolios", params=params)
         data = self._handle_response(response)
         return [IntentPortfolio.from_dict(p) for p in data.get("portfolios", [])]
-    
-    def update_portfolio_status(self, portfolio_id: str, status: PortfolioStatus) -> IntentPortfolio:
+
+    def update_portfolio_status(
+        self, portfolio_id: str, status: PortfolioStatus
+    ) -> IntentPortfolio:
         """
         Update portfolio status.
-        
+
         Args:
             portfolio_id: The portfolio ID.
             status: New status (active, completed, abandoned).
-        
+
         Returns:
             Updated portfolio.
         """
@@ -619,7 +615,7 @@ class OpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentPortfolio.from_dict(data)
-    
+
     def add_intent_to_portfolio(
         self,
         portfolio_id: str,
@@ -629,13 +625,13 @@ class OpenIntentClient:
     ) -> PortfolioMembership:
         """
         Add an intent to a portfolio.
-        
+
         Args:
             portfolio_id: The portfolio ID.
             intent_id: The intent to add.
             role: Membership role (primary, member, dependency).
             priority: Priority (higher = more important).
-        
+
         Returns:
             Membership record.
         """
@@ -649,11 +645,11 @@ class OpenIntentClient:
         )
         data = self._handle_response(response)
         return PortfolioMembership.from_dict(data)
-    
+
     def remove_intent_from_portfolio(self, portfolio_id: str, intent_id: str) -> None:
         """
         Remove an intent from a portfolio.
-        
+
         Args:
             portfolio_id: The portfolio ID.
             intent_id: The intent to remove.
@@ -663,14 +659,16 @@ class OpenIntentClient:
         )
         if response.status_code != 204:
             self._handle_response(response)
-    
-    def get_portfolio_intents(self, portfolio_id: str) -> tuple[list[Intent], AggregateStatus]:
+
+    def get_portfolio_intents(
+        self, portfolio_id: str
+    ) -> tuple[list[Intent], AggregateStatus]:
         """
         Get all intents in a portfolio with aggregate status.
-        
+
         Args:
             portfolio_id: The portfolio ID.
-        
+
         Returns:
             Tuple of (intents list, aggregate status).
         """
@@ -679,21 +677,21 @@ class OpenIntentClient:
         intents = [Intent.from_dict(i) for i in data.get("intents", [])]
         agg = AggregateStatus.from_dict(data.get("aggregate_status", {}))
         return intents, agg
-    
+
     def get_intent_portfolios(self, intent_id: str) -> list[IntentPortfolio]:
         """
         Get all portfolios containing an intent.
-        
+
         Args:
             intent_id: The intent ID.
-        
+
         Returns:
             List of portfolios.
         """
         response = self._client.get(f"/api/v1/intents/{intent_id}/portfolios")
         data = self._handle_response(response)
         return [IntentPortfolio.from_dict(p) for p in data.get("portfolios", [])]
-    
+
     # RFC-0005: Attachments
     def add_attachment(
         self,
@@ -706,7 +704,7 @@ class OpenIntentClient:
     ) -> IntentAttachment:
         """
         Add a file attachment to an intent.
-        
+
         Args:
             intent_id: The intent ID.
             filename: Name of the file.
@@ -714,7 +712,7 @@ class OpenIntentClient:
             size: File size in bytes.
             storage_url: URL where the file is stored.
             metadata: Optional metadata (dimensions, duration, etc.).
-        
+
         Returns:
             The created attachment.
         """
@@ -730,25 +728,25 @@ class OpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentAttachment.from_dict(data)
-    
+
     def get_attachments(self, intent_id: str) -> list[IntentAttachment]:
         """
         Get all attachments for an intent.
-        
+
         Args:
             intent_id: The intent ID.
-        
+
         Returns:
             List of attachments.
         """
         response = self._client.get(f"/api/v1/intents/{intent_id}/attachments")
         data = self._handle_response(response)
         return [IntentAttachment.from_dict(a) for a in data.get("attachments", [])]
-    
+
     def delete_attachment(self, intent_id: str, attachment_id: str) -> None:
         """
         Delete an attachment from an intent.
-        
+
         Args:
             intent_id: The intent ID.
             attachment_id: The attachment ID to delete.
@@ -758,7 +756,7 @@ class OpenIntentClient:
         )
         if response.status_code != 204:
             self._handle_response(response)
-    
+
     # RFC-0009: Cost Tracking
     def record_cost(
         self,
@@ -771,7 +769,7 @@ class OpenIntentClient:
     ) -> IntentCost:
         """
         Record a cost/resource usage for an intent.
-        
+
         Args:
             intent_id: The intent ID.
             cost_type: Type of cost (tokens, api_call, compute, custom).
@@ -779,7 +777,7 @@ class OpenIntentClient:
             unit: Unit of measurement (tokens, cents, seconds).
             provider: Optional provider name (openai, anthropic, etc.).
             metadata: Optional additional info (model, prompt_tokens, etc.).
-        
+
         Returns:
             The recorded cost.
         """
@@ -796,14 +794,14 @@ class OpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentCost.from_dict(data)
-    
+
     def get_costs(self, intent_id: str) -> tuple[list[IntentCost], CostSummary]:
         """
         Get all costs for an intent with summary.
-        
+
         Args:
             intent_id: The intent ID.
-        
+
         Returns:
             Tuple of (costs list, cost summary).
         """
@@ -812,7 +810,7 @@ class OpenIntentClient:
         costs = [IntentCost.from_dict(c) for c in data.get("costs", [])]
         summary = CostSummary.from_dict(data.get("summary", {}))
         return costs, summary
-    
+
     # RFC-0010: Retry Policies
     def set_retry_policy(
         self,
@@ -826,7 +824,7 @@ class OpenIntentClient:
     ) -> RetryPolicy:
         """
         Set or update retry policy for an intent.
-        
+
         Args:
             intent_id: The intent ID.
             strategy: Retry strategy (none, fixed, exponential, linear).
@@ -835,7 +833,7 @@ class OpenIntentClient:
             max_delay_ms: Maximum delay between retries.
             fallback_agent_id: Agent to hand off to after max failures.
             failure_threshold: Failures before triggering fallback.
-        
+
         Returns:
             The retry policy.
         """
@@ -852,14 +850,14 @@ class OpenIntentClient:
         )
         data = self._handle_response(response)
         return RetryPolicy.from_dict(data)
-    
+
     def get_retry_policy(self, intent_id: str) -> Optional[RetryPolicy]:
         """
         Get retry policy for an intent.
-        
+
         Args:
             intent_id: The intent ID.
-        
+
         Returns:
             Retry policy or None if not configured.
         """
@@ -868,7 +866,7 @@ class OpenIntentClient:
             return None
         data = self._handle_response(response)
         return RetryPolicy.from_dict(data)
-    
+
     def record_failure(
         self,
         intent_id: str,
@@ -880,7 +878,7 @@ class OpenIntentClient:
     ) -> IntentFailure:
         """
         Record a failure that occurred while processing an intent.
-        
+
         Args:
             intent_id: The intent ID.
             attempt_number: Which attempt this was.
@@ -888,7 +886,7 @@ class OpenIntentClient:
             error_message: Optional error description.
             retry_scheduled_at: When retry is scheduled (if any).
             metadata: Optional additional info.
-        
+
         Returns:
             The recorded failure.
         """
@@ -899,27 +897,29 @@ class OpenIntentClient:
                 "attempt_number": attempt_number,
                 "error_code": error_code,
                 "error_message": error_message,
-                "retry_scheduled_at": retry_scheduled_at.isoformat() if retry_scheduled_at else None,
+                "retry_scheduled_at": (
+                    retry_scheduled_at.isoformat() if retry_scheduled_at else None
+                ),
                 "metadata": metadata or {},
             },
         )
         data = self._handle_response(response)
         return IntentFailure.from_dict(data)
-    
+
     def get_failures(self, intent_id: str) -> list[IntentFailure]:
         """
         Get failure history for an intent.
-        
+
         Args:
             intent_id: The intent ID.
-        
+
         Returns:
             List of failures.
         """
         response = self._client.get(f"/api/v1/intents/{intent_id}/failures")
         data = self._handle_response(response)
         return [IntentFailure.from_dict(f) for f in data.get("failures", [])]
-    
+
     # RFC-0006: Subscriptions
     def subscribe(
         self,
@@ -931,14 +931,14 @@ class OpenIntentClient:
     ) -> IntentSubscription:
         """
         Subscribe to real-time notifications for an intent or portfolio.
-        
+
         Args:
             intent_id: Intent to subscribe to (optional).
             portfolio_id: Portfolio to subscribe to (optional).
             event_types: Which events to receive (optional, all if not specified).
             webhook_url: URL to receive webhook notifications.
             expires_at: When subscription expires (optional).
-        
+
         Returns:
             The created subscription.
         """
@@ -955,17 +955,17 @@ class OpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentSubscription.from_dict(data)
-    
+
     def get_subscriptions(
         self, intent_id: str = None, portfolio_id: str = None
     ) -> list[IntentSubscription]:
         """
         Get subscriptions, optionally filtered by intent or portfolio.
-        
+
         Args:
             intent_id: Filter by intent (optional).
             portfolio_id: Filter by portfolio (optional).
-        
+
         Returns:
             List of subscriptions.
         """
@@ -977,25 +977,25 @@ class OpenIntentClient:
         response = self._client.get("/api/v1/subscriptions", params=params)
         data = self._handle_response(response)
         return [IntentSubscription.from_dict(s) for s in data.get("subscriptions", [])]
-    
+
     def unsubscribe(self, subscription_id: str) -> None:
         """
         Remove a subscription.
-        
+
         Args:
             subscription_id: The subscription ID to remove.
         """
         response = self._client.delete(f"/api/v1/subscriptions/{subscription_id}")
         if response.status_code != 204:
             self._handle_response(response)
-    
+
     def close(self) -> None:
         """Close the HTTP client connection."""
         self._client.close()
-    
+
     def __enter__(self):
         return self
-    
+
     def __exit__(self, *args):
         self.close()
 
@@ -1003,7 +1003,7 @@ class OpenIntentClient:
 class AsyncOpenIntentClient:
     """
     Asynchronous client for the OpenIntent Coordination Protocol.
-    
+
     Example:
         ```python
         async with AsyncOpenIntentClient(
@@ -1017,7 +1017,7 @@ class AsyncOpenIntentClient:
             )
         ```
     """
-    
+
     def __init__(
         self,
         base_url: str,
@@ -1037,7 +1037,7 @@ class AsyncOpenIntentClient:
             },
             timeout=timeout,
         )
-    
+
     def _handle_response(self, response: httpx.Response) -> dict:
         """Handle HTTP response and raise appropriate exceptions."""
         if response.status_code == 404:
@@ -1075,14 +1075,14 @@ class AsyncOpenIntentClient:
                 status_code=response.status_code,
                 response=response.json() if response.content else None,
             )
-        
+
         return response.json() if response.content else {}
-    
+
     async def discover(self) -> dict:
         """Discover protocol capabilities."""
         response = await self._client.get("/.well-known/openintent.json")
         return self._handle_response(response)
-    
+
     async def create_intent(
         self,
         title: str,
@@ -1100,13 +1100,13 @@ class AsyncOpenIntentClient:
         response = await self._client.post("/api/v1/intents", json=payload)
         data = self._handle_response(response)
         return Intent.from_dict(data)
-    
+
     async def get_intent(self, intent_id: str) -> Intent:
         """Retrieve an intent by ID."""
         response = await self._client.get(f"/api/v1/intents/{intent_id}")
         data = self._handle_response(response)
         return Intent.from_dict(data)
-    
+
     async def list_intents(
         self,
         status: IntentStatus = None,
@@ -1117,11 +1117,11 @@ class AsyncOpenIntentClient:
         params = {"limit": limit, "offset": offset}
         if status:
             params["status"] = status.value
-        
+
         response = await self._client.get("/api/v1/intents", params=params)
         data = self._handle_response(response)
         return [Intent.from_dict(item) for item in data.get("intents", data)]
-    
+
     async def update_state(
         self,
         intent_id: str,
@@ -1136,7 +1136,7 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return Intent.from_dict(data)
-    
+
     async def set_status(
         self,
         intent_id: str,
@@ -1151,7 +1151,7 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return Intent.from_dict(data)
-    
+
     async def log_event(
         self,
         intent_id: str,
@@ -1168,7 +1168,7 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentEvent.from_dict(data)
-    
+
     async def get_events(
         self,
         intent_id: str,
@@ -1182,14 +1182,14 @@ class AsyncOpenIntentClient:
             params["event_type"] = event_type.value
         if since:
             params["since"] = since.isoformat()
-        
+
         response = await self._client.get(
             f"/api/v1/intents/{intent_id}/events",
             params=params,
         )
         data = self._handle_response(response)
         return [IntentEvent.from_dict(item) for item in data.get("events", data)]
-    
+
     async def acquire_lease(
         self,
         intent_id: str,
@@ -1206,20 +1206,20 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentLease.from_dict(data)
-    
+
     async def release_lease(self, intent_id: str, lease_id: str) -> None:
         """Release a previously acquired lease."""
         response = await self._client.delete(
             f"/api/v1/intents/{intent_id}/leases/{lease_id}"
         )
         self._handle_response(response)
-    
+
     async def get_leases(self, intent_id: str) -> list[IntentLease]:
         """List all active leases for an intent."""
         response = await self._client.get(f"/api/v1/intents/{intent_id}/leases")
         data = self._handle_response(response)
         return [IntentLease.from_dict(item) for item in data.get("leases", data)]
-    
+
     async def request_arbitration(
         self,
         intent_id: str,
@@ -1236,7 +1236,7 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return ArbitrationRequest.from_dict(data)
-    
+
     async def record_decision(
         self,
         intent_id: str,
@@ -1255,13 +1255,13 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return Decision.from_dict(data)
-    
+
     async def get_decisions(self, intent_id: str) -> list[Decision]:
         """Retrieve all decisions for an intent."""
         response = await self._client.get(f"/api/v1/intents/{intent_id}/decisions")
         data = self._handle_response(response)
         return [Decision.from_dict(item) for item in data.get("decisions", data)]
-    
+
     async def assign_agent(self, intent_id: str, agent_id: str = None) -> dict:
         """Assign an agent to work on an intent."""
         response = await self._client.post(
@@ -1269,7 +1269,7 @@ class AsyncOpenIntentClient:
             json={"agent_id": agent_id or self.agent_id},
         )
         return self._handle_response(response)
-    
+
     async def unassign_agent(self, intent_id: str, agent_id: str = None) -> None:
         """Remove an agent from an intent."""
         aid = agent_id or self.agent_id
@@ -1277,7 +1277,7 @@ class AsyncOpenIntentClient:
             f"/api/v1/intents/{intent_id}/agents/{aid}"
         )
         self._handle_response(response)
-    
+
     async def create_portfolio(
         self,
         name: str,
@@ -1298,13 +1298,13 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentPortfolio.from_dict(data)
-    
+
     async def get_portfolio(self, portfolio_id: str) -> IntentPortfolio:
         """Get a portfolio with its intents and aggregate status."""
         response = await self._client.get(f"/api/v1/portfolios/{portfolio_id}")
         data = self._handle_response(response)
         return IntentPortfolio.from_dict(data)
-    
+
     async def list_portfolios(self, created_by: str = None) -> list[IntentPortfolio]:
         """List portfolios, optionally filtered by creator."""
         params = {}
@@ -1313,8 +1313,10 @@ class AsyncOpenIntentClient:
         response = await self._client.get("/api/v1/portfolios", params=params)
         data = self._handle_response(response)
         return [IntentPortfolio.from_dict(p) for p in data.get("portfolios", [])]
-    
-    async def update_portfolio_status(self, portfolio_id: str, status: PortfolioStatus) -> IntentPortfolio:
+
+    async def update_portfolio_status(
+        self, portfolio_id: str, status: PortfolioStatus
+    ) -> IntentPortfolio:
         """Update portfolio status."""
         response = await self._client.patch(
             f"/api/v1/portfolios/{portfolio_id}/status",
@@ -1322,7 +1324,7 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentPortfolio.from_dict(data)
-    
+
     async def add_intent_to_portfolio(
         self,
         portfolio_id: str,
@@ -1341,31 +1343,35 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return PortfolioMembership.from_dict(data)
-    
-    async def remove_intent_from_portfolio(self, portfolio_id: str, intent_id: str) -> None:
+
+    async def remove_intent_from_portfolio(
+        self, portfolio_id: str, intent_id: str
+    ) -> None:
         """Remove an intent from a portfolio."""
         response = await self._client.delete(
             f"/api/v1/portfolios/{portfolio_id}/intents/{intent_id}"
         )
         if response.status_code != 204:
             self._handle_response(response)
-    
-    async def get_portfolio_intents(self, portfolio_id: str) -> tuple[list[Intent], AggregateStatus]:
+
+    async def get_portfolio_intents(
+        self, portfolio_id: str
+    ) -> tuple[list[Intent], AggregateStatus]:
         """Get all intents in a portfolio with aggregate status."""
         response = await self._client.get(f"/api/v1/portfolios/{portfolio_id}/intents")
         data = self._handle_response(response)
         intents = [Intent.from_dict(i) for i in data.get("intents", [])]
         agg = AggregateStatus.from_dict(data.get("aggregate_status", {}))
         return intents, agg
-    
+
     async def get_intent_portfolios(self, intent_id: str) -> list[IntentPortfolio]:
         """Get all portfolios containing an intent."""
         response = await self._client.get(f"/api/v1/intents/{intent_id}/portfolios")
         data = self._handle_response(response)
         return [IntentPortfolio.from_dict(p) for p in data.get("portfolios", [])]
-    
+
     # ==================== Attachments ====================
-    
+
     async def add_attachment(
         self,
         intent_id: str,
@@ -1386,13 +1392,13 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentAttachment.from_dict(data)
-    
+
     async def get_attachments(self, intent_id: str) -> list[IntentAttachment]:
         """Get all attachments for an intent."""
         response = await self._client.get(f"/api/v1/intents/{intent_id}/attachments")
         data = self._handle_response(response)
         return [IntentAttachment.from_dict(a) for a in data.get("attachments", [])]
-    
+
     async def delete_attachment(self, intent_id: str, attachment_id: str) -> None:
         """Delete an attachment."""
         response = await self._client.delete(
@@ -1400,9 +1406,9 @@ class AsyncOpenIntentClient:
         )
         if response.status_code != 204:
             self._handle_response(response)
-    
+
     # ==================== Cost Tracking ====================
-    
+
     async def record_cost(
         self,
         intent_id: str,
@@ -1425,7 +1431,7 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentCost.from_dict(data)
-    
+
     async def get_costs(self, intent_id: str) -> tuple[list[IntentCost], CostSummary]:
         """Get all costs for an intent with summary."""
         response = await self._client.get(f"/api/v1/intents/{intent_id}/costs")
@@ -1433,9 +1439,9 @@ class AsyncOpenIntentClient:
         costs = [IntentCost.from_dict(c) for c in data.get("costs", [])]
         summary = CostSummary.from_dict(data.get("summary", {}))
         return costs, summary
-    
+
     # ==================== Retry Policies ====================
-    
+
     async def set_retry_policy(
         self,
         intent_id: str,
@@ -1458,7 +1464,7 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return RetryPolicy.from_dict(data)
-    
+
     async def get_retry_policy(self, intent_id: str) -> Optional[RetryPolicy]:
         """Get retry policy for an intent."""
         response = await self._client.get(f"/api/v1/intents/{intent_id}/retry-policy")
@@ -1466,7 +1472,7 @@ class AsyncOpenIntentClient:
             return None
         data = self._handle_response(response)
         return RetryPolicy.from_dict(data)
-    
+
     async def record_failure(
         self,
         intent_id: str,
@@ -1487,15 +1493,15 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentFailure.from_dict(data)
-    
+
     async def get_failures(self, intent_id: str) -> list[IntentFailure]:
         """Get all failures for an intent."""
         response = await self._client.get(f"/api/v1/intents/{intent_id}/failures")
         data = self._handle_response(response)
         return [IntentFailure.from_dict(f) for f in data.get("failures", [])]
-    
+
     # ==================== Subscriptions ====================
-    
+
     async def subscribe(
         self,
         webhook_url: str,
@@ -1513,12 +1519,14 @@ class AsyncOpenIntentClient:
                 "subscriber_id": self.agent_id,
                 "webhook_url": webhook_url,
                 "event_types": event_types or [],
-                "expires_at": (datetime.now() + timedelta(hours=expires_in_hours)).isoformat(),
+                "expires_at": (
+                    datetime.now() + timedelta(hours=expires_in_hours)
+                ).isoformat(),
             },
         )
         data = self._handle_response(response)
         return IntentSubscription.from_dict(data)
-    
+
     async def get_subscriptions(
         self,
         intent_id: str = None,
@@ -1530,19 +1538,19 @@ class AsyncOpenIntentClient:
             params["intent_id"] = intent_id
         if portfolio_id:
             params["portfolio_id"] = portfolio_id
-        
+
         response = await self._client.get("/api/v1/subscriptions", params=params)
         data = self._handle_response(response)
         return [IntentSubscription.from_dict(s) for s in data.get("subscriptions", [])]
-    
+
     async def unsubscribe(self, subscription_id: str) -> None:
         """Unsubscribe from events."""
         response = await self._client.delete(f"/api/v1/subscriptions/{subscription_id}")
         if response.status_code != 204:
             self._handle_response(response)
-    
+
     # ==================== Lease Renewal ====================
-    
+
     async def renew_lease(
         self,
         intent_id: str,
@@ -1556,13 +1564,13 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentLease.from_dict(data)
-    
+
     async def close(self) -> None:
         """Close the HTTP client connection."""
         await self._client.aclose()
-    
+
     async def __aenter__(self):
         return self
-    
+
     async def __aexit__(self, *args):
         await self.close()
