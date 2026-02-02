@@ -21,7 +21,7 @@ from .database import Database, IntentModel, get_database
 class IntentCreate(BaseModel):
     title: str
     description: str = ""
-    created_by: str
+    created_by: Optional[str] = None
     parent_id: Optional[str] = Field(None, alias="parent_intent_id")
     depends_on: List[str] = Field(default_factory=list)
     constraints: Dict[str, Any] = Field(default_factory=dict)
@@ -373,12 +373,13 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         api_key: str = Depends(validate_api_key),
     ):
         session = db.get_session()
+        creator = intent.created_by or api_key
         try:
             created = db.create_intent(
                 session,
                 title=intent.title,
                 description=intent.description,
-                created_by=intent.created_by,
+                created_by=creator,
                 parent_id=intent.parent_id,
                 constraints=intent.constraints,
                 state=intent.state,
@@ -389,7 +390,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 session,
                 intent_id=created.id,
                 event_type="intent_created",
-                actor=intent.created_by,
+                actor=creator,
                 payload={"title": intent.title},
             )
 

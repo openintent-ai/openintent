@@ -177,6 +177,7 @@ class OpenIntentClient:
             "description": description,
             "constraints": constraints or [],
             "state": initial_state or {},
+            "created_by": self.agent_id,
         }
         if parent_intent_id:
             payload["parent_intent_id"] = parent_intent_id
@@ -1847,6 +1848,7 @@ class AsyncOpenIntentClient:
             "description": description,
             "constraints": constraints or [],
             "state": initial_state or {},
+            "created_by": self.agent_id,
         }
         response = await self._client.post("/api/v1/intents", json=payload)
         data = self._handle_response(response)
