@@ -4,6 +4,8 @@ OpenIntent SDK - Python client for the OpenIntent Coordination Protocol.
 A lightweight SDK for coordinating intent across humans and AI agents.
 """
 
+from typing import Any
+
 from .agents import (
     Agent,
     AgentConfig,
@@ -88,7 +90,7 @@ from .workflow import (
 )
 
 
-def get_server():
+def get_server() -> tuple[Any, Any, Any]:
     """Lazy import for server components (requires server extras)."""
     try:
         from .server import OpenIntentServer, ServerConfig, create_app

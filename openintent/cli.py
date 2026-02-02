@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 
-def cmd_run(args):
+def cmd_run(args: argparse.Namespace) -> None:
     """Run a workflow from a YAML file."""
     from .workflow import (
         WorkflowError,
@@ -120,7 +120,7 @@ def cmd_run(args):
         sys.exit(1)
 
 
-def cmd_validate(args):
+def cmd_validate(args: argparse.Namespace) -> None:
     """Validate a workflow YAML file."""
     from .workflow import (
         WorkflowError,
@@ -150,7 +150,7 @@ def cmd_validate(args):
         sys.exit(1)
 
 
-def cmd_list(args):
+def cmd_list(args: argparse.Namespace) -> None:
     """List sample workflows."""
     from .workflow import list_sample_workflows
 
@@ -171,7 +171,7 @@ def cmd_list(args):
         print()
 
 
-def cmd_new(args):
+def cmd_new(args: argparse.Namespace) -> None:
     """Create a new workflow from template."""
     name = args.name or "my_workflow"
     filename = f"{name.lower().replace(' ', '_')}.yaml"
@@ -216,7 +216,7 @@ workflow:
     print(f"  4. Execute: openintent run {filename}")
 
 
-def cmd_demo(args):
+def cmd_demo(args: argparse.Namespace) -> None:
     """Run the complete demo: server + agents + workflow."""
     import json
     import tempfile
@@ -447,7 +447,7 @@ workflow:
         print("Done.")
 
 
-def main():
+def main() -> None:
     """Main entry point for the CLI."""
     parser = argparse.ArgumentParser(
         prog="openintent",

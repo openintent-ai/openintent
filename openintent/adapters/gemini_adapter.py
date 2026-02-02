@@ -464,7 +464,7 @@ class GeminiChatSession:
         self._chat = chat
 
     @property
-    def history(self) -> list:
+    def history(self) -> list[Any]:
         """The chat history."""
         return self._chat.history
 

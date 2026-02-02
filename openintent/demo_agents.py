@@ -23,7 +23,7 @@ import os
 from typing import Any, Optional
 
 
-def get_llm_client(provider: str = "auto"):
+def get_llm_client(provider: str = "auto") -> tuple[Any, str, str]:
     """
     Get an LLM client based on provider or auto-detect from env vars.
 
@@ -62,7 +62,13 @@ def get_llm_client(provider: str = "auto"):
         raise ValueError(f"Unknown provider: {provider}")
 
 
-def call_llm(client, model: str, provider: str, messages: list[dict], **kwargs) -> str:
+def call_llm(
+    client: Any,
+    model: str,
+    provider: str,
+    messages: list[dict[str, Any]],
+    **kwargs: Any,
+) -> str:
     """Call the LLM with the appropriate API."""
     if provider == "anthropic":
         system = next((m["content"] for m in messages if m["role"] == "system"), "")
@@ -73,13 +79,13 @@ def call_llm(client, model: str, provider: str, messages: list[dict], **kwargs) 
             system=system,
             messages=user_messages,
         )
-        return response.content[0].text
+        return str(response.content[0].text)
 
     else:  # openai
         response = client.chat.completions.create(
             model=model, messages=messages, **kwargs
         )
-        return response.choices[0].message.content
+        return str(response.choices[0].message.content)
 
 
 class DemoAgent:
@@ -88,12 +94,12 @@ class DemoAgent:
     agent_id: str = "demo-agent"
     system_prompt: str = "You are a helpful assistant."
 
-    def __init__(self, provider: str = "auto"):
+    def __init__(self, provider: str = "auto") -> None:
         self.client, self.model, self.provider = get_llm_client(provider)
         self.base_url = os.getenv("OPENINTENT_URL", "http://localhost:8000")
         self.api_key = os.getenv("OPENINTENT_API_KEY", "demo-agent-key")
 
-    def call(self, user_prompt: str, **kwargs) -> str:
+    def call(self, user_prompt: str, **kwargs: Any) -> str:
         """Call the LLM with the system prompt and user prompt."""
         messages = [
             {"role": "system", "content": self.system_prompt},
@@ -101,12 +107,12 @@ class DemoAgent:
         ]
         return call_llm(self.client, self.model, self.provider, messages, **kwargs)
 
-    async def handle_intent(self, intent: Any) -> dict:
+    async def handle_intent(self, intent: Any) -> dict[str, Any]:
         """Override this to handle assigned intents."""
         raise NotImplementedError
 
     @classmethod
-    def run(cls, provider: str = "auto", base_url: Optional[str] = None):
+    def run(cls, provider: str = "auto", base_url: Optional[str] = None) -> None:
         """Run this agent, subscribing to intents."""
         from openintent.agents import Agent, on_assignment
 
@@ -115,10 +121,10 @@ class DemoAgent:
         @Agent(cls.agent_id)
         class WrappedAgent:
             @on_assignment
-            async def work(self, intent: Any) -> dict:
+            async def work(self, intent: Any) -> dict[str, Any]:
                 return await instance.handle_intent(intent)
 
-        WrappedAgent.run(
+        WrappedAgent.run(  # type: ignore[attr-defined]
             base_url=base_url or instance.base_url,
             api_key=instance.api_key,
         )
@@ -140,7 +146,7 @@ class ResearcherAgent(DemoAgent):
 
 Be concise but comprehensive. Focus on accuracy and clarity."""
 
-    async def handle_intent(self, intent: Any) -> dict:
+    async def handle_intent(self, intent: Any) -> dict[str, Any]:
         topic = intent.description or intent.title
         constraints = "\n".join(intent.constraints) if intent.constraints else ""
 
@@ -174,7 +180,7 @@ class SummarizerAgent(DemoAgent):
 
 Be concise. Focus on the essential takeaways."""
 
-    async def handle_intent(self, intent: Any) -> dict:
+    async def handle_intent(self, intent: Any) -> dict[str, Any]:
         state = intent.state or {}
         findings = state.get("findings", intent.description or intent.title)
 
@@ -206,7 +212,7 @@ class WriterAgent(DemoAgent):
 
 Focus on quality and clarity."""
 
-    async def handle_intent(self, intent: Any) -> dict:
+    async def handle_intent(self, intent: Any) -> dict[str, Any]:
         task = intent.description or intent.title
         state = intent.state or {}
         context = state.get("research", state.get("findings", ""))
@@ -241,7 +247,7 @@ class AnalyzerAgent(DemoAgent):
 
 Be analytical and precise."""
 
-    async def handle_intent(self, intent: Any) -> dict:
+    async def handle_intent(self, intent: Any) -> dict[str, Any]:
         data = (
             intent.state.get("data", intent.description)
             if intent.state
@@ -276,7 +282,7 @@ def start_demo_agents(
     agent_ids: Optional[list[str]] = None,
     provider: str = "auto",
     base_url: Optional[str] = None,
-):
+) -> None:
     """
     Start demo agents in the background.
 
