@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -71,10 +71,31 @@ class StatePatch(BaseModel):
 
 
 class StatePatchRequest(BaseModel):
-    patches: List[StatePatch]
+    # Support both formats:
+    # 1. JSON Patch: {"patches": [{op, path, value}, ...]}
+    # 2. Simple merge: {"state": {"key": "value"}}
+    patches: Optional[List[StatePatch]] = None
+    state: Optional[Dict[str, Any]] = None
+    
+    def get_patches(self) -> List[Dict[str, Any]]:
+        """Convert to patches format, handling both input styles."""
+        if self.patches:
+            return [p.model_dump() for p in self.patches]
+        elif self.state:
+            # Convert simple state dict to set operations
+            return [{"op": "set", "path": k, "value": v} for k, v in self.state.items()]
+        return []
 
 
 class StatusUpdateRequest(BaseModel):
+    status: str
+
+
+class LeaseRenewRequest(BaseModel):
+    duration_seconds: int = 300
+
+
+class PortfolioStatusRequest(BaseModel):
     status: str
 
 
@@ -866,7 +887,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
 
         session = db.get_session()
         try:
-            patches = [p.model_dump() for p in request.patches]
+            patches = request.get_patches()
             updated = db.update_intent_state(session, intent_id, if_match, patches)
 
             if not updated:
@@ -1103,6 +1124,34 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
+    @app.patch("/api/v1/intents/{intent_id}/leases/{lease_id}", response_model=LeaseResponse)
+    async def renew_lease(
+        intent_id: str,
+        lease_id: str,
+        request: LeaseRenewRequest,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        session = db.get_session()
+        try:
+            renewed = db.renew_lease(session, lease_id, api_key, request.duration_seconds)
+            if not renewed:
+                raise HTTPException(
+                    status_code=404, detail="Lease not found or not owned by you"
+                )
+
+            db.create_event(
+                session,
+                intent_id=intent_id,
+                event_type="lease_renewed",
+                actor=api_key,
+                payload={"lease_id": lease_id, "duration_seconds": request.duration_seconds},
+            )
+
+            return LeaseResponse.model_validate(renewed)
+        finally:
+            session.close()
+
     @app.delete("/api/v1/intents/{intent_id}/leases/{lease_id}")
     async def release_lease(
         intent_id: str,
@@ -1175,6 +1224,35 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
+    @app.delete("/api/v1/intents/{intent_id}/attachments/{attachment_id}")
+    async def delete_attachment(
+        intent_id: str,
+        attachment_id: str,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        session = db.get_session()
+        try:
+            deleted = db.delete_attachment(session, attachment_id)
+            if not deleted:
+                raise HTTPException(status_code=404, detail="Attachment not found")
+            return Response(status_code=204)
+        finally:
+            session.close()
+
+    @app.get("/api/v1/intents/{intent_id}/portfolios", response_model=List[PortfolioResponse])
+    async def get_intent_portfolios(
+        intent_id: str,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        session = db.get_session()
+        try:
+            portfolios = db.get_intent_portfolios(session, intent_id)
+            return [PortfolioResponse.model_validate(p) for p in portfolios]
+        finally:
+            session.close()
+
     @app.get("/api/v1/intents/{intent_id}/costs", response_model=List[CostResponse])
     async def get_costs(
         intent_id: str,
@@ -1233,7 +1311,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
-    @app.post(
+    @app.put(
         "/api/v1/intents/{intent_id}/retry-policy", response_model=RetryPolicyResponse
     )
     async def set_retry_policy(
@@ -1360,6 +1438,22 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
+    @app.patch("/api/v1/portfolios/{portfolio_id}/status", response_model=PortfolioResponse)
+    async def update_portfolio_status(
+        portfolio_id: str,
+        request: PortfolioStatusRequest,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        session = db.get_session()
+        try:
+            portfolio = db.update_portfolio_status(session, portfolio_id, request.status)
+            if not portfolio:
+                raise HTTPException(status_code=404, detail="Portfolio not found")
+            return PortfolioResponse.model_validate(portfolio)
+        finally:
+            session.close()
+
     @app.get(
         "/api/v1/portfolios/{portfolio_id}/intents", response_model=List[IntentResponse]
     )
@@ -1410,6 +1504,32 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             )
 
             return {"message": "Intent added to portfolio", "membership_id": created.id}
+        finally:
+            session.close()
+
+    @app.delete("/api/v1/portfolios/{portfolio_id}/intents/{intent_id}")
+    async def remove_intent_from_portfolio(
+        portfolio_id: str,
+        intent_id: str,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        session = db.get_session()
+        try:
+            removed = db.remove_intent_from_portfolio(session, portfolio_id, intent_id)
+            if not removed:
+                raise HTTPException(status_code=404, detail="Membership not found")
+
+            _broadcast_event(
+                "portfolios",
+                {
+                    "type": "intent_removed",
+                    "portfolio_id": portfolio_id,
+                    "intent_id": intent_id,
+                },
+            )
+
+            return {"message": "Intent removed from portfolio"}
         finally:
             session.close()
 

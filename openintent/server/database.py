@@ -482,6 +482,24 @@ class Database:
         session.refresh(lease)
         return lease
 
+    def renew_lease(
+        self, session: Session, lease_id: str, agent_id: str, duration_seconds: int
+    ) -> Optional[IntentLeaseModel]:
+        lease = (
+            session.query(IntentLeaseModel)
+            .filter(IntentLeaseModel.id == lease_id)
+            .first()
+        )
+        if not lease or lease.agent_id != agent_id:
+            return None
+        if lease.released_at is not None:
+            return None  # Already released
+
+        lease.expires_at = datetime.utcnow() + timedelta(seconds=duration_seconds)
+        session.commit()
+        session.refresh(lease)
+        return lease
+
     def create_portfolio(self, session: Session, **kwargs) -> PortfolioModel:
         portfolio = PortfolioModel(**kwargs)
         session.add(portfolio)
@@ -515,6 +533,21 @@ class Database:
         session.refresh(membership)
         return membership
 
+    def update_portfolio_status(
+        self, session: Session, portfolio_id: str, status: str
+    ) -> Optional[PortfolioModel]:
+        portfolio = (
+            session.query(PortfolioModel)
+            .filter(PortfolioModel.id == portfolio_id)
+            .first()
+        )
+        if not portfolio:
+            return None
+        portfolio.status = status
+        session.commit()
+        session.refresh(portfolio)
+        return portfolio
+
     def get_portfolio_intents(
         self, session: Session, portfolio_id: str
     ) -> List[IntentModel]:
@@ -543,6 +576,50 @@ class Database:
             .filter(IntentAttachmentModel.intent_id == intent_id)
             .all()
         )
+
+    def delete_attachment(
+        self, session: Session, attachment_id: str
+    ) -> bool:
+        attachment = (
+            session.query(IntentAttachmentModel)
+            .filter(IntentAttachmentModel.id == attachment_id)
+            .first()
+        )
+        if not attachment:
+            return False
+        session.delete(attachment)
+        session.commit()
+        return True
+
+    def get_intent_portfolios(
+        self, session: Session, intent_id: str
+    ) -> List[PortfolioModel]:
+        memberships = (
+            session.query(PortfolioMembershipModel)
+            .filter(PortfolioMembershipModel.intent_id == intent_id)
+            .all()
+        )
+        portfolio_ids = [m.portfolio_id for m in memberships]
+        if not portfolio_ids:
+            return []
+        return session.query(PortfolioModel).filter(PortfolioModel.id.in_(portfolio_ids)).all()
+
+    def remove_intent_from_portfolio(
+        self, session: Session, portfolio_id: str, intent_id: str
+    ) -> bool:
+        membership = (
+            session.query(PortfolioMembershipModel)
+            .filter(
+                PortfolioMembershipModel.portfolio_id == portfolio_id,
+                PortfolioMembershipModel.intent_id == intent_id
+            )
+            .first()
+        )
+        if not membership:
+            return False
+        session.delete(membership)
+        session.commit()
+        return True
 
     def record_cost(self, session: Session, **kwargs) -> IntentCostModel:
         cost = IntentCostModel(**kwargs)

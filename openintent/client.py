@@ -477,8 +477,8 @@ class OpenIntentClient:
         Returns:
             The updated Intent object.
         """
-        response = self._client.patch(
-            f"/api/v1/intents/{intent_id}/state",
+        response = self._client.post(
+            f"/api/v1/intents/{intent_id}/status",
             json={"status": status.value},
             headers={"If-Match": str(version)},
         )
@@ -1901,8 +1901,8 @@ class AsyncOpenIntentClient:
         status: IntentStatus,
     ) -> Intent:
         """Change intent status."""
-        response = await self._client.patch(
-            f"/api/v1/intents/{intent_id}/state",
+        response = await self._client.post(
+            f"/api/v1/intents/{intent_id}/status",
             json={"status": status.value},
             headers={"If-Match": str(version)},
         )
