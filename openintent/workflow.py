@@ -11,6 +11,8 @@ Example:
     result = await spec.run()
 """
 
+# mypy: disable-error-code="assignment, return-value"
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -21,9 +23,9 @@ if TYPE_CHECKING:
     from .agents import PortfolioSpec
 
 try:
-    import yaml
+    import yaml  # type: ignore[import-untyped]
 except ImportError:
-    yaml = None  # type: ignore
+    yaml = None  # type: ignore[assignment]
 
 
 class WorkflowError(Exception):

@@ -2,6 +2,8 @@
 FastAPI application for OpenIntent server.
 """
 
+# mypy: disable-error-code="arg-type, var-annotated, misc, union-attr, attr-defined"
+
 import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime

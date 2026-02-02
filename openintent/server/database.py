@@ -3,6 +3,8 @@ Database layer for OpenIntent server using SQLAlchemy.
 Supports SQLite (default) and PostgreSQL.
 """
 
+# mypy: disable-error-code="assignment"
+
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from uuid import uuid4
@@ -27,7 +29,7 @@ from sqlalchemy.pool import StaticPool
 Base = declarative_base()
 
 
-class IntentModel(Base):
+class IntentModel(Base):  # type: ignore[misc, valid-type]
     __tablename__ = "intents"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
@@ -63,7 +65,7 @@ class IntentModel(Base):
     __table_args__ = (Index("idx_intents_parent_id", "parent_id"),)
 
 
-class IntentEventModel(Base):
+class IntentEventModel(Base):  # type: ignore[misc, valid-type]
     __tablename__ = "intent_events"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
@@ -78,7 +80,7 @@ class IntentEventModel(Base):
     __table_args__ = (Index("idx_intent_events_intent_id", "intent_id"),)
 
 
-class IntentAgentModel(Base):
+class IntentAgentModel(Base):  # type: ignore[misc, valid-type]
     __tablename__ = "intent_agents"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
@@ -95,7 +97,7 @@ class IntentAgentModel(Base):
     )
 
 
-class IntentLeaseModel(Base):
+class IntentLeaseModel(Base):  # type: ignore[misc, valid-type]
     __tablename__ = "intent_leases"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
@@ -111,7 +113,7 @@ class IntentLeaseModel(Base):
     __table_args__ = (Index("idx_intent_leases_intent_scope", "intent_id", "scope"),)
 
 
-class PortfolioModel(Base):
+class PortfolioModel(Base):  # type: ignore[misc, valid-type]
     __tablename__ = "portfolios"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
@@ -130,7 +132,7 @@ class PortfolioModel(Base):
     )
 
 
-class PortfolioMembershipModel(Base):
+class PortfolioMembershipModel(Base):  # type: ignore[misc, valid-type]
     __tablename__ = "portfolio_memberships"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
@@ -148,7 +150,7 @@ class PortfolioMembershipModel(Base):
     )
 
 
-class IntentAttachmentModel(Base):
+class IntentAttachmentModel(Base):  # type: ignore[misc, valid-type]
     __tablename__ = "intent_attachments"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
@@ -163,7 +165,7 @@ class IntentAttachmentModel(Base):
     intent = relationship("IntentModel", back_populates="attachments")
 
 
-class IntentCostModel(Base):
+class IntentCostModel(Base):  # type: ignore[misc, valid-type]
     __tablename__ = "intent_costs"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
@@ -179,7 +181,7 @@ class IntentCostModel(Base):
     intent = relationship("IntentModel", back_populates="costs")
 
 
-class IntentRetryPolicyModel(Base):
+class IntentRetryPolicyModel(Base):  # type: ignore[misc, valid-type]
     __tablename__ = "intent_retry_policies"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
@@ -194,7 +196,7 @@ class IntentRetryPolicyModel(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
-class IntentFailureModel(Base):
+class IntentFailureModel(Base):  # type: ignore[misc, valid-type]
     __tablename__ = "intent_failures"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))

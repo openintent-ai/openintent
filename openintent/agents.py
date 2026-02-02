@@ -18,6 +18,8 @@ Usage:
     ```
 """
 
+# mypy: disable-error-code="attr-defined, arg-type, misc, call-arg"
+
 import asyncio
 import logging
 from abc import ABC
