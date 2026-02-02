@@ -461,7 +461,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             db.create_event(
                 session,
                 intent_id=created.id,
-                event_type="created",
+                event_type="intent_created",
                 actor=api_key,
                 payload={"parent_id": parent_id, "depends_on": child.depends_on},
             )

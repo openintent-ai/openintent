@@ -76,13 +76,17 @@ class TestIntent:
             version=1,
             status=IntentStatus.ACTIVE,
             state=IntentState(data={"progress": 0.5}),
-            constraints=["constraint1"],
+            constraints={"max_time": 3600, "priority": "high"},
+            created_by="test-user",
+            confidence=85,
         )
         d = intent.to_dict()
         assert d["id"] == "test-id"
         assert d["status"] == "active"
         assert d["state"] == {"progress": 0.5}
-        assert d["constraints"] == ["constraint1"]
+        assert d["constraints"] == {"max_time": 3600, "priority": "high"}
+        assert d["created_by"] == "test-user"
+        assert d["confidence"] == 85
 
     def test_intent_from_dict(self):
         data = {
@@ -92,13 +96,30 @@ class TestIntent:
             "version": 2,
             "status": "completed",
             "state": {"done": True},
-            "constraints": [],
+            "constraints": {"max_retries": 3},
+            "created_by": "test-agent",
+            "confidence": 90,
         }
         intent = Intent.from_dict(data)
         assert intent.id == "test-id"
         assert intent.version == 2
         assert intent.status == IntentStatus.COMPLETED
         assert intent.state.get("done") is True
+        assert intent.constraints == {"max_retries": 3}
+        assert intent.created_by == "test-agent"
+        assert intent.confidence == 90
+
+    def test_intent_from_dict_legacy_list_constraints(self):
+        """Test backward compatibility with list-based constraints."""
+        data = {
+            "id": "legacy-id",
+            "title": "Legacy Intent",
+            "status": "active",
+            "constraints": ["rule1", "rule2"],
+        }
+        intent = Intent.from_dict(data)
+        # Legacy list constraints are preserved in a "rules" key
+        assert intent.constraints == {"rules": ["rule1", "rule2"]}
 
 
 class TestIntentEvent:
@@ -123,13 +144,13 @@ class TestIntentEvent:
         event = IntentEvent(
             id="event-1",
             intent_id="intent-1",
-            event_type=EventType.STATE_UPDATED,
+            event_type=EventType.STATE_PATCHED,
             agent_id="agent-1",
             payload={},
             created_at=now,
         )
         d = event.to_dict()
-        assert d["event_type"] == "state_updated"
+        assert d["event_type"] == "state_patched"
         assert d["created_at"] == now.isoformat()
 
 
@@ -183,20 +204,40 @@ class TestEnums:
     """Tests for enum values."""
 
     def test_intent_status_values(self):
+        assert IntentStatus.DRAFT.value == "draft"
         assert IntentStatus.ACTIVE.value == "active"
-        assert IntentStatus.COMPLETED.value == "completed"
-        assert IntentStatus.CANCELLED.value == "cancelled"
         assert IntentStatus.BLOCKED.value == "blocked"
+        assert IntentStatus.COMPLETED.value == "completed"
+        assert IntentStatus.ABANDONED.value == "abandoned"
 
     def test_event_type_values(self):
-        assert EventType.CREATED.value == "created"
-        assert EventType.STATE_UPDATED.value == "state_updated"
+        # Core lifecycle events
+        assert EventType.INTENT_CREATED.value == "intent_created"
+        assert EventType.STATE_PATCHED.value == "state_patched"
+        assert EventType.STATUS_CHANGED.value == "status_changed"
         assert EventType.LEASE_ACQUIRED.value == "lease_acquired"
+        # Legacy aliases for backward compatibility
+        assert EventType.CREATED.value == "intent_created"
+        assert EventType.STATE_UPDATED.value == "state_patched"
+
+    def test_extended_event_types(self):
+        # Dependency events (RFC-0002)
+        assert EventType.DEPENDENCY_ADDED.value == "dependency_added"
+        assert EventType.DEPENDENCY_REMOVED.value == "dependency_removed"
+        # Attachment events (RFC-0005)
+        assert EventType.ATTACHMENT_ADDED.value == "attachment_added"
+        # Portfolio events (RFC-0007)
+        assert EventType.PORTFOLIO_CREATED.value == "portfolio_created"
+        assert EventType.ADDED_TO_PORTFOLIO.value == "added_to_portfolio"
+        assert EventType.REMOVED_FROM_PORTFOLIO.value == "removed_from_portfolio"
+        # Failure events (RFC-0010)
+        assert EventType.FAILURE_RECORDED.value == "failure_recorded"
 
     def test_lease_status_values(self):
         assert LeaseStatus.ACTIVE.value == "active"
         assert LeaseStatus.RELEASED.value == "released"
         assert LeaseStatus.EXPIRED.value == "expired"
+        assert LeaseStatus.REVOKED.value == "revoked"
 
     def test_stream_status_values(self):
         assert StreamStatus.ACTIVE.value == "active"

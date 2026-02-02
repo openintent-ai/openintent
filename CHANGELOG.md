@@ -5,6 +5,39 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-02-02
+
+### Fixed
+
+- **IntentStatus Enum**: Aligned SDK with protocol spec
+  - Now uses: `draft`, `active`, `blocked`, `completed`, `abandoned`
+  - Added missing `DRAFT` and `ABANDONED` statuses
+  - Removed deprecated `CANCELLED` (use `ABANDONED` instead)
+  - Fixes "ValueError: 'draft' is not a valid IntentStatus" when using SDK with servers
+
+- **EventType Enum**: Aligned SDK with all server event types
+  - Renamed `CREATED` → `INTENT_CREATED` (value: `intent_created`)
+  - Renamed `STATE_UPDATED` → `STATE_PATCHED` (value: `state_patched`)
+  - Added: `DEPENDENCY_ADDED`, `DEPENDENCY_REMOVED` (RFC-0002)
+  - Added: `ATTACHMENT_ADDED` (RFC-0005)
+  - Added: `PORTFOLIO_CREATED`, `ADDED_TO_PORTFOLIO`, `REMOVED_FROM_PORTFOLIO` (RFC-0007)
+  - Added: `FAILURE_RECORDED` (RFC-0010)
+  - Legacy aliases `CREATED` and `STATE_UPDATED` preserved for backward compatibility
+
+- **LeaseStatus Enum**: Added missing `REVOKED` status
+
+- **Intent Model**: 
+  - Changed `constraints` from `list[str]` to `dict[str, Any]` to match server spec
+  - Added `created_by` and `confidence` fields to match server response
+
+## [0.4.4] - 2026-02-02
+
+### Fixed
+
+- **Intent Creation**: Client now sends `created_by` field (using `agent_id`) when creating intents
+- **Server Compatibility**: Server now accepts optional `created_by` field, defaulting to API key
+- **Demo Script**: Fixed 422 validation errors in `/try` demo by ensuring proper authentication
+
 ## [0.4.0] - 2026-02-01
 
 ### Added

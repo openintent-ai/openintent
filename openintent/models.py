@@ -11,27 +11,56 @@ from typing import Any, Optional
 class IntentStatus(str, Enum):
     """Status of an intent in its lifecycle."""
 
+    DRAFT = "draft"
     ACTIVE = "active"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
     BLOCKED = "blocked"
+    COMPLETED = "completed"
+    ABANDONED = "abandoned"
 
 
 class EventType(str, Enum):
     """Types of events that can occur on an intent."""
 
-    CREATED = "created"
-    STATE_UPDATED = "state_updated"
+    # Intent lifecycle events
+    INTENT_CREATED = "intent_created"
+    STATE_PATCHED = "state_patched"
     STATUS_CHANGED = "status_changed"
+
+    # Agent events
     AGENT_ASSIGNED = "agent_assigned"
     AGENT_UNASSIGNED = "agent_unassigned"
+
+    # Constraint events
     CONSTRAINT_ADDED = "constraint_added"
     CONSTRAINT_REMOVED = "constraint_removed"
+
+    # Dependency events (RFC-0002 Intent Graphs)
+    DEPENDENCY_ADDED = "dependency_added"
+    DEPENDENCY_REMOVED = "dependency_removed"
+
+    # Lease events (RFC-0003)
     LEASE_ACQUIRED = "lease_acquired"
     LEASE_RELEASED = "lease_released"
+
+    # Governance events (RFC-0004)
     ARBITRATION_REQUESTED = "arbitration_requested"
     DECISION_RECORDED = "decision_recorded"
+
+    # Attachment events (RFC-0005)
+    ATTACHMENT_ADDED = "attachment_added"
+
+    # Portfolio events (RFC-0007)
+    PORTFOLIO_CREATED = "portfolio_created"
+    ADDED_TO_PORTFOLIO = "added_to_portfolio"
+    REMOVED_FROM_PORTFOLIO = "removed_from_portfolio"
+
+    # Failure events (RFC-0010)
+    FAILURE_RECORDED = "failure_recorded"
+
+    # General events
     COMMENT = "comment"
+
+    # LLM observability events
     TOOL_CALL_STARTED = "tool_call_started"
     TOOL_CALL_COMPLETED = "tool_call_completed"
     TOOL_CALL_FAILED = "tool_call_failed"
@@ -42,6 +71,10 @@ class EventType(str, Enum):
     STREAM_CHUNK = "stream_chunk"
     STREAM_COMPLETED = "stream_completed"
     STREAM_CANCELLED = "stream_cancelled"
+
+    # Legacy aliases for backward compatibility
+    CREATED = "intent_created"
+    STATE_UPDATED = "state_patched"
 
 
 class StreamStatus(str, Enum):
@@ -134,11 +167,13 @@ class Intent:
     version: int
     status: IntentStatus
     state: IntentState
-    constraints: list[str] = field(default_factory=list)
+    constraints: dict[str, Any] = field(default_factory=dict)
     parent_intent_id: Optional[str] = None
     depends_on: list[str] = field(default_factory=list)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    created_by: Optional[str] = None
+    confidence: int = 0
 
     @property
     def has_parent(self) -> bool:
@@ -163,10 +198,17 @@ class Intent:
             "depends_on": self.depends_on,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_by": self.created_by,
+            "confidence": self.confidence,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Intent":
+        # Handle constraints as dict (spec) or list (legacy)
+        constraints = data.get("constraints", {})
+        if isinstance(constraints, list):
+            # Preserve legacy list constraints in a "rules" key
+            constraints = {"rules": constraints} if constraints else {}
         return cls(
             id=data["id"],
             title=data["title"],
@@ -174,7 +216,7 @@ class Intent:
             version=data.get("version", 1),
             status=IntentStatus(data.get("status", "active")),
             state=IntentState.from_dict(data.get("state", {})),
-            constraints=data.get("constraints", []),
+            constraints=constraints,
             parent_intent_id=data.get("parent_intent_id") or data.get("parentIntentId"),
             depends_on=data.get("depends_on") or data.get("dependsOn") or [],
             created_at=(
@@ -187,6 +229,8 @@ class Intent:
                 if data.get("updated_at")
                 else None
             ),
+            created_by=data.get("created_by"),
+            confidence=data.get("confidence", 0),
         )
 
 
