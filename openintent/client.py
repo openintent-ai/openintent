@@ -450,7 +450,7 @@ class OpenIntentClient:
         Raises:
             ConflictError: If version doesn't match (another update occurred).
         """
-        response = self._client.patch(
+        response = self._client.post(
             f"/api/v1/intents/{intent_id}/state",
             json={"state": state_patch},
             headers={"If-Match": str(version)},
@@ -1882,7 +1882,7 @@ class AsyncOpenIntentClient:
         state_patch: dict[str, Any],
     ) -> Intent:
         """Update intent state with optimistic concurrency control."""
-        response = await self._client.patch(
+        response = await self._client.post(
             f"/api/v1/intents/{intent_id}/state",
             json={"state": state_patch},
             headers={"If-Match": str(version)},
