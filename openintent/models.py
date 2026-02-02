@@ -243,29 +243,35 @@ class IntentEvent:
     id: str
     intent_id: str
     event_type: EventType
-    agent_id: str
+    agent_id: Optional[str]
     payload: dict[str, Any]
     created_at: datetime
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "id": self.id,
             "intent_id": self.intent_id,
             "event_type": self.event_type.value,
-            "agent_id": self.agent_id,
             "payload": self.payload,
             "created_at": self.created_at.isoformat(),
         }
+        if self.agent_id:
+            result["agent_id"] = self.agent_id
+        return result
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "IntentEvent":
         return cls(
-            id=data["id"],
-            intent_id=data["intent_id"],
-            event_type=EventType(data["event_type"]),
-            agent_id=data["agent_id"],
+            id=data.get("id", ""),
+            intent_id=data.get("intent_id", ""),
+            event_type=EventType(data.get("event_type", "state_patched")),
+            agent_id=data.get("agent_id"),
             payload=data.get("payload", {}),
-            created_at=datetime.fromisoformat(data["created_at"]),
+            created_at=(
+                datetime.fromisoformat(data["created_at"])
+                if "created_at" in data
+                else datetime.now()
+            ),
         )
 
 
