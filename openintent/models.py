@@ -243,7 +243,7 @@ class IntentEvent:
     id: str
     intent_id: str
     event_type: EventType
-    agent_id: Optional[str]
+    actor: Optional[str]
     payload: dict[str, Any]
     created_at: datetime
 
@@ -255,8 +255,8 @@ class IntentEvent:
             "payload": self.payload,
             "created_at": self.created_at.isoformat(),
         }
-        if self.agent_id:
-            result["agent_id"] = self.agent_id
+        if self.actor:
+            result["actor"] = self.actor
         return result
 
     @classmethod
@@ -265,7 +265,7 @@ class IntentEvent:
             id=data.get("id", ""),
             intent_id=data.get("intent_id", ""),
             event_type=EventType(data.get("event_type", "state_patched")),
-            agent_id=data.get("agent_id"),
+            actor=data.get("actor"),
             payload=data.get("payload", {}),
             created_at=(
                 datetime.fromisoformat(data["created_at"])

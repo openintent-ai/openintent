@@ -131,13 +131,14 @@ class TestIntentEvent:
             id="event-1",
             intent_id="intent-1",
             event_type=EventType.CREATED,
-            agent_id="agent-1",
+            actor="agent-1",
             payload={"key": "value"},
             created_at=now,
         )
         assert event.id == "event-1"
         assert event.event_type == EventType.CREATED
         assert event.payload["key"] == "value"
+        assert event.actor == "agent-1"
 
     def test_event_to_dict(self):
         now = datetime.now()
@@ -145,13 +146,14 @@ class TestIntentEvent:
             id="event-1",
             intent_id="intent-1",
             event_type=EventType.STATE_PATCHED,
-            agent_id="agent-1",
+            actor="agent-1",
             payload={},
             created_at=now,
         )
         d = event.to_dict()
         assert d["event_type"] == "state_patched"
         assert d["created_at"] == now.isoformat()
+        assert d["actor"] == "agent-1"
 
 
 class TestIntentLease:

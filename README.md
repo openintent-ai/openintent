@@ -255,7 +255,7 @@ client.log_event(
 events = client.get_events(intent.id)
 
 for event in events:
-    print(f"{event.event_type} by {event.agent_id} at {event.created_at}")
+    print(f"{event.event_type} by {event.actor} at {event.created_at}")
 ```
 
 ### Agent Leasing (RFC-0003)
