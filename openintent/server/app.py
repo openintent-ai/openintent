@@ -76,7 +76,7 @@ class StatePatchRequest(BaseModel):
     # 2. Simple merge: {"state": {"key": "value"}}
     patches: Optional[List[StatePatch]] = None
     state: Optional[Dict[str, Any]] = None
-    
+
     def get_patches(self) -> List[Dict[str, Any]]:
         """Convert to patches format, handling both input styles."""
         if self.patches:
