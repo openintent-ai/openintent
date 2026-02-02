@@ -17,7 +17,7 @@ Security Model:
 - Events and state changes are attributed to agent_id
 
 Run:
-    export OPENINTENT_API_URL=http://localhost:5000
+    export OPENINTENT_API_URL=http://localhost:8000
     python auth_identity.py
 """
 
@@ -37,7 +37,7 @@ from openintent import (
     EventType,
 )
 
-OPENINTENT_API_URL = os.getenv("OPENINTENT_API_URL", "http://localhost:5000")
+OPENINTENT_API_URL = os.getenv("OPENINTENT_API_URL", "http://localhost:8000")
 
 
 class AgentRole(Enum):

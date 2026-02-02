@@ -6,8 +6,8 @@ Thank you for your interest in contributing to the OpenIntent Python SDK! This d
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/openintent-ai/openintent-sdk-python.git
-   cd openintent-sdk-python
+   git clone https://github.com/openintent-ai/openintent.git
+   cd openintent
    ```
 
 2. Create a virtual environment:

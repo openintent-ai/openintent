@@ -4,6 +4,21 @@ OpenIntent SDK - Python client for the OpenIntent Coordination Protocol.
 A lightweight SDK for coordinating intent across humans and AI agents.
 """
 
+from .agents import (
+    Agent,
+    AgentConfig,
+    BaseAgent,
+    Coordinator,
+    IntentSpec,
+    PortfolioSpec,
+    Worker,
+    on_all_complete,
+    on_assignment,
+    on_complete,
+    on_event,
+    on_lease_available,
+    on_state_change,
+)
 from .client import AsyncOpenIntentClient, OpenIntentClient
 from .exceptions import (
     ConflictError,
@@ -30,11 +45,22 @@ from .models import (
     IntentStatus,
     IntentSubscription,
     LeaseStatus,
+    LLMRequestPayload,
     MembershipRole,
     PortfolioMembership,
     PortfolioStatus,
     RetryPolicy,
     RetryStrategy,
+    StreamState,
+    StreamStatus,
+    ToolCallPayload,
+)
+from .streaming import (
+    EventQueue,
+    SSEEvent,
+    SSEEventType,
+    SSEStream,
+    SSESubscription,
 )
 from .validation import (
     InputValidationError,
@@ -51,8 +77,31 @@ from .validation import (
     validate_url,
     validate_uuid,
 )
+from .workflow import (
+    GovernanceConfig,
+    PhaseConfig,
+    WorkflowError,
+    WorkflowNotFoundError,
+    WorkflowSpec,
+    WorkflowValidationError,
+    validate_workflow,
+)
 
-__version__ = "0.1.0"
+
+def get_server():
+    """Lazy import for server components (requires server extras)."""
+    try:
+        from .server import OpenIntentServer, ServerConfig, create_app
+
+        return OpenIntentServer, ServerConfig, create_app
+    except ImportError:
+        raise ImportError(
+            "Server components require the 'server' extras. "
+            "Install with: pip install openintent[server]"
+        )
+
+
+__version__ = "0.4.0"
 __all__ = [
     "OpenIntentClient",
     "AsyncOpenIntentClient",
@@ -78,6 +127,10 @@ __all__ = [
     "RetryStrategy",
     "IntentFailure",
     "IntentSubscription",
+    "ToolCallPayload",
+    "LLMRequestPayload",
+    "StreamState",
+    "StreamStatus",
     "OpenIntentError",
     "ConflictError",
     "NotFoundError",
@@ -96,4 +149,30 @@ __all__ = [
     "validate_lease_acquire",
     "validate_cost_record",
     "validate_subscription",
+    "SSEEvent",
+    "SSEEventType",
+    "SSEStream",
+    "SSESubscription",
+    "EventQueue",
+    "Agent",
+    "BaseAgent",
+    "Coordinator",
+    "Worker",
+    "AgentConfig",
+    "IntentSpec",
+    "PortfolioSpec",
+    "on_assignment",
+    "on_complete",
+    "on_lease_available",
+    "on_state_change",
+    "on_event",
+    "on_all_complete",
+    "WorkflowSpec",
+    "WorkflowError",
+    "WorkflowValidationError",
+    "WorkflowNotFoundError",
+    "PhaseConfig",
+    "GovernanceConfig",
+    "validate_workflow",
+    "get_server",
 ]

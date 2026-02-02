@@ -8,7 +8,7 @@ Prerequisites:
     pip install openintent
 
 Usage:
-    export OPENINTENT_API_URL=http://localhost:5000
+    export OPENINTENT_API_URL=http://localhost:8000
     export OPENINTENT_API_KEY=dev-user-key
     python basic_usage.py
 """
@@ -25,14 +25,13 @@ from openintent import (
 
 def main():
     # Configuration
-    base_url = os.getenv("OPENINTENT_API_URL", "http://localhost:5000")
+    base_url = os.getenv("OPENINTENT_API_URL", "http://localhost:8000")
     api_key = os.getenv("OPENINTENT_API_KEY", "dev-user-key")
 
     # Initialize client
     with OpenIntentClient(
         base_url=base_url, api_key=api_key, agent_id="example-agent"
     ) as client:
-
         # 1. Discover protocol capabilities
         print("1. Discovering protocol...")
         try:

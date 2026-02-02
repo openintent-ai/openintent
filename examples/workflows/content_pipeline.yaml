@@ -1,0 +1,100 @@
+openintent: "1.0"
+
+# ============================================================
+# Content Pipeline Workflow - Parallel Execution Example
+# ============================================================
+#
+# A content creation pipeline where:
+#   1. Research runs first
+#   2. Writing and images run in parallel (both depend on research)
+#   3. Publishing waits for both writing and images
+#
+# Demonstrates:
+#   - Parallel phase execution
+#   - Multiple dependencies
+#   - Cost tracking
+#
+# Run with:
+#   openintent run examples/workflows/content_pipeline.yaml
+#
+# ============================================================
+
+info:
+  name: "Content Pipeline"
+  version: "1.0.0"
+  description: "Create, illustrate, and publish content with parallel processing"
+
+governance:
+  max_cost_usd: 5.00
+  timeout_hours: 1
+
+agents:
+  research-agent:
+    description: "Topic research and outline creation"
+    capabilities: ["research", "planning"]
+    
+  writer-agent:
+    description: "Content writing and editing"
+    capabilities: ["writing", "editing"]
+    
+  image-agent:
+    description: "Image generation and selection"
+    capabilities: ["image-generation", "media"]
+    
+  publisher-agent:
+    description: "Content formatting and publishing"
+    capabilities: ["formatting", "publishing"]
+
+workflow:
+  # Phase 1: Research (runs first)
+  research:
+    title: "Research Topic"
+    description: "Gather information and create content outline"
+    assign: research-agent
+    initial_state:
+      topic: "Benefits of AI agents in software development"
+      
+  # Phase 2a: Writing (runs in parallel with images)
+  write:
+    title: "Write Content"
+    description: "Draft the article based on research"
+    assign: writer-agent
+    depends_on:
+      - research
+    cost_tracking:
+      enabled: true
+      budget_usd: 2.00
+    initial_state:
+      style: "technical blog"
+      length: "1500 words"
+
+  # Phase 2b: Images (runs in parallel with writing)
+  images:
+    title: "Generate Images"
+    description: "Create illustrations for the content"
+    assign: image-agent
+    depends_on:
+      - research
+    cost_tracking:
+      enabled: true
+      budget_usd: 1.00
+    initial_state:
+      count: 3
+      style: "modern, minimalist"
+
+  # Phase 3: Publishing (waits for both writing and images)
+  publish:
+    title: "Publish Content"
+    description: "Format and publish the final article"
+    assign: publisher-agent
+    depends_on:
+      - write
+      - images
+    attachments:
+      - filename: "article.md"
+        content_type: "text/markdown"
+      - filename: "metadata.json"
+        content_type: "application/json"
+    initial_state:
+      platform: "blog"
+      schedule: "immediate"

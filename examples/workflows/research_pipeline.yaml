@@ -1,0 +1,57 @@
+openintent: "1.0"
+
+# ============================================================
+# Research Pipeline - Multi-Stage Coordinated Workflow
+# ============================================================
+#
+# A more complex workflow demonstrating coordinated multi-agent
+# research with analysis and content generation phases.
+#
+# To run:
+#   1. Start the server: openintent-server
+#   2. Run your agents
+#   3. Execute: openintent run research_pipeline.yaml
+#
+# ============================================================
+
+info:
+  name: "Research Pipeline"
+  version: "1.0.0"
+  description: "Multi-agent research, analysis, and content generation"
+
+workflow:
+  research:
+    title: "Gather Research"
+    description: "Research current trends in AI agent coordination"
+    assign: researcher
+    constraints:
+      - "Focus on recent developments (2024-2025)"
+      - "Include both academic and industry perspectives"
+      - "Note key challenges and solutions"
+    
+  analyze:
+    title: "Analyze Findings"
+    description: "Identify patterns and insights from the research"
+    assign: analyzer
+    depends_on: [research]
+    constraints:
+      - "Identify top 3 key trends"
+      - "Note any contradictions or debates"
+    
+  write:
+    title: "Generate Report"
+    description: "Write a comprehensive report on the findings"
+    assign: writer
+    depends_on: [analyze]
+    constraints:
+      - "Use clear, professional language"
+      - "Structure with introduction, findings, and recommendations"
+    
+  summarize:
+    title: "Executive Summary"
+    description: "Create a brief executive summary"
+    assign: summarizer
+    depends_on: [write]
+    constraints:
+      - "Maximum 3 paragraphs"
+      - "Highlight actionable insights"

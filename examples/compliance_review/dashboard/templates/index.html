@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compliance Review Dashboard</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f0f;
+            color: #e5e5e5;
+            line-height: 1.5;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid #333;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .subtitle {
+            color: #888;
+            font-size: 0.875rem;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.875rem;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #22c55e;
+        }
+        
+        .status-dot.error {
+            background: #ef4444;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        @media (max-width: 900px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .panel {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #333;
+            background: #222;
+        }
+        
+        .panel-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #888;
+        }
+        
+        .panel-content {
+            padding: 16px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .intent-card {
+            background: #252525;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        
+        .intent-card:hover {
+            border-color: #555;
+        }
+        
+        .intent-card.selected {
+            border-color: #3b82f6;
+        }
+        
+        .intent-title {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        
+        .intent-meta {
+            font-size: 0.75rem;
+            color: #888;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+        
+        .badge.pending {
+            background: #3b3b00;
+            color: #fbbf24;
+        }
+        
+        .badge.in_progress {
+            background: #002244;
+            color: #3b82f6;
+        }
+        
+        .badge.completed {
+            background: #003300;
+            color: #22c55e;
+        }
+        
+        .badge.failed {
+            background: #330000;
+            color: #ef4444;
+        }
+        
+        .event-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #2a2a2a;
+            font-size: 0.875rem;
+        }
+        
+        .event-item:last-child {
+            border-bottom: none;
+        }
+        
+        .event-type {
+            color: #3b82f6;
+            font-weight: 500;
+        }
+        
+        .event-time {
+            color: #666;
+            font-size: 0.75rem;
+        }
+        
+        .lease-item, .cost-item, .attachment-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #2a2a2a;
+            font-size: 0.875rem;
+        }
+        
+        .cost-total {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #22c55e;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+        }
+        
+        .btn-approve {
+            background: #22c55e;
+            color: #000;
+        }
+        
+        .btn-reject {
+            background: #ef4444;
+            color: #fff;
+        }
+        
+        .btn-refresh {
+            background: #333;
+            color: #fff;
+            font-size: 0.75rem;
+            padding: 4px 8px;
+        }
+        
+        .governance-actions {
+            display: flex;
+            gap: 8px;
+            padding: 16px;
+            border-top: 1px solid #333;
+        }
+        
+        .empty-state {
+            color: #666;
+            text-align: center;
+            padding: 40px;
+            font-size: 0.875rem;
+        }
+        
+        .loading {
+            color: #666;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .state-tree {
+            font-family: monospace;
+            font-size: 0.75rem;
+            background: #0a0a0a;
+            padding: 12px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Compliance Review Dashboard</h1>
+                <p class="subtitle">OpenIntent Protocol - All 8 RFCs (Polling every 3s)</p>
+            </div>
+            <div class="status-indicator">
+                <span class="status-dot" id="connection-status"></span>
+                <span id="connection-text">Connected</span>
+                <button class="btn btn-refresh" onclick="refreshAll()">Refresh</button>
+            </div>
+        </header>
+        
+        <div class="grid">
+            <!-- Intents Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Intents (RFC-0001)</span>
+                    <span id="intent-count">0</span>
+                </div>
+                <div class="panel-content" id="intents-list">
+                    <div class="loading">Loading intents...</div>
+                </div>
+            </div>
+            
+            <!-- Events Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Events (RFC-0002)</span>
+                    <span id="event-count">0</span>
+                </div>
+                <div class="panel-content" id="events-list">
+                    <div class="empty-state">Select an intent to view events</div>
+                </div>
+            </div>
+            
+            <!-- Leases Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Leases (RFC-0003)</span>
+                </div>
+                <div class="panel-content" id="leases-list">
+                    <div class="empty-state">Select an intent to view leases</div>
+                </div>
+            </div>
+            
+            <!-- Costs Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Costs (RFC-0007)</span>
+                </div>
+                <div class="panel-content" id="costs-panel">
+                    <div class="empty-state">Select an intent to view costs</div>
+                </div>
+            </div>
+            
+            <!-- Attachments Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Attachments (RFC-0005)</span>
+                </div>
+                <div class="panel-content" id="attachments-list">
+                    <div class="empty-state">Select an intent to view attachments</div>
+                </div>
+            </div>
+            
+            <!-- Governance Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Governance (RFC-0004)</span>
+                </div>
+                <div class="panel-content" id="governance-panel">
+                    <div class="empty-state">Select an intent requiring approval</div>
+                </div>
+                <div class="governance-actions" id="governance-actions" style="display: none;">
+                    <button class="btn btn-approve" onclick="approveIntent()">Approve</button>
+                    <button class="btn btn-reject" onclick="rejectIntent()">Reject</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- State Panel (Full Width) -->
+        <div class="panel" style="margin-top: 20px;">
+            <div class="panel-header">
+                <span class="panel-title">Intent State</span>
+            </div>
+            <div class="panel-content">
+                <div class="state-tree" id="state-tree">Select an intent to view its state</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let selectedIntentId = null;
+        let autoRefreshInterval = null;
+        
+        async function fetchIntents() {
+            try {
+                const res = await fetch('/api/intents');
+                const data = await res.json();
+                
+                if (data.error) {
+                    document.getElementById('connection-status').classList.add('error');
+                    document.getElementById('connection-text').textContent = 'Error';
+                    return;
+                }
+                
+                document.getElementById('connection-status').classList.remove('error');
+                document.getElementById('connection-text').textContent = 'Connected';
+                
+                const list = document.getElementById('intents-list');
+                const count = document.getElementById('intent-count');
+                count.textContent = data.intents.length;
+                
+                if (data.intents.length === 0) {
+                    list.innerHTML = '<div class="empty-state">No intents found</div>';
+                    return;
+                }
+                
+                list.innerHTML = data.intents.map(intent => `
+                    <div class="intent-card ${selectedIntentId === intent.id ? 'selected' : ''}" 
+                         onclick="selectIntent('${intent.id}')"
+                         data-testid="intent-card-${intent.id}">
+                        <div class="intent-title">${escapeHtml(intent.title)}</div>
+                        <div class="intent-meta">
+                            <span class="badge ${intent.status}">${intent.status}</span>
+                            <span>v${intent.version}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Failed to fetch intents:', e);
+                document.getElementById('connection-status').classList.add('error');
+                document.getElementById('connection-text').textContent = 'Disconnected';
+            }
+        }
+        
+        async function selectIntent(intentId) {
+            selectedIntentId = intentId;
+            
+            // Update selection UI
+            document.querySelectorAll('.intent-card').forEach(card => {
+                card.classList.toggle('selected', card.dataset.testid === `intent-card-${intentId}`);
+            });
+            
+            // Fetch all details in parallel
+            await Promise.all([
+                fetchEvents(intentId),
+                fetchLeases(intentId),
+                fetchCosts(intentId),
+                fetchAttachments(intentId),
+                fetchIntentDetails(intentId),
+            ]);
+        }
+        
+        async function fetchIntentDetails(intentId) {
+            try {
+                const res = await fetch(`/api/intents/${intentId}`);
+                const data = await res.json();
+                
+                document.getElementById('state-tree').textContent = 
+                    JSON.stringify(data.state || {}, null, 2);
+                
+                // Check if governance actions needed
+                const state = data.state || {};
+                const report = state.report || {};
+                
+                if (report.requires_approval) {
+                    document.getElementById('governance-panel').innerHTML = `
+                        <p>Risk Category: <strong>${report.summary?.risk_category || 'UNKNOWN'}</strong></p>
+                        <p>Issues Found: ${report.summary?.total_issues || 0}</p>
+                        <p style="color: #fbbf24; margin-top: 8px;">Requires human approval</p>
+                    `;
+                    document.getElementById('governance-actions').style.display = 'flex';
+                } else {
+                    document.getElementById('governance-panel').innerHTML = 
+                        '<div class="empty-state">No governance action required</div>';
+                    document.getElementById('governance-actions').style.display = 'none';
+                }
+            } catch (e) {
+                console.error('Failed to fetch intent details:', e);
+            }
+        }
+        
+        async function fetchEvents(intentId) {
+            try {
+                const res = await fetch(`/api/intents/${intentId}/events`);
+                const data = await res.json();
+                
+                const list = document.getElementById('events-list');
+                const count = document.getElementById('event-count');
+                count.textContent = data.events?.length || 0;
+                
+                if (!data.events || data.events.length === 0) {
+                    list.innerHTML = '<div class="empty-state">No events</div>';
+                    return;
+                }
+                
+                list.innerHTML = data.events.slice(0, 20).map(event => `
+                    <div class="event-item">
+                        <span class="event-type">${event.event_type}</span>
+                        <span class="event-time">${formatTime(event.timestamp)}</span>
+                        <div style="color: #888; font-size: 0.75rem;">${event.actor || ''}</div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Failed to fetch events:', e);
+            }
+        }
+        
+        async function fetchLeases(intentId) {
+            try {
+                const res = await fetch(`/api/intents/${intentId}/leases`);
+                const data = await res.json();
+                
+                const list = document.getElementById('leases-list');
+                
+                if (!data.leases || data.leases.length === 0) {
+                    list.innerHTML = '<div class="empty-state">No active leases</div>';
+                    return;
+                }
+                
+                list.innerHTML = data.leases.map(lease => `
+                    <div class="lease-item">
+                        <span>${lease.scope}</span>
+                        <span class="badge ${lease.status}">${lease.status}</span>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Failed to fetch leases:', e);
+            }
+        }
+        
+        async function fetchCosts(intentId) {
+            try {
+                const res = await fetch(`/api/intents/${intentId}/costs`);
+                const data = await res.json();
+                
+                const panel = document.getElementById('costs-panel');
+                
+                panel.innerHTML = `
+                    <div class="cost-total">$${(data.total || 0).toFixed(4)}</div>
+                    ${Object.entries(data.by_type || {}).map(([type, amount]) => `
+                        <div class="cost-item">
+                            <span>${type}</span>
+                            <span>$${amount.toFixed(4)}</span>
+                        </div>
+                    `).join('')}
+                `;
+            } catch (e) {
+                console.error('Failed to fetch costs:', e);
+            }
+        }
+        
+        async function fetchAttachments(intentId) {
+            try {
+                const res = await fetch(`/api/intents/${intentId}/attachments`);
+                const data = await res.json();
+                
+                const list = document.getElementById('attachments-list');
+                
+                if (!data.attachments || data.attachments.length === 0) {
+                    list.innerHTML = '<div class="empty-state">No attachments</div>';
+                    return;
+                }
+                
+                list.innerHTML = data.attachments.map(att => `
+                    <div class="attachment-item">
+                        <span>${att.filename}</span>
+                        <span style="color: #888;">${att.content_type}</span>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Failed to fetch attachments:', e);
+            }
+        }
+        
+        async function approveIntent() {
+            if (!selectedIntentId) return;
+            
+            try {
+                await fetch(`/api/governance/approve/${selectedIntentId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason: 'Approved via dashboard' })
+                });
+                await selectIntent(selectedIntentId);
+            } catch (e) {
+                console.error('Failed to approve:', e);
+            }
+        }
+        
+        async function rejectIntent() {
+            if (!selectedIntentId) return;
+            
+            try {
+                await fetch(`/api/governance/reject/${selectedIntentId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason: 'Rejected via dashboard' })
+                });
+                await selectIntent(selectedIntentId);
+            } catch (e) {
+                console.error('Failed to reject:', e);
+            }
+        }
+        
+        function refreshAll() {
+            fetchIntents();
+            if (selectedIntentId) {
+                selectIntent(selectedIntentId);
+            }
+        }
+        
+        function formatTime(isoString) {
+            if (!isoString) return '';
+            const d = new Date(isoString);
+            return d.toLocaleTimeString();
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Initial load
+        fetchIntents();
+        
+        // Auto-refresh every 3 seconds
+        autoRefreshInterval = setInterval(refreshAll, 3000);
+    </script>
+</body>
+</html>

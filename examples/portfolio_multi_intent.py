@@ -31,7 +31,7 @@ from openintent import (
     PortfolioStatus,
 )
 
-OPENINTENT_API_URL = os.getenv("OPENINTENT_API_URL", "http://localhost:5000")
+OPENINTENT_API_URL = os.getenv("OPENINTENT_API_URL", "http://localhost:8000")
 OPENINTENT_API_KEY = os.getenv("OPENINTENT_API_KEY", "dev-user-key")
 
 
@@ -57,9 +57,9 @@ class TripPlanningCoordinator:
 
     async def create_trip_portfolio(self, destination: str, budget: float) -> str:
         """Create a portfolio for the trip with governance policy."""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Creating Trip Portfolio: {destination}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         portfolio = await self.client.create_portfolio(
             name=f"Trip to {destination}",
@@ -221,9 +221,9 @@ async def monitor_portfolio_progress(client: AsyncOpenIntentClient, portfolio_id
     """Monitor and display portfolio aggregate progress."""
     portfolio = await client.get_portfolio(portfolio_id)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("PORTFOLIO STATUS")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  Name: {portfolio.name}")
     print(f"  Status: {portfolio.status.value}")
 

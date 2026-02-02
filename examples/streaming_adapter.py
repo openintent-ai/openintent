@@ -19,7 +19,7 @@ Architecture:
 
 Run:
     export OPENAI_API_KEY=your-key
-    export OPENINTENT_API_URL=http://localhost:5000
+    export OPENINTENT_API_URL=http://localhost:8000
     python streaming_adapter.py
 """
 
@@ -98,7 +98,7 @@ class StreamingAdapter:
         self.state_update_interval = state_update_interval
 
         self._openintent_url = openintent_url or os.getenv(
-            "OPENINTENT_API_URL", "http://localhost:5000"
+            "OPENINTENT_API_URL", "http://localhost:8000"
         )
         self._openintent_key = openintent_key or os.getenv(
             "OPENINTENT_API_KEY", "dev-user-key"

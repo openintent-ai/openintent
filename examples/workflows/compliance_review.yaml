@@ -1,0 +1,151 @@
+openintent: "1.0"
+
+# ============================================================
+# Compliance Document Review - Advanced Example (All 8 RFCs)
+# ============================================================
+#
+# A comprehensive compliance workflow demonstrating ALL OpenIntent features:
+#   - RFC-0001: Intents (structured phases)
+#   - RFC-0002: Events (audit trail)
+#   - RFC-0003: Leasing (exclusive section access)
+#   - RFC-0004: Governance (approval gates)
+#   - RFC-0005: Attachments (report files)
+#   - RFC-0006: Subscriptions (real-time updates)
+#   - RFC-0007: Costs (budget tracking)
+#   - RFC-0008: Retry (failure handling)
+#
+# Run with:
+#   openintent run examples/workflows/compliance_review.yaml
+#
+# ============================================================
+
+info:
+  name: "Compliance Document Review"
+  version: "2.0.0"
+  description: "Full compliance review pipeline showcasing all OpenIntent RFCs"
+
+governance:
+  require_approval:
+    when: "risk.category == 'HIGH'"
+    approvers:
+      - "legal-team"
+      - "compliance-officer"
+    timeout_hours: 24
+    on_timeout: "escalate"
+  max_cost_usd: 10.00
+  timeout_hours: 48
+  escalation:
+    contact: "legal@company.com"
+    after_hours: 4
+
+agents:
+  ocr-agent:
+    description: "Document text extraction with OCR"
+    capabilities: ["ocr", "pdf", "image"]
+    
+  analyzer-agent:
+    description: "Clause analysis and issue detection"
+    capabilities: ["nlp", "compliance", "legal"]
+    
+  risk-agent:
+    description: "Risk assessment and scoring"
+    capabilities: ["scoring", "risk-analysis"]
+    
+  report-agent:
+    description: "Report generation and formatting"
+    capabilities: ["reporting", "formatting", "export"]
+
+workflow:
+  # Phase 1: Document Extraction (RFC-0008: Retry Policies)
+  extraction:
+    title: "Document Extraction"
+    description: "Extract text and structure from uploaded document"
+    assign: ocr-agent
+    retry:
+      max_attempts: 3
+      backoff: exponential
+      initial_delay_ms: 1000
+      max_delay_ms: 30000
+      retryable_errors:
+        - "TIMEOUT"
+        - "OCR_FAILURE"
+    constraints:
+      - "max_file_size_mb: 50"
+      - "formats: pdf,docx,image"
+    initial_state:
+      phase: "extraction"
+
+  # Phase 2: Clause Analysis (RFC-0003: Leasing)
+  analysis:
+    title: "Clause Analysis"
+    description: "Analyze each clause for compliance issues"
+    assign: analyzer-agent
+    depends_on:
+      - extraction
+    leasing:
+      strategy: per_section
+      scope: "section:{{section.id}}"
+      ttl_seconds: 60
+      wait_for_lock: true
+    constraints:
+      - "exclusive_access: true"
+    initial_state:
+      phase: "analysis"
+      analysis_depth: "comprehensive"
+
+  # Phase 3: Risk Assessment (RFC-0007: Costs)
+  risk:
+    title: "Risk Assessment"
+    description: "Calculate overall document risk score"
+    assign: risk-agent
+    depends_on:
+      - analysis
+    cost_tracking:
+      enabled: true
+      budget_usd: 2.00
+      alert_at_percent: 80
+    constraints:
+      - "scoring_model: v2"
+    initial_state:
+      phase: "risk"
+      include_benchmarks: true
+
+  # Phase 4: Report Generation (RFC-0005: Attachments)
+  report:
+    title: "Report Generation"
+    description: "Generate comprehensive compliance report"
+    assign: report-agent
+    depends_on:
+      - risk
+    attachments:
+      - filename: "compliance_report.json"
+        content_type: "application/json"
+      - filename: "compliance_summary.md"
+        content_type: "text/markdown"
+      - filename: "executive_brief.pdf"
+        content_type: "application/pdf"
+    initial_state:
+      phase: "report"
+      output_formats:
+        - "json"
+        - "markdown"
+        - "pdf"
+
+# Type definitions for validation
+types:
+  Section:
+    id: string
+    title: string
+    text: string
+    page: integer
+    
+  ComplianceIssue:
+    type: string
+    severity:
+      enum: ["low", "medium", "high", "critical"]
+    description: string
+    section_id: string
+    recommendation: string
+    
+  RiskCategory:
+    enum: ["LOW", "MEDIUM", "HIGH", "CRITICAL"]

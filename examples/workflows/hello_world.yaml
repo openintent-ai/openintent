@@ -1,0 +1,37 @@
+openintent: "1.0"
+
+# ============================================================
+# Hello World - Basic Coordinated Workflow
+# ============================================================
+#
+# A simple two-phase workflow: research a topic and summarize.
+#
+# To run this workflow:
+#   1. Start the server: openintent-server
+#   2. Run your agents (see examples/demo_agents.py)
+#   3. Execute: openintent run hello_world.yaml
+#
+# ============================================================
+
+info:
+  name: "Hello World"
+  version: "1.0.0"
+  description: "A simple coordinated workflow - research a topic and summarize"
+
+workflow:
+  research:
+    title: "Research Topic"
+    description: "Research the benefits of multi-agent coordination"
+    assign: researcher
+    constraints:
+      - "Be thorough but concise"
+      - "Include practical examples"
+    
+  summarize:
+    title: "Summarize Findings"
+    description: "Create an executive summary of the research"
+    assign: summarizer
+    depends_on: [research]
+    constraints:
+      - "Keep under 200 words"
+      - "Focus on key takeaways"

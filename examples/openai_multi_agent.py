@@ -15,7 +15,7 @@ Prerequisites:
 
 Usage:
     export OPENAI_API_KEY=your-key
-    export OPENINTENT_API_URL=http://localhost:5000
+    export OPENINTENT_API_URL=http://localhost:8000
     export OPENINTENT_API_KEY=dev-user-key
     python openai_multi_agent.py
 """
@@ -37,7 +37,7 @@ from openintent import (
     LeaseConflictError,
 )
 
-OPENINTENT_API_URL = os.getenv("OPENINTENT_API_URL", "http://localhost:5000")
+OPENINTENT_API_URL = os.getenv("OPENINTENT_API_URL", "http://localhost:8000")
 OPENINTENT_API_KEY = os.getenv("OPENINTENT_API_KEY", "dev-user-key")
 
 

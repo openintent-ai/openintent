@@ -1,0 +1,108 @@
+openintent: "1.0"
+
+# ============================================================
+# Data Pipeline Workflow - ETL Pattern Example
+# ============================================================
+#
+# A classic ETL (Extract, Transform, Load) workflow:
+#   1. Extract data from source
+#   2. Transform and validate
+#   3. Load into destination
+#   4. Verify and report
+#
+# Demonstrates:
+#   - Sequential dependencies
+#   - Error handling with retries
+#   - Cost tracking for API calls
+#
+# Run with:
+#   openintent run examples/workflows/data_pipeline.yaml
+#
+# ============================================================
+
+info:
+  name: "Data Pipeline"
+  version: "1.0.0"
+  description: "ETL pipeline for data processing and migration"
+
+governance:
+  max_cost_usd: 20.00
+  timeout_hours: 2
+
+agents:
+  extractor-agent:
+    description: "Extracts data from various sources"
+    capabilities: ["api", "database", "file"]
+    
+  transformer-agent:
+    description: "Transforms and validates data"
+    capabilities: ["transformation", "validation"]
+    
+  loader-agent:
+    description: "Loads data into destination systems"
+    capabilities: ["database", "api", "batch"]
+    
+  validator-agent:
+    description: "Verifies data integrity and generates reports"
+    capabilities: ["validation", "reporting"]
+
+workflow:
+  extract:
+    title: "Extract Data"
+    description: "Pull data from source systems"
+    assign: extractor-agent
+    retry:
+      max_attempts: 5
+      backoff: exponential
+      initial_delay_ms: 2000
+    cost_tracking:
+      enabled: true
+      budget_usd: 5.00
+    initial_state:
+      source: "api"
+      batch_size: 1000
+
+  transform:
+    title: "Transform Data"
+    description: "Clean, validate, and transform extracted data"
+    assign: transformer-agent
+    depends_on:
+      - extract
+    initial_state:
+      validations:
+        - "schema"
+        - "nulls"
+        - "duplicates"
+      transformations:
+        - "normalize"
+        - "enrich"
+
+  load:
+    title: "Load Data"
+    description: "Insert transformed data into destination"
+    assign: loader-agent
+    depends_on:
+      - transform
+    retry:
+      max_attempts: 3
+      backoff: linear
+      initial_delay_ms: 5000
+    initial_state:
+      destination: "database"
+      batch_size: 500
+      upsert: true
+
+  verify:
+    title: "Verify Load"
+    description: "Check data integrity and generate summary"
+    assign: validator-agent
+    depends_on:
+      - load
+    attachments:
+      - filename: "pipeline_report.json"
+        content_type: "application/json"
+    initial_state:
+      checks:
+        - "row_count"
+        - "checksum"
+        - "sample_validation"

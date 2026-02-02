@@ -6,9 +6,12 @@ Provides both synchronous and asynchronous clients with full protocol support.
 
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from typing import Any, Generator, Optional
+from typing import TYPE_CHECKING, Any, Generator, Optional
 
 import httpx
+
+if TYPE_CHECKING:
+    from .streaming import EventQueue, SSEStream
 
 from .exceptions import (
     ConflictError,
@@ -32,11 +35,15 @@ from .models import (
     IntentPortfolio,
     IntentStatus,
     IntentSubscription,
+    LLMRequestPayload,
     MembershipRole,
     PortfolioMembership,
     PortfolioStatus,
     RetryPolicy,
     RetryStrategy,
+    StreamState,
+    StreamStatus,
+    ToolCallPayload,
 )
 
 
@@ -145,9 +152,11 @@ class OpenIntentClient:
     def create_intent(
         self,
         title: str,
-        description: str,
+        description: str = "",
         constraints: Optional[list[str]] = None,
         initial_state: Optional[dict[str, Any]] = None,
+        parent_intent_id: Optional[str] = None,
+        depends_on: Optional[list[str]] = None,
     ) -> Intent:
         """
         Create a new intent.
@@ -157,16 +166,22 @@ class OpenIntentClient:
             description: Detailed description of the goal.
             constraints: Optional list of constraints.
             initial_state: Optional initial state data.
+            parent_intent_id: Optional parent intent ID for hierarchical graphs (RFC-0002).
+            depends_on: Optional list of intent IDs this depends on (RFC-0002).
 
         Returns:
             The created Intent object.
         """
-        payload = {
+        payload: dict[str, Any] = {
             "title": title,
             "description": description,
             "constraints": constraints or [],
             "state": initial_state or {},
         }
+        if parent_intent_id:
+            payload["parent_intent_id"] = parent_intent_id
+        if depends_on:
+            payload["depends_on"] = depends_on
         response = self._client.post("/api/v1/intents", json=payload)
         data = self._handle_response(response)
         return Intent.from_dict(data)
@@ -209,6 +224,208 @@ class OpenIntentClient:
         response = self._client.get("/api/v1/intents", params=params)
         data = self._handle_response(response)
         return [Intent.from_dict(item) for item in data.get("intents", data)]
+
+    # ==================== Intent Graphs (RFC-0002) ====================
+
+    def create_child_intent(
+        self,
+        parent_id: str,
+        title: str,
+        description: str = "",
+        constraints: Optional[list[str]] = None,
+        initial_state: Optional[dict[str, Any]] = None,
+        depends_on: Optional[list[str]] = None,
+    ) -> Intent:
+        """
+        Create a child intent under a parent intent.
+
+        Args:
+            parent_id: The parent intent ID.
+            title: Human-readable title for the child intent.
+            description: Detailed description of the goal.
+            constraints: Optional list of constraints.
+            initial_state: Optional initial state data.
+            depends_on: Optional list of intent IDs this depends on.
+
+        Returns:
+            The created child Intent object.
+        """
+        payload = {
+            "title": title,
+            "description": description,
+            "constraints": constraints or [],
+            "state": initial_state or {},
+            "parent_intent_id": parent_id,
+            "depends_on": depends_on or [],
+        }
+        response = self._client.post(
+            f"/api/v1/intents/{parent_id}/children", json=payload
+        )
+        data = self._handle_response(response)
+        return Intent.from_dict(data)
+
+    def get_children(self, intent_id: str) -> list[Intent]:
+        """
+        Get immediate children of an intent.
+
+        Args:
+            intent_id: The parent intent ID.
+
+        Returns:
+            List of child Intent objects.
+        """
+        response = self._client.get(f"/api/v1/intents/{intent_id}/children")
+        data = self._handle_response(response)
+        return [Intent.from_dict(item) for item in data.get("children", data)]
+
+    def get_descendants(self, intent_id: str) -> list[Intent]:
+        """
+        Get all descendants of an intent (recursive).
+
+        Args:
+            intent_id: The ancestor intent ID.
+
+        Returns:
+            List of all descendant Intent objects.
+        """
+        response = self._client.get(f"/api/v1/intents/{intent_id}/descendants")
+        data = self._handle_response(response)
+        return [Intent.from_dict(item) for item in data.get("descendants", data)]
+
+    def get_ancestors(self, intent_id: str) -> list[Intent]:
+        """
+        Get all ancestors of an intent up to root.
+
+        Args:
+            intent_id: The descendant intent ID.
+
+        Returns:
+            List of ancestor Intent objects (nearest first).
+        """
+        response = self._client.get(f"/api/v1/intents/{intent_id}/ancestors")
+        data = self._handle_response(response)
+        return [Intent.from_dict(item) for item in data.get("ancestors", data)]
+
+    def get_dependencies(self, intent_id: str) -> list[Intent]:
+        """
+        Get intents that this intent depends on.
+
+        Args:
+            intent_id: The dependent intent ID.
+
+        Returns:
+            List of dependency Intent objects.
+        """
+        response = self._client.get(f"/api/v1/intents/{intent_id}/dependencies")
+        data = self._handle_response(response)
+        return [Intent.from_dict(item) for item in data.get("dependencies", data)]
+
+    def get_dependents(self, intent_id: str) -> list[Intent]:
+        """
+        Get intents that depend on this intent.
+
+        Args:
+            intent_id: The dependency intent ID.
+
+        Returns:
+            List of dependent Intent objects.
+        """
+        response = self._client.get(f"/api/v1/intents/{intent_id}/dependents")
+        data = self._handle_response(response)
+        return [Intent.from_dict(item) for item in data.get("dependents", data)]
+
+    def add_dependency(
+        self,
+        intent_id: str,
+        dependency_id: str,
+        version: int,
+    ) -> Intent:
+        """
+        Add a dependency to an intent.
+
+        Args:
+            intent_id: The intent to add dependency to.
+            dependency_id: The intent that becomes a dependency.
+            version: Expected current version (for conflict detection).
+
+        Returns:
+            The updated Intent object.
+
+        Raises:
+            ValidationError: If adding creates a cycle.
+        """
+        response = self._client.post(
+            f"/api/v1/intents/{intent_id}/dependencies",
+            json={"dependency_id": dependency_id},
+            headers={"If-Match": str(version)},
+        )
+        data = self._handle_response(response)
+        return Intent.from_dict(data)
+
+    def remove_dependency(
+        self,
+        intent_id: str,
+        dependency_id: str,
+        version: int,
+    ) -> Intent:
+        """
+        Remove a dependency from an intent.
+
+        Args:
+            intent_id: The intent to remove dependency from.
+            dependency_id: The dependency to remove.
+            version: Expected current version (for conflict detection).
+
+        Returns:
+            The updated Intent object.
+        """
+        response = self._client.delete(
+            f"/api/v1/intents/{intent_id}/dependencies/{dependency_id}",
+            headers={"If-Match": str(version)},
+        )
+        data = self._handle_response(response)
+        return Intent.from_dict(data)
+
+    def get_ready_intents(self, intent_id: str) -> list[Intent]:
+        """
+        Get child intents that are ready to work on (all dependencies satisfied).
+
+        Args:
+            intent_id: The parent intent ID.
+
+        Returns:
+            List of Intent objects that have no blocking dependencies.
+        """
+        response = self._client.get(f"/api/v1/intents/{intent_id}/ready")
+        data = self._handle_response(response)
+        return [Intent.from_dict(item) for item in data.get("ready", data)]
+
+    def get_blocked_intents(self, intent_id: str) -> list[Intent]:
+        """
+        Get child intents that are blocked by unmet dependencies.
+
+        Args:
+            intent_id: The parent intent ID.
+
+        Returns:
+            List of Intent objects that have blocking dependencies.
+        """
+        response = self._client.get(f"/api/v1/intents/{intent_id}/blocked")
+        data = self._handle_response(response)
+        return [Intent.from_dict(item) for item in data.get("blocked", data)]
+
+    def get_intent_graph(self, intent_id: str) -> dict[str, Any]:
+        """
+        Get the full intent graph from a node.
+
+        Args:
+            intent_id: The intent to get graph from.
+
+        Returns:
+            Graph structure with nodes, edges, and metadata.
+        """
+        response = self._client.get(f"/api/v1/intents/{intent_id}/graph")
+        return self._handle_response(response)
 
     # ==================== State Management ====================
 
@@ -993,6 +1210,536 @@ class OpenIntentClient:
         if response.status_code != 204:
             self._handle_response(response)
 
+    # ==================== Tool Call Logging ====================
+
+    def log_tool_call_started(
+        self,
+        intent_id: str,
+        tool_name: str,
+        tool_id: str,
+        arguments: dict[str, Any],
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+        parent_request_id: Optional[str] = None,
+    ) -> IntentEvent:
+        """
+        Log the start of a tool call initiated by an LLM.
+
+        Args:
+            intent_id: The intent this tool call is part of.
+            tool_name: Name of the tool being called.
+            tool_id: Unique identifier for this tool call.
+            arguments: Arguments passed to the tool.
+            provider: LLM provider (e.g., "openai", "anthropic").
+            model: Model that initiated the call.
+            parent_request_id: ID of the parent LLM request.
+
+        Returns:
+            The created event.
+        """
+        payload = ToolCallPayload(
+            tool_name=tool_name,
+            tool_id=tool_id,
+            arguments=arguments,
+            provider=provider,
+            model=model,
+            parent_request_id=parent_request_id,
+        )
+        return self.log_event(intent_id, EventType.TOOL_CALL_STARTED, payload.to_dict())
+
+    def log_tool_call_completed(
+        self,
+        intent_id: str,
+        tool_name: str,
+        tool_id: str,
+        arguments: dict[str, Any],
+        result: Any,
+        duration_ms: Optional[int] = None,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> IntentEvent:
+        """
+        Log the successful completion of a tool call.
+
+        Args:
+            intent_id: The intent this tool call is part of.
+            tool_name: Name of the tool that was called.
+            tool_id: Unique identifier for this tool call.
+            arguments: Arguments that were passed to the tool.
+            result: Result returned by the tool.
+            duration_ms: How long the tool call took.
+            provider: LLM provider.
+            model: Model that initiated the call.
+
+        Returns:
+            The created event.
+        """
+        payload = ToolCallPayload(
+            tool_name=tool_name,
+            tool_id=tool_id,
+            arguments=arguments,
+            result=result,
+            duration_ms=duration_ms,
+            provider=provider,
+            model=model,
+        )
+        return self.log_event(
+            intent_id, EventType.TOOL_CALL_COMPLETED, payload.to_dict()
+        )
+
+    def log_tool_call_failed(
+        self,
+        intent_id: str,
+        tool_name: str,
+        tool_id: str,
+        arguments: dict[str, Any],
+        error: str,
+        duration_ms: Optional[int] = None,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> IntentEvent:
+        """
+        Log a failed tool call.
+
+        Args:
+            intent_id: The intent this tool call is part of.
+            tool_name: Name of the tool that failed.
+            tool_id: Unique identifier for this tool call.
+            arguments: Arguments that were passed to the tool.
+            error: Error message or description.
+            duration_ms: How long before the failure.
+            provider: LLM provider.
+            model: Model that initiated the call.
+
+        Returns:
+            The created event.
+        """
+        payload = ToolCallPayload(
+            tool_name=tool_name,
+            tool_id=tool_id,
+            arguments=arguments,
+            error=error,
+            duration_ms=duration_ms,
+            provider=provider,
+            model=model,
+        )
+        return self.log_event(intent_id, EventType.TOOL_CALL_FAILED, payload.to_dict())
+
+    # ==================== LLM Request Logging ====================
+
+    def log_llm_request_started(
+        self,
+        intent_id: str,
+        request_id: str,
+        provider: str,
+        model: str,
+        messages_count: int,
+        tools_available: Optional[list[str]] = None,
+        stream: bool = False,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> IntentEvent:
+        """
+        Log the start of an LLM API request.
+
+        Args:
+            intent_id: The intent this request is part of.
+            request_id: Unique identifier for this request.
+            provider: LLM provider (e.g., "openai", "anthropic").
+            model: Model being called.
+            messages_count: Number of messages in the request.
+            tools_available: List of tool names available to the model.
+            stream: Whether this is a streaming request.
+            temperature: Temperature setting.
+            max_tokens: Max tokens setting.
+
+        Returns:
+            The created event.
+        """
+        payload = LLMRequestPayload(
+            request_id=request_id,
+            provider=provider,
+            model=model,
+            messages_count=messages_count,
+            tools_available=tools_available or [],
+            stream=stream,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return self.log_event(
+            intent_id, EventType.LLM_REQUEST_STARTED, payload.to_dict()
+        )
+
+    def log_llm_request_completed(
+        self,
+        intent_id: str,
+        request_id: str,
+        provider: str,
+        model: str,
+        messages_count: int,
+        response_content: Optional[str] = None,
+        tool_calls: Optional[list[dict[str, Any]]] = None,
+        finish_reason: Optional[str] = None,
+        prompt_tokens: Optional[int] = None,
+        completion_tokens: Optional[int] = None,
+        total_tokens: Optional[int] = None,
+        duration_ms: Optional[int] = None,
+    ) -> IntentEvent:
+        """
+        Log the successful completion of an LLM API request.
+
+        Args:
+            intent_id: The intent this request is part of.
+            request_id: Unique identifier for this request.
+            provider: LLM provider.
+            model: Model that was called.
+            messages_count: Number of messages in the request.
+            response_content: Text content of the response.
+            tool_calls: Any tool calls in the response.
+            finish_reason: Why the model stopped generating.
+            prompt_tokens: Tokens used for the prompt.
+            completion_tokens: Tokens used for the completion.
+            total_tokens: Total tokens used.
+            duration_ms: Request duration in milliseconds.
+
+        Returns:
+            The created event.
+        """
+        payload = LLMRequestPayload(
+            request_id=request_id,
+            provider=provider,
+            model=model,
+            messages_count=messages_count,
+            response_content=response_content,
+            tool_calls=tool_calls or [],
+            finish_reason=finish_reason,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            duration_ms=duration_ms,
+        )
+        return self.log_event(
+            intent_id, EventType.LLM_REQUEST_COMPLETED, payload.to_dict()
+        )
+
+    def log_llm_request_failed(
+        self,
+        intent_id: str,
+        request_id: str,
+        provider: str,
+        model: str,
+        messages_count: int,
+        error: str,
+        duration_ms: Optional[int] = None,
+    ) -> IntentEvent:
+        """
+        Log a failed LLM API request.
+
+        Args:
+            intent_id: The intent this request is part of.
+            request_id: Unique identifier for this request.
+            provider: LLM provider.
+            model: Model that was called.
+            messages_count: Number of messages in the request.
+            error: Error message or description.
+            duration_ms: Time until failure.
+
+        Returns:
+            The created event.
+        """
+        payload = LLMRequestPayload(
+            request_id=request_id,
+            provider=provider,
+            model=model,
+            messages_count=messages_count,
+            error=error,
+            duration_ms=duration_ms,
+        )
+        return self.log_event(
+            intent_id, EventType.LLM_REQUEST_FAILED, payload.to_dict()
+        )
+
+    # ==================== Stream Coordination ====================
+
+    def start_stream(
+        self,
+        intent_id: str,
+        stream_id: str,
+        provider: str,
+        model: str,
+    ) -> IntentEvent:
+        """
+        Signal the start of a streaming LLM response.
+
+        Args:
+            intent_id: The intent this stream is part of.
+            stream_id: Unique identifier for this stream.
+            provider: LLM provider.
+            model: Model being streamed from.
+
+        Returns:
+            The created event.
+        """
+        payload = StreamState(
+            stream_id=stream_id,
+            intent_id=intent_id,
+            agent_id=self.agent_id,
+            status=StreamStatus.ACTIVE,
+            provider=provider,
+            model=model,
+            started_at=datetime.now(),
+        )
+        return self.log_event(intent_id, EventType.STREAM_STARTED, payload.to_dict())
+
+    def log_stream_chunk(
+        self,
+        intent_id: str,
+        stream_id: str,
+        chunk_index: int,
+        token_count: int = 1,
+    ) -> IntentEvent:
+        """
+        Log a chunk received during streaming (use sparingly for performance).
+
+        Args:
+            intent_id: The intent this stream is part of.
+            stream_id: The stream identifier.
+            chunk_index: Index of this chunk.
+            token_count: Number of tokens in this chunk.
+
+        Returns:
+            The created event.
+        """
+        return self.log_event(
+            intent_id,
+            EventType.STREAM_CHUNK,
+            {
+                "stream_id": stream_id,
+                "chunk_index": chunk_index,
+                "token_count": token_count,
+            },
+        )
+
+    def complete_stream(
+        self,
+        intent_id: str,
+        stream_id: str,
+        provider: str,
+        model: str,
+        chunks_received: int,
+        tokens_streamed: int,
+    ) -> IntentEvent:
+        """
+        Signal successful completion of a stream.
+
+        Args:
+            intent_id: The intent this stream is part of.
+            stream_id: The stream identifier.
+            provider: LLM provider.
+            model: Model that was streamed from.
+            chunks_received: Total chunks received.
+            tokens_streamed: Total tokens streamed.
+
+        Returns:
+            The created event.
+        """
+        payload = StreamState(
+            stream_id=stream_id,
+            intent_id=intent_id,
+            agent_id=self.agent_id,
+            status=StreamStatus.COMPLETED,
+            provider=provider,
+            model=model,
+            chunks_received=chunks_received,
+            tokens_streamed=tokens_streamed,
+            completed_at=datetime.now(),
+        )
+        return self.log_event(intent_id, EventType.STREAM_COMPLETED, payload.to_dict())
+
+    def cancel_stream(
+        self,
+        intent_id: str,
+        stream_id: str,
+        provider: str,
+        model: str,
+        reason: Optional[str] = None,
+        chunks_received: int = 0,
+        tokens_streamed: int = 0,
+    ) -> IntentEvent:
+        """
+        Signal cancellation of an active stream.
+
+        Args:
+            intent_id: The intent this stream is part of.
+            stream_id: The stream identifier.
+            provider: LLM provider.
+            model: Model that was being streamed from.
+            reason: Why the stream was cancelled.
+            chunks_received: Chunks received before cancellation.
+            tokens_streamed: Tokens streamed before cancellation.
+
+        Returns:
+            The created event.
+        """
+        payload = StreamState(
+            stream_id=stream_id,
+            intent_id=intent_id,
+            agent_id=self.agent_id,
+            status=StreamStatus.CANCELLED,
+            provider=provider,
+            model=model,
+            chunks_received=chunks_received,
+            tokens_streamed=tokens_streamed,
+            cancelled_at=datetime.now(),
+            cancel_reason=reason,
+        )
+        return self.log_event(intent_id, EventType.STREAM_CANCELLED, payload.to_dict())
+
+    # =========================================================================
+    # SSE Streaming Subscriptions
+    # =========================================================================
+
+    def subscribe_sse(self, intent_id: str) -> "SSEStream":
+        """
+        Subscribe to real-time events for a specific intent via SSE.
+
+        This returns an iterator that yields events as they occur, providing
+        sub-second latency compared to polling.
+
+        Args:
+            intent_id: The intent ID to subscribe to.
+
+        Returns:
+            An SSEStream that yields SSEEvent objects.
+
+        Example:
+            ```python
+            from openintent.streaming import SSEEventType
+
+            for event in client.subscribe_sse(intent_id):
+                if event.type == SSEEventType.STATE_CHANGED:
+                    print(f"State updated: {event.data}")
+                elif event.type == SSEEventType.STATUS_CHANGED:
+                    print(f"Status: {event.data['status']}")
+            ```
+        """
+        from .streaming import SSEStream
+
+        url = f"{self.base_url}/api/v1/intents/{intent_id}/subscribe"
+        headers = {
+            "X-API-Key": self.api_key,
+            "X-Agent-ID": self.agent_id,
+        }
+        return SSEStream(url, headers)
+
+    def subscribe_portfolio(self, portfolio_id: str) -> "SSEStream":
+        """
+        Subscribe to real-time events for all intents in a portfolio.
+
+        Coordinators should use this to monitor portfolio-wide progress
+        instead of subscribing to each intent individually.
+
+        Args:
+            portfolio_id: The portfolio ID to subscribe to.
+
+        Returns:
+            An SSEStream that yields SSEEvent objects for all portfolio events.
+
+        Example:
+            ```python
+            for event in client.subscribe_portfolio(portfolio_id):
+                if event.type == "INTENT_COMPLETED":
+                    intent_id = event.data["intent_id"]
+                    print(f"Intent {intent_id} completed")
+            ```
+        """
+        from .streaming import SSEStream
+
+        url = f"{self.base_url}/api/v1/portfolios/{portfolio_id}/subscribe"
+        headers = {
+            "X-API-Key": self.api_key,
+            "X-Agent-ID": self.agent_id,
+        }
+        return SSEStream(url, headers)
+
+    def subscribe_agent(self, agent_id: Optional[str] = None) -> "SSEStream":
+        """
+        Subscribe to events for intents assigned to an agent.
+
+        Agents should use this to receive notifications when new intents
+        are assigned to them, without polling.
+
+        Args:
+            agent_id: The agent ID (defaults to this client's agent_id).
+
+        Returns:
+            An SSEStream that yields SSEEvent objects for agent assignments.
+
+        Example:
+            ```python
+            for event in client.subscribe_agent():
+                if event.type == "INTENT_ASSIGNED":
+                    intent_id = event.data["intent_id"]
+                    print(f"New assignment: {intent_id}")
+                    process_intent(intent_id)
+            ```
+        """
+        from .streaming import SSEStream
+
+        aid = agent_id or self.agent_id
+        url = f"{self.base_url}/api/v1/agents/{aid}/subscribe"
+        headers = {
+            "X-API-Key": self.api_key,
+            "X-Agent-ID": self.agent_id,
+        }
+        return SSEStream(url, headers)
+
+    def create_event_queue(
+        self,
+        intent_id: Optional[str] = None,
+        portfolio_id: Optional[str] = None,
+        agent_id: Optional[str] = None,
+    ) -> "EventQueue":
+        """
+        Create a queue-based event subscription for easier processing.
+
+        Use this when you want to process events in a pull-based manner
+        rather than an iterator-based manner.
+
+        Args:
+            intent_id: Subscribe to a specific intent.
+            portfolio_id: Subscribe to a portfolio (mutually exclusive with intent_id).
+            agent_id: Subscribe to agent assignments.
+
+        Returns:
+            An EventQueue that can be used to get events.
+
+        Example:
+            ```python
+            with client.create_event_queue(portfolio_id=portfolio_id) as queue:
+                while True:
+                    event = queue.get(timeout=30)
+                    if event:
+                        handle_event(event)
+            ```
+        """
+        from .streaming import EventQueue
+
+        if intent_id:
+            url = f"{self.base_url}/api/v1/intents/{intent_id}/subscribe"
+        elif portfolio_id:
+            url = f"{self.base_url}/api/v1/portfolios/{portfolio_id}/subscribe"
+        elif agent_id:
+            url = f"{self.base_url}/api/v1/agents/{agent_id}/subscribe"
+        else:
+            url = f"{self.base_url}/api/v1/agents/{self.agent_id}/subscribe"
+
+        headers = {
+            "X-API-Key": self.api_key,
+            "X-Agent-ID": self.agent_id,
+        }
+        return EventQueue(url, headers)
+
     def close(self) -> None:
         """Close the HTTP client connection."""
         self._client.close()
@@ -1574,6 +2321,259 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return IntentLease.from_dict(data)
+
+    # ==================== Tool Call Logging ====================
+
+    async def log_tool_call_started(
+        self,
+        intent_id: str,
+        tool_name: str,
+        tool_id: str,
+        arguments: dict[str, Any],
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+        parent_request_id: Optional[str] = None,
+    ) -> IntentEvent:
+        """Log the start of a tool call initiated by an LLM."""
+        payload = ToolCallPayload(
+            tool_name=tool_name,
+            tool_id=tool_id,
+            arguments=arguments,
+            provider=provider,
+            model=model,
+            parent_request_id=parent_request_id,
+        )
+        return await self.log_event(
+            intent_id, EventType.TOOL_CALL_STARTED, payload.to_dict()
+        )
+
+    async def log_tool_call_completed(
+        self,
+        intent_id: str,
+        tool_name: str,
+        tool_id: str,
+        arguments: dict[str, Any],
+        result: Any,
+        duration_ms: Optional[int] = None,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> IntentEvent:
+        """Log the successful completion of a tool call."""
+        payload = ToolCallPayload(
+            tool_name=tool_name,
+            tool_id=tool_id,
+            arguments=arguments,
+            result=result,
+            duration_ms=duration_ms,
+            provider=provider,
+            model=model,
+        )
+        return await self.log_event(
+            intent_id, EventType.TOOL_CALL_COMPLETED, payload.to_dict()
+        )
+
+    async def log_tool_call_failed(
+        self,
+        intent_id: str,
+        tool_name: str,
+        tool_id: str,
+        arguments: dict[str, Any],
+        error: str,
+        duration_ms: Optional[int] = None,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> IntentEvent:
+        """Log a failed tool call."""
+        payload = ToolCallPayload(
+            tool_name=tool_name,
+            tool_id=tool_id,
+            arguments=arguments,
+            error=error,
+            duration_ms=duration_ms,
+            provider=provider,
+            model=model,
+        )
+        return await self.log_event(
+            intent_id, EventType.TOOL_CALL_FAILED, payload.to_dict()
+        )
+
+    # ==================== LLM Request Logging ====================
+
+    async def log_llm_request_started(
+        self,
+        intent_id: str,
+        request_id: str,
+        provider: str,
+        model: str,
+        messages_count: int,
+        tools_available: Optional[list[str]] = None,
+        stream: bool = False,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> IntentEvent:
+        """Log the start of an LLM API request."""
+        payload = LLMRequestPayload(
+            request_id=request_id,
+            provider=provider,
+            model=model,
+            messages_count=messages_count,
+            tools_available=tools_available or [],
+            stream=stream,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return await self.log_event(
+            intent_id, EventType.LLM_REQUEST_STARTED, payload.to_dict()
+        )
+
+    async def log_llm_request_completed(
+        self,
+        intent_id: str,
+        request_id: str,
+        provider: str,
+        model: str,
+        messages_count: int,
+        response_content: Optional[str] = None,
+        tool_calls: Optional[list[dict[str, Any]]] = None,
+        finish_reason: Optional[str] = None,
+        prompt_tokens: Optional[int] = None,
+        completion_tokens: Optional[int] = None,
+        total_tokens: Optional[int] = None,
+        duration_ms: Optional[int] = None,
+    ) -> IntentEvent:
+        """Log the successful completion of an LLM API request."""
+        payload = LLMRequestPayload(
+            request_id=request_id,
+            provider=provider,
+            model=model,
+            messages_count=messages_count,
+            response_content=response_content,
+            tool_calls=tool_calls or [],
+            finish_reason=finish_reason,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            duration_ms=duration_ms,
+        )
+        return await self.log_event(
+            intent_id, EventType.LLM_REQUEST_COMPLETED, payload.to_dict()
+        )
+
+    async def log_llm_request_failed(
+        self,
+        intent_id: str,
+        request_id: str,
+        provider: str,
+        model: str,
+        messages_count: int,
+        error: str,
+        duration_ms: Optional[int] = None,
+    ) -> IntentEvent:
+        """Log a failed LLM API request."""
+        payload = LLMRequestPayload(
+            request_id=request_id,
+            provider=provider,
+            model=model,
+            messages_count=messages_count,
+            error=error,
+            duration_ms=duration_ms,
+        )
+        return await self.log_event(
+            intent_id, EventType.LLM_REQUEST_FAILED, payload.to_dict()
+        )
+
+    # ==================== Stream Coordination ====================
+
+    async def start_stream(
+        self,
+        intent_id: str,
+        stream_id: str,
+        provider: str,
+        model: str,
+    ) -> IntentEvent:
+        """Signal the start of a streaming LLM response."""
+        payload = StreamState(
+            stream_id=stream_id,
+            intent_id=intent_id,
+            agent_id=self.agent_id,
+            status=StreamStatus.ACTIVE,
+            provider=provider,
+            model=model,
+            started_at=datetime.now(),
+        )
+        return await self.log_event(
+            intent_id, EventType.STREAM_STARTED, payload.to_dict()
+        )
+
+    async def log_stream_chunk(
+        self,
+        intent_id: str,
+        stream_id: str,
+        chunk_index: int,
+        token_count: int = 1,
+    ) -> IntentEvent:
+        """Log a chunk received during streaming (use sparingly)."""
+        return await self.log_event(
+            intent_id,
+            EventType.STREAM_CHUNK,
+            {
+                "stream_id": stream_id,
+                "chunk_index": chunk_index,
+                "token_count": token_count,
+            },
+        )
+
+    async def complete_stream(
+        self,
+        intent_id: str,
+        stream_id: str,
+        provider: str,
+        model: str,
+        chunks_received: int,
+        tokens_streamed: int,
+    ) -> IntentEvent:
+        """Signal successful completion of a stream."""
+        payload = StreamState(
+            stream_id=stream_id,
+            intent_id=intent_id,
+            agent_id=self.agent_id,
+            status=StreamStatus.COMPLETED,
+            provider=provider,
+            model=model,
+            chunks_received=chunks_received,
+            tokens_streamed=tokens_streamed,
+            completed_at=datetime.now(),
+        )
+        return await self.log_event(
+            intent_id, EventType.STREAM_COMPLETED, payload.to_dict()
+        )
+
+    async def cancel_stream(
+        self,
+        intent_id: str,
+        stream_id: str,
+        provider: str,
+        model: str,
+        reason: Optional[str] = None,
+        chunks_received: int = 0,
+        tokens_streamed: int = 0,
+    ) -> IntentEvent:
+        """Signal cancellation of an active stream."""
+        payload = StreamState(
+            stream_id=stream_id,
+            intent_id=intent_id,
+            agent_id=self.agent_id,
+            status=StreamStatus.CANCELLED,
+            provider=provider,
+            model=model,
+            chunks_received=chunks_received,
+            tokens_streamed=tokens_streamed,
+            cancelled_at=datetime.now(),
+            cancel_reason=reason,
+        )
+        return await self.log_event(
+            intent_id, EventType.STREAM_CANCELLED, payload.to_dict()
+        )
 
     async def close(self) -> None:
         """Close the HTTP client connection."""

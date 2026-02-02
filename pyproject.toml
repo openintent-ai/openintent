@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openintent"
-version = "0.1.4"
-description = "Python SDK for the OpenIntent Coordination Protocol"
+version = "0.4.0"
+description = "Python SDK and Server for the OpenIntent Coordination Protocol"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -19,9 +19,11 @@ keywords = [
     "protocol",
     "intent",
     "multi-agent",
+    "llm",
+    "server",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
@@ -31,13 +33,22 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Framework :: FastAPI",
 ]
 requires-python = ">=3.10"
 dependencies = [
     "httpx>=0.25.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
+server = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "sqlalchemy>=2.0.0",
+    "sse-starlette>=1.6.0",
+    "pydantic>=2.0.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
@@ -46,12 +57,35 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
 ]
+# LLM Provider Adapters (install only what you need)
 openai = [
     "openai>=1.0.0",
 ]
-all = [
-    "openintent[dev,openai]",
+anthropic = [
+    "anthropic>=0.18.0",
 ]
+gemini = [
+    "google-generativeai>=0.4.0",
+]
+grok = [
+    "openai>=1.0.0",  # Grok uses OpenAI-compatible API
+]
+deepseek = [
+    "openai>=1.0.0",  # DeepSeek uses OpenAI-compatible API
+]
+# Convenience extras
+all-adapters = [
+    "openai>=1.0.0",
+    "anthropic>=0.18.0",
+    "google-generativeai>=0.4.0",
+]
+all = [
+    "openintent[server,dev,all-adapters]",
+]
+
+[project.scripts]
+openintent-server = "openintent.server.cli:main"
+openintent = "openintent.cli:main"
 
 [project.urls]
 Homepage = "https://openintent.ai"

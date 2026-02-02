@@ -32,6 +32,25 @@ class EventType(str, Enum):
     ARBITRATION_REQUESTED = "arbitration_requested"
     DECISION_RECORDED = "decision_recorded"
     COMMENT = "comment"
+    TOOL_CALL_STARTED = "tool_call_started"
+    TOOL_CALL_COMPLETED = "tool_call_completed"
+    TOOL_CALL_FAILED = "tool_call_failed"
+    LLM_REQUEST_STARTED = "llm_request_started"
+    LLM_REQUEST_COMPLETED = "llm_request_completed"
+    LLM_REQUEST_FAILED = "llm_request_failed"
+    STREAM_STARTED = "stream_started"
+    STREAM_CHUNK = "stream_chunk"
+    STREAM_COMPLETED = "stream_completed"
+    STREAM_CANCELLED = "stream_cancelled"
+
+
+class StreamStatus(str, Enum):
+    """Status of a streaming operation."""
+
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    FAILED = "failed"
 
 
 class LeaseStatus(str, Enum):
@@ -104,6 +123,9 @@ class IntentState:
 class Intent:
     """
     Core intent object representing a goal to be coordinated.
+
+    RFC-0002 Intent Graphs: Supports hierarchical parent-child relationships
+    via parent_intent_id and dependency graphs via depends_on.
     """
 
     id: str
@@ -113,8 +135,20 @@ class Intent:
     status: IntentStatus
     state: IntentState
     constraints: list[str] = field(default_factory=list)
+    parent_intent_id: Optional[str] = None
+    depends_on: list[str] = field(default_factory=list)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    @property
+    def has_parent(self) -> bool:
+        """Check if this intent has a parent (is a child intent)."""
+        return self.parent_intent_id is not None
+
+    @property
+    def has_dependencies(self) -> bool:
+        """Check if this intent depends on other intents."""
+        return len(self.depends_on) > 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -125,6 +159,8 @@ class Intent:
             "status": self.status.value,
             "state": self.state.to_dict(),
             "constraints": self.constraints,
+            "parent_intent_id": self.parent_intent_id,
+            "depends_on": self.depends_on,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -134,11 +170,13 @@ class Intent:
         return cls(
             id=data["id"],
             title=data["title"],
-            description=data["description"],
-            version=data["version"],
-            status=IntentStatus(data["status"]),
+            description=data.get("description", ""),
+            version=data.get("version", 1),
+            status=IntentStatus(data.get("status", "active")),
             state=IntentState.from_dict(data.get("state", {})),
             constraints=data.get("constraints", []),
+            parent_intent_id=data.get("parent_intent_id") or data.get("parentIntentId"),
+            depends_on=data.get("depends_on") or data.get("dependsOn") or [],
             created_at=(
                 datetime.fromisoformat(data["created_at"])
                 if data.get("created_at")
@@ -729,4 +767,213 @@ class IntentSubscription:
                 if data.get("createdAt")
                 else None
             ),
+        )
+
+
+@dataclass
+class ToolCallPayload:
+    """
+    Structured payload for tool call events.
+    Captures LLM-initiated tool/function calls with full context.
+    """
+
+    tool_name: str
+    tool_id: str
+    arguments: dict[str, Any]
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    parent_request_id: Optional[str] = None
+    result: Optional[Any] = None
+    error: Optional[str] = None
+    duration_ms: Optional[int] = None
+    token_count: Optional[int] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "tool_name": self.tool_name,
+            "tool_id": self.tool_id,
+            "arguments": self.arguments,
+        }
+        if self.provider:
+            result["provider"] = self.provider
+        if self.model:
+            result["model"] = self.model
+        if self.parent_request_id:
+            result["parent_request_id"] = self.parent_request_id
+        if self.result is not None:
+            result["result"] = self.result
+        if self.error:
+            result["error"] = self.error
+        if self.duration_ms is not None:
+            result["duration_ms"] = self.duration_ms
+        if self.token_count is not None:
+            result["token_count"] = self.token_count
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ToolCallPayload":
+        return cls(
+            tool_name=data["tool_name"],
+            tool_id=data["tool_id"],
+            arguments=data.get("arguments", {}),
+            provider=data.get("provider"),
+            model=data.get("model"),
+            parent_request_id=data.get("parent_request_id"),
+            result=data.get("result"),
+            error=data.get("error"),
+            duration_ms=data.get("duration_ms"),
+            token_count=data.get("token_count"),
+        )
+
+
+@dataclass
+class LLMRequestPayload:
+    """
+    Structured payload for LLM request events.
+    Captures the full context of an LLM API call.
+    """
+
+    request_id: str
+    provider: str
+    model: str
+    messages_count: int
+    tools_available: list[str] = field(default_factory=list)
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+    stream: bool = False
+    response_content: Optional[str] = None
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    finish_reason: Optional[str] = None
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
+    total_tokens: Optional[int] = None
+    duration_ms: Optional[int] = None
+    error: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "request_id": self.request_id,
+            "provider": self.provider,
+            "model": self.model,
+            "messages_count": self.messages_count,
+            "stream": self.stream,
+        }
+        if self.tools_available:
+            result["tools_available"] = self.tools_available
+        if self.temperature is not None:
+            result["temperature"] = self.temperature
+        if self.max_tokens is not None:
+            result["max_tokens"] = self.max_tokens
+        if self.response_content:
+            result["response_content"] = self.response_content
+        if self.tool_calls:
+            result["tool_calls"] = self.tool_calls
+        if self.finish_reason:
+            result["finish_reason"] = self.finish_reason
+        if self.prompt_tokens is not None:
+            result["prompt_tokens"] = self.prompt_tokens
+        if self.completion_tokens is not None:
+            result["completion_tokens"] = self.completion_tokens
+        if self.total_tokens is not None:
+            result["total_tokens"] = self.total_tokens
+        if self.duration_ms is not None:
+            result["duration_ms"] = self.duration_ms
+        if self.error:
+            result["error"] = self.error
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "LLMRequestPayload":
+        return cls(
+            request_id=data["request_id"],
+            provider=data["provider"],
+            model=data["model"],
+            messages_count=data.get("messages_count", 0),
+            tools_available=data.get("tools_available", []),
+            temperature=data.get("temperature"),
+            max_tokens=data.get("max_tokens"),
+            stream=data.get("stream", False),
+            response_content=data.get("response_content"),
+            tool_calls=data.get("tool_calls", []),
+            finish_reason=data.get("finish_reason"),
+            prompt_tokens=data.get("prompt_tokens"),
+            completion_tokens=data.get("completion_tokens"),
+            total_tokens=data.get("total_tokens"),
+            duration_ms=data.get("duration_ms"),
+            error=data.get("error"),
+        )
+
+
+@dataclass
+class StreamState:
+    """
+    Tracks the state of a streaming operation.
+    Used for real-time coordination and cancellation.
+    """
+
+    stream_id: str
+    intent_id: str
+    agent_id: str
+    status: StreamStatus
+    provider: str
+    model: str
+    chunks_received: int = 0
+    tokens_streamed: int = 0
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    cancelled_at: Optional[datetime] = None
+    cancel_reason: Optional[str] = None
+    error: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "stream_id": self.stream_id,
+            "intent_id": self.intent_id,
+            "agent_id": self.agent_id,
+            "status": self.status.value,
+            "provider": self.provider,
+            "model": self.model,
+            "chunks_received": self.chunks_received,
+            "tokens_streamed": self.tokens_streamed,
+        }
+        if self.started_at:
+            result["started_at"] = self.started_at.isoformat()
+        if self.completed_at:
+            result["completed_at"] = self.completed_at.isoformat()
+        if self.cancelled_at:
+            result["cancelled_at"] = self.cancelled_at.isoformat()
+        if self.cancel_reason:
+            result["cancel_reason"] = self.cancel_reason
+        if self.error:
+            result["error"] = self.error
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "StreamState":
+        return cls(
+            stream_id=data["stream_id"],
+            intent_id=data["intent_id"],
+            agent_id=data["agent_id"],
+            status=StreamStatus(data["status"]),
+            provider=data["provider"],
+            model=data["model"],
+            chunks_received=data.get("chunks_received", 0),
+            tokens_streamed=data.get("tokens_streamed", 0),
+            started_at=(
+                datetime.fromisoformat(data["started_at"])
+                if data.get("started_at")
+                else None
+            ),
+            completed_at=(
+                datetime.fromisoformat(data["completed_at"])
+                if data.get("completed_at")
+                else None
+            ),
+            cancelled_at=(
+                datetime.fromisoformat(data["cancelled_at"])
+                if data.get("cancelled_at")
+                else None
+            ),
+            cancel_reason=data.get("cancel_reason"),
+            error=data.get("error"),
         )

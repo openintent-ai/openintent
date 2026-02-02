@@ -1,0 +1,61 @@
+openintent: "1.0"
+
+# ============================================================
+# Research Assistant Workflow - Intermediate Example
+# ============================================================
+#
+# A two-phase workflow where:
+#   1. Research agent gathers information
+#   2. Synthesis agent creates a summary
+#
+# Demonstrates:
+#   - Dependencies between phases
+#   - State passing between agents
+#   - Basic retry configuration
+#
+# Run with:
+#   openintent run examples/workflows/research_assistant.yaml
+#
+# ============================================================
+
+info:
+  name: "Research Assistant"
+  version: "1.0.0"
+  description: "Research a topic and synthesize findings into a summary"
+
+agents:
+  research-agent:
+    description: "Gathers information from sources"
+    capabilities: ["search", "extraction"]
+    
+  synthesis-agent:
+    description: "Combines findings into coherent summary"
+    capabilities: ["summarization", "writing"]
+
+workflow:
+  research:
+    title: "Gather Research"
+    description: "Search for and collect relevant information"
+    assign: research-agent
+    constraints:
+      - "max_sources: 5"
+      - "min_relevance: 0.7"
+    initial_state:
+      topic: "multi-agent coordination patterns"
+      depth: "comprehensive"
+    retry:
+      max_attempts: 3
+      backoff: exponential
+      initial_delay_ms: 1000
+
+  synthesize:
+    title: "Synthesize Findings"
+    description: "Combine research into a structured summary"
+    assign: synthesis-agent
+    depends_on:
+      - research
+    constraints:
+      - "max_length: 1000"
+      - "format: structured"
+    initial_state:
+      output_format: "markdown"
