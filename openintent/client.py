@@ -544,7 +544,9 @@ class OpenIntentClient:
             params=params,
         )
         data = self._handle_response(response)
-        return [IntentEvent.from_dict(item) for item in data.get("events", data)]
+        # Handle both list response and dict with "events" key
+        events = data if isinstance(data, list) else data.get("events", [])
+        return [IntentEvent.from_dict(item) for item in events]
 
     # ==================== Lease Management ====================
 
@@ -1945,7 +1947,9 @@ class AsyncOpenIntentClient:
             params=params,
         )
         data = self._handle_response(response)
-        return [IntentEvent.from_dict(item) for item in data.get("events", data)]
+        # Handle both list response and dict with "events" key
+        events = data if isinstance(data, list) else data.get("events", [])
+        return [IntentEvent.from_dict(item) for item in events]
 
     async def acquire_lease(
         self,
