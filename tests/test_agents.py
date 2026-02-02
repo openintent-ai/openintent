@@ -4,7 +4,6 @@ Unit tests for the OpenIntent agents module.
 Tests the high-level Agent, Coordinator, Worker abstractions.
 """
 
-
 from openintent.agents import (
     Agent,
     AgentConfig,

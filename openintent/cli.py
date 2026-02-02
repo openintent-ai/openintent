@@ -176,7 +176,7 @@ def cmd_new(args):
     name = args.name or "my_workflow"
     filename = f"{name.lower().replace(' ', '_')}.yaml"
 
-    template = f'''openintent: "1.0"
+    template = f"""openintent: "1.0"
 
 info:
   name: "{name}"
@@ -197,7 +197,7 @@ workflow:
       - "max_time_seconds: 60"
     initial_state:
       phase: "processing"
-'''
+"""
 
     path = Path(filename)
     if path.exists() and not args.force:

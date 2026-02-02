@@ -127,9 +127,7 @@ class GeminiAdapter(BaseAdapter):
         messages_count = (
             1
             if isinstance(contents, str)
-            else len(contents)
-            if isinstance(contents, list)
-            else 1
+            else len(contents) if isinstance(contents, list) else 1
         )
 
         if self._config.log_requests:

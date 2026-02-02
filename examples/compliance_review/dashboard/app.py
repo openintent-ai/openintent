@@ -66,13 +66,13 @@ async def get_intents():
                     "id": i.id,
                     "title": i.title,
                     "description": i.description,
-                    "status": i.status.value
-                    if hasattr(i.status, "value")
-                    else str(i.status),
+                    "status": (
+                        i.status.value if hasattr(i.status, "value") else str(i.status)
+                    ),
                     "version": i.version,
-                    "state": i.state.to_dict()
-                    if hasattr(i.state, "to_dict")
-                    else i.state,
+                    "state": (
+                        i.state.to_dict() if hasattr(i.state, "to_dict") else i.state
+                    ),
                     "created_at": i.created_at.isoformat() if i.created_at else None,
                 }
                 for i in intents
@@ -92,13 +92,17 @@ async def get_intent(intent_id: str):
             "id": intent.id,
             "title": intent.title,
             "description": intent.description,
-            "status": intent.status.value
-            if hasattr(intent.status, "value")
-            else str(intent.status),
+            "status": (
+                intent.status.value
+                if hasattr(intent.status, "value")
+                else str(intent.status)
+            ),
             "version": intent.version,
-            "state": intent.state.to_dict()
-            if hasattr(intent.state, "to_dict")
-            else intent.state,
+            "state": (
+                intent.state.to_dict()
+                if hasattr(intent.state, "to_dict")
+                else intent.state
+            ),
             "constraints": intent.constraints,
             "created_at": intent.created_at.isoformat() if intent.created_at else None,
         }
@@ -116,9 +120,11 @@ async def get_events(intent_id: str):
             "events": [
                 {
                     "id": e.id,
-                    "event_type": e.event_type.value
-                    if hasattr(e.event_type, "value")
-                    else str(e.event_type),
+                    "event_type": (
+                        e.event_type.value
+                        if hasattr(e.event_type, "value")
+                        else str(e.event_type)
+                    ),
                     "actor": e.actor,
                     "timestamp": e.timestamp.isoformat() if e.timestamp else None,
                     "payload": e.payload,
@@ -142,12 +148,14 @@ async def get_leases(intent_id: str):
                     "id": lease.id,
                     "scope": lease.scope,
                     "holder_agent_id": lease.holder_agent_id,
-                    "status": lease.status.value
-                    if hasattr(lease.status, "value")
-                    else str(lease.status),
-                    "expires_at": lease.expires_at.isoformat()
-                    if lease.expires_at
-                    else None,
+                    "status": (
+                        lease.status.value
+                        if hasattr(lease.status, "value")
+                        else str(lease.status)
+                    ),
+                    "expires_at": (
+                        lease.expires_at.isoformat() if lease.expires_at else None
+                    ),
                 }
                 for lease in leases
             ]
@@ -204,9 +212,9 @@ async def get_portfolios():
                 {
                     "id": p.id,
                     "name": p.name,
-                    "status": p.status.value
-                    if hasattr(p.status, "value")
-                    else str(p.status),
+                    "status": (
+                        p.status.value if hasattr(p.status, "value") else str(p.status)
+                    ),
                     "intent_count": len(p.intents) if p.intents else 0,
                 }
                 for p in portfolios
