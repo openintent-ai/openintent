@@ -1124,7 +1124,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
-    @app.patch("/api/v1/intents/{intent_id}/leases/{lease_id}", response_model=LeaseResponse)
+    @app.patch(
+        "/api/v1/intents/{intent_id}/leases/{lease_id}", response_model=LeaseResponse
+    )
     async def renew_lease(
         intent_id: str,
         lease_id: str,
@@ -1134,7 +1136,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
     ):
         session = db.get_session()
         try:
-            renewed = db.renew_lease(session, lease_id, api_key, request.duration_seconds)
+            renewed = db.renew_lease(
+                session, lease_id, api_key, request.duration_seconds
+            )
             if not renewed:
                 raise HTTPException(
                     status_code=404, detail="Lease not found or not owned by you"
@@ -1145,7 +1149,10 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 intent_id=intent_id,
                 event_type="lease_renewed",
                 actor=api_key,
-                payload={"lease_id": lease_id, "duration_seconds": request.duration_seconds},
+                payload={
+                    "lease_id": lease_id,
+                    "duration_seconds": request.duration_seconds,
+                },
             )
 
             return LeaseResponse.model_validate(renewed)
@@ -1240,7 +1247,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
-    @app.get("/api/v1/intents/{intent_id}/portfolios", response_model=List[PortfolioResponse])
+    @app.get(
+        "/api/v1/intents/{intent_id}/portfolios", response_model=List[PortfolioResponse]
+    )
     async def get_intent_portfolios(
         intent_id: str,
         db: Database = Depends(get_db),
@@ -1438,7 +1447,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
-    @app.patch("/api/v1/portfolios/{portfolio_id}/status", response_model=PortfolioResponse)
+    @app.patch(
+        "/api/v1/portfolios/{portfolio_id}/status", response_model=PortfolioResponse
+    )
     async def update_portfolio_status(
         portfolio_id: str,
         request: PortfolioStatusRequest,
@@ -1447,7 +1458,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
     ):
         session = db.get_session()
         try:
-            portfolio = db.update_portfolio_status(session, portfolio_id, request.status)
+            portfolio = db.update_portfolio_status(
+                session, portfolio_id, request.status
+            )
             if not portfolio:
                 raise HTTPException(status_code=404, detail="Portfolio not found")
             return PortfolioResponse.model_validate(portfolio)

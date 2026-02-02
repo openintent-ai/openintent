@@ -577,9 +577,7 @@ class Database:
             .all()
         )
 
-    def delete_attachment(
-        self, session: Session, attachment_id: str
-    ) -> bool:
+    def delete_attachment(self, session: Session, attachment_id: str) -> bool:
         attachment = (
             session.query(IntentAttachmentModel)
             .filter(IntentAttachmentModel.id == attachment_id)
@@ -602,7 +600,11 @@ class Database:
         portfolio_ids = [m.portfolio_id for m in memberships]
         if not portfolio_ids:
             return []
-        return session.query(PortfolioModel).filter(PortfolioModel.id.in_(portfolio_ids)).all()
+        return (
+            session.query(PortfolioModel)
+            .filter(PortfolioModel.id.in_(portfolio_ids))
+            .all()
+        )
 
     def remove_intent_from_portfolio(
         self, session: Session, portfolio_id: str, intent_id: str
@@ -611,7 +613,7 @@ class Database:
             session.query(PortfolioMembershipModel)
             .filter(
                 PortfolioMembershipModel.portfolio_id == portfolio_id,
-                PortfolioMembershipModel.intent_id == intent_id
+                PortfolioMembershipModel.intent_id == intent_id,
             )
             .first()
         )
