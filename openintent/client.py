@@ -508,6 +508,7 @@ class OpenIntentClient:
             f"/api/v1/intents/{intent_id}/events",
             json={
                 "event_type": event_type.value,
+                "actor": self.agent_id,
                 "payload": payload or {},
             },
         )
@@ -1922,6 +1923,7 @@ class AsyncOpenIntentClient:
             f"/api/v1/intents/{intent_id}/events",
             json={
                 "event_type": event_type.value,
+                "actor": self.agent_id,
                 "payload": payload or {},
             },
         )
