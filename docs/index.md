@@ -6,6 +6,9 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+!!! tip "What's New in v0.6.0"
+    **Full Observability & Distributed Tracing** - Complete workflow execution path visualization with LLM token/cost tracking and cost rollup across all operations.
+
 ## What is OpenIntent?
 
 OpenIntent is a **neutral protocol for coordinating intent across humans and AI agents**. It replaces unstructured chat-based agent coordination with:
@@ -80,17 +83,30 @@ class ResearchAgent:
         return {"status": "completed", "result": "..."}
 ```
 
-### LLM Adapters
+### LLM Adapters with Full Observability
 
-Built-in observability for popular LLM providers:
+Built-in observability for popular LLM providers with automatic token/cost tracking:
 
 ```python
 from openintent.adapters import OpenAIAdapter
 
 adapter = OpenAIAdapter(openai_client, oi_client, intent_id)
-response = adapter.chat_complete(messages=[...])
-# Automatically logs: model, tokens, latency, cost
+response = adapter.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[...]
+)
+# Automatically logs: model, tokens, latency, duration_ms
+# Events include: prompt_tokens, completion_tokens, total_tokens
 ```
+
+### Distributed Tracing (v0.6.0)
+
+Complete end-to-end workflow visualization:
+
+- **Workflow tree structure** showing orchestrator → intent flow
+- **LLM operations summary** with tokens, duration, and cost per call
+- **Cost rollup** totaling tokens and estimated cost across all operations
+- **Event timeline** for complete audit trail
 
 ### Built-in Server
 

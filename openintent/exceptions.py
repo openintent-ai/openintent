@@ -57,3 +57,15 @@ class ValidationError(OpenIntentError):
     ) -> None:
         super().__init__(message, **kwargs)
         self.errors = errors or []
+
+
+class APIError(OpenIntentError):
+    """Raised when an API request fails with an unexpected error."""
+
+    pass
+
+
+class AuthenticationError(OpenIntentError):
+    """Raised when authentication fails or API key is invalid."""
+
+    pass

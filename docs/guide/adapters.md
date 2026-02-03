@@ -72,7 +72,7 @@ response = adapter.messages_create(
 
 ## What Gets Logged
 
-Each LLM call creates events with:
+Each LLM call creates events with full observability data:
 
 **Request Started:**
 ```json
@@ -80,6 +80,7 @@ Each LLM call creates events with:
   "event_type": "llm_request_started",
   "payload": {
     "model": "gpt-4",
+    "provider": "openai",
     "request_id": "req-abc123"
   }
 }
@@ -91,13 +92,59 @@ Each LLM call creates events with:
   "event_type": "llm_request_completed",
   "payload": {
     "model": "gpt-4",
+    "provider": "openai",
     "request_id": "req-abc123",
-    "input_tokens": 150,
-    "output_tokens": 75,
-    "latency_ms": 1234,
+    "prompt_tokens": 150,
+    "completion_tokens": 75,
+    "total_tokens": 225,
+    "duration_ms": 1234,
     "finish_reason": "stop"
   }
 }
+```
+
+## Cost Tracking (v0.6.0)
+
+The adapters automatically log token counts for cost estimation:
+
+| Field | Description |
+|-------|-------------|
+| `prompt_tokens` | Input tokens sent to the model |
+| `completion_tokens` | Output tokens generated |
+| `total_tokens` | Sum of prompt + completion |
+| `duration_ms` | Request latency in milliseconds |
+
+Use these to calculate costs based on your provider's pricing:
+
+```python
+# Example cost calculation for gpt-4o-mini
+cost_per_token = 0.00000015  # $0.15 per 1M tokens
+total_cost = event.payload["total_tokens"] * cost_per_token
+```
+
+## Distributed Tracing
+
+When using adapters with the demo or CLI, you get a complete workflow trace:
+
+```
+◉ ORCHESTRATOR
+│
+├─► ⬤ research │ Intent: Research AI Agent Coordination
+│   ├── ★ LLM → gpt-4o-mini (156 tokens, 892ms)
+│   └── ✓ COMPLETE
+│
+└─► ⬤ summary │ depends_on: research
+    ├── ★ LLM → gpt-4o-mini (89 tokens, 423ms)
+    └── ✓ COMPLETE
+
+┌────────────────────────────────────────────────────────────────┐
+│  LLM OPERATIONS                                                │
+├────────────────────────────────────────────────────────────────┤
+│  ★ research   │ gpt-4o-mini │  156 tok │ 892ms │ $0.000023    │
+│  ★ summary    │ gpt-4o-mini │   89 tok │ 423ms │ $0.000013    │
+├────────────────────────────────────────────────────────────────┤
+│  TOTAL: 2 calls │ 245 tokens │ $0.000036 estimated cost       │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ## Using with @Agent
