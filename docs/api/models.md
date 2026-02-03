@@ -26,9 +26,9 @@ Core data models for the OpenIntent SDK.
     options:
       show_source: false
 
-## Lease
+## IntentLease
 
-::: openintent.models.Lease
+::: openintent.models.IntentLease
     options:
       show_source: false
 
@@ -38,9 +38,15 @@ Core data models for the OpenIntent SDK.
     options:
       show_source: false
 
-## Portfolio
+## IntentPortfolio
 
-::: openintent.models.Portfolio
+::: openintent.models.IntentPortfolio
+    options:
+      show_source: false
+
+## PortfolioStatus
+
+::: openintent.models.PortfolioStatus
     options:
       show_source: false
 
