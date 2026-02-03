@@ -302,18 +302,31 @@ def check_llm():
             pass
     return None, None
 
-PROVIDER, CLIENT = check_llm()
+PROVIDER, LLM_CLIENT = check_llm()
 
-def llm_call(prompt: str) -> str:
-    if not CLIENT:
+def llm_call_with_adapter(prompt: str, oi_client, intent_id: str) -> str:
+    \"\"\"Make LLM call using adapter for observability (token counts, cost).\"\"\"
+    if not LLM_CLIENT:
         h = hashlib.md5(prompt.encode()).hexdigest()[:8]
         return f"[Mock #{h}] Multi-agent coordination enables scalable workflows through separation of concerns, parallel execution, and fault isolation."
     try:
         if PROVIDER == "anthropic":
-            r = CLIENT.messages.create(model="claude-sonnet-4-20250514", max_tokens=500, messages=[{"role": "user", "content": prompt}])
+            from openintent.adapters import AnthropicAdapter
+            adapter = AnthropicAdapter(LLM_CLIENT, oi_client, intent_id)
+            r = adapter.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=500,
+                messages=[{"role": "user", "content": prompt}]
+            )
             return r.content[0].text
         else:
-            r = CLIENT.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}], max_tokens=500)
+            from openintent.adapters import OpenAIAdapter
+            adapter = OpenAIAdapter(LLM_CLIENT, oi_client, intent_id)
+            r = adapter.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=500
+            )
             return r.choices[0].message.content
     except Exception as e:
         return f"[Error] {str(e)[:100]}"
@@ -322,13 +335,15 @@ def llm_call(prompt: str) -> str:
 class Researcher:
     @on_assignment
     async def work(self, intent):
-        return {"findings": llm_call(f"Research: {intent.description}")}
+        result = llm_call_with_adapter(f"Research: {intent.description}", self._client, intent.id)
+        return {"findings": result}
 
 @Agent("summarizer", base_url="http://localhost:8000", api_key="dev-user-key")
 class Summarizer:
     @on_assignment
     async def work(self, intent):
-        return {"summary": llm_call(f"Summarize: {intent.description}")}
+        result = llm_call_with_adapter(f"Summarize: {intent.description}", self._client, intent.id)
+        return {"summary": result}
 
 async def main():
     await asyncio.gather(Researcher._run_async(), Summarizer._run_async())

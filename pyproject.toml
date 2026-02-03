@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openintent"
-version = "0.5.2"
+version = "0.6.0"
 description = "Python SDK and Server for the OpenIntent Coordination Protocol"
 readme = "README.md"
 license = {text = "MIT"}
@@ -57,6 +57,12 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
 ]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.24.0",
+    "pymdown-extensions>=10.0.0",
+]
 # LLM Provider Adapters (install only what you need)
 openai = [
     "openai>=1.0.0",
@@ -80,7 +86,7 @@ all-adapters = [
     "google-generativeai>=0.4.0",
 ]
 all = [
-    "openintent[server,dev,all-adapters]",
+    "openintent[server,dev,docs,all-adapters]",
 ]
 
 [project.scripts]
@@ -89,7 +95,7 @@ openintent = "openintent.cli:main"
 
 [project.urls]
 Homepage = "https://openintent.ai"
-Documentation = "https://openintent.ai/docs"
+Documentation = "https://openintent-ai.github.io/openintent/"
 Repository = "https://github.com/openintent-ai/openintent"
 Changelog = "https://github.com/openintent-ai/openintent/blob/main/CHANGELOG.md"
 

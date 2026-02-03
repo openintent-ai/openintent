@@ -1,0 +1,91 @@
+site_name: OpenIntent Python SDK
+site_description: Production-ready Python SDK for the OpenIntent Coordination Protocol
+site_url: https://openintent-ai.github.io/openintent/
+repo_url: https://github.com/openintent-ai/openintent
+repo_name: openintent-ai/openintent
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            docstring_style: google
+            merge_init_into_class: true
+            separate_signature: true
+            show_signature_annotations: true
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Configuration: getting-started/configuration.md
+  - User Guide:
+    - Intents: guide/intents.md
+    - Events: guide/events.md
+    - Agent Abstractions: guide/agents.md
+    - LLM Adapters: guide/adapters.md
+    - Built-in Server: guide/server.md
+  - API Reference:
+    - Client: api/client.md
+    - Models: api/models.md
+    - Agents: api/agents.md
+    - Adapters: api/adapters.md
+    - Server: api/server.md
+    - Exceptions: api/exceptions.md
+  - Examples:
+    - Multi-Agent Workflow: examples/multi-agent.md
+    - Streaming: examples/streaming.md
+    - Portfolios: examples/portfolios.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/openintent-ai/openintent
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/openintent/
