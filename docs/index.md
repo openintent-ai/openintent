@@ -68,6 +68,45 @@ The SDK implements all 8 OpenIntent RFCs:
 | 0009 | Cost Tracking | Compute and API cost management |
 | 0010 | Retry Policies | Transient failure handling |
 
+### YAML Workflows
+
+Define multi-agent workflows declaratively without code:
+
+```yaml
+openintent: "1.0"
+
+info:
+  name: "Research Pipeline"
+
+workflow:
+  research:
+    title: "Gather Research"
+    assign: researcher
+    constraints: ["Be thorough", "Use 3+ sources"]
+    
+  summarize:
+    title: "Create Summary"
+    assign: summarizer
+    depends_on: [research]
+```
+
+Execute with the CLI:
+
+```bash
+openintent run workflow.yaml
+```
+
+Or programmatically:
+
+```python
+from openintent.workflow import WorkflowSpec
+
+spec = WorkflowSpec.from_yaml("workflow.yaml")
+result = await spec.run(server_url="http://localhost:8000")
+```
+
+See the [Workflow YAML Specification](spec/workflow-yaml.md) and [Workflows Guide](guide/workflows.md) for details.
+
 ### High-Level Agent Abstractions
 
 Zero-boilerplate agent development with decorators:

@@ -68,16 +68,20 @@ nav:
   - User Guide:
     - Intents: guide/intents.md
     - Events: guide/events.md
+    - YAML Workflows: guide/workflows.md
     - Agent Abstractions: guide/agents.md
     - LLM Adapters: guide/adapters.md
     - Built-in Server: guide/server.md
   - API Reference:
     - Client: api/client.md
     - Models: api/models.md
+    - Workflow: api/workflow.md
     - Agents: api/agents.md
     - Adapters: api/adapters.md
     - Server: api/server.md
     - Exceptions: api/exceptions.md
+  - Specification:
+    - Workflow YAML: spec/workflow-yaml.md
   - Examples:
     - Multi-Agent Workflow: examples/multi-agent.md
     - Streaming: examples/streaming.md
