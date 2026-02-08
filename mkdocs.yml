@@ -109,6 +109,19 @@ nav:
   - User Guide:
     - Intents: guide/intents.md
     - Events: guide/events.md
+    - Leasing & Concurrency: guide/leasing.md
+    - Governance & Arbitration: guide/governance.md
+    - Attachments: guide/attachments.md
+    - Subscriptions & Streaming: guide/subscriptions.md
+    - Portfolios: guide/portfolios.md
+    - Cost Tracking & Retry: guide/cost-retry.md
+    - Access Control: guide/access-control.md
+    - Task Planning: guide/task-planning.md
+    - Coordinator Patterns: guide/coordinators.md
+    - Credential Vaults & Tools: guide/vaults.md
+    - Agent Memory: guide/memory.md
+    - Agent Lifecycle & Health: guide/lifecycle.md
+    - Triggers & Reactive Scheduling: guide/triggers.md
     - YAML Workflows: guide/workflows.md
     - Agent Abstractions: guide/agents.md
     - LLM Adapters: guide/adapters.md
