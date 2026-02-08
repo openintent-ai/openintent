@@ -125,7 +125,9 @@ class GeminiAdapter(BaseAdapter):
             temperature = None
 
         messages_count = (
-            1 if isinstance(contents, str) else len(contents) if isinstance(contents, list) else 1
+            1
+            if isinstance(contents, str)
+            else len(contents) if isinstance(contents, list) else 1
         )
 
         if self._config.log_requests:
@@ -148,7 +150,9 @@ class GeminiAdapter(BaseAdapter):
                     temperature=temperature,
                 )
             except Exception as e:
-                self._handle_error(e, {"phase": "request_started", "request_id": request_id})
+                self._handle_error(
+                    e, {"phase": "request_started", "request_id": request_id}
+                )
 
         start_time = time.time()
 
@@ -216,15 +220,23 @@ class GeminiAdapter(BaseAdapter):
                     messages_count=messages_count,
                     response_content=text_content if text_content else None,
                     finish_reason=finish_reason,
-                    prompt_tokens=(getattr(usage, "prompt_token_count", None) if usage else None),
-                    completion_tokens=(
-                        getattr(usage, "candidates_token_count", None) if usage else None
+                    prompt_tokens=(
+                        getattr(usage, "prompt_token_count", None) if usage else None
                     ),
-                    total_tokens=(getattr(usage, "total_token_count", None) if usage else None),
+                    completion_tokens=(
+                        getattr(usage, "candidates_token_count", None)
+                        if usage
+                        else None
+                    ),
+                    total_tokens=(
+                        getattr(usage, "total_token_count", None) if usage else None
+                    ),
                     duration_ms=duration_ms,
                 )
             except Exception as e:
-                self._handle_error(e, {"phase": "request_completed", "request_id": request_id})
+                self._handle_error(
+                    e, {"phase": "request_completed", "request_id": request_id}
+                )
 
         if self._config.log_tool_calls:
             self._log_function_calls(response, model)
@@ -252,7 +264,9 @@ class GeminiAdapter(BaseAdapter):
                     model=model,
                 )
             except Exception as e:
-                self._handle_error(e, {"phase": "stream_started", "stream_id": stream_id})
+                self._handle_error(
+                    e, {"phase": "stream_started", "stream_id": stream_id}
+                )
 
         self._invoke_stream_start(stream_id, model, "google")
 
@@ -296,7 +310,9 @@ class GeminiAdapter(BaseAdapter):
                             chunk_index=chunk_count,
                         )
                     except Exception as e:
-                        self._handle_error(e, {"phase": "stream_chunk", "stream_id": stream_id})
+                        self._handle_error(
+                            e, {"phase": "stream_chunk", "stream_id": stream_id}
+                        )
 
                 if chunk.candidates:
                     candidate = chunk.candidates[0]
@@ -331,7 +347,9 @@ class GeminiAdapter(BaseAdapter):
                         tokens_streamed=len("".join(content_parts)),
                     )
                 except Exception as e:
-                    self._handle_error(e, {"phase": "stream_completed", "stream_id": stream_id})
+                    self._handle_error(
+                        e, {"phase": "stream_completed", "stream_id": stream_id}
+                    )
 
             self._invoke_stream_end(stream_id, "".join(content_parts), chunk_count)
 
@@ -343,12 +361,16 @@ class GeminiAdapter(BaseAdapter):
                         provider="google",
                         model=model,
                         messages_count=messages_count,
-                        response_content=("".join(content_parts) if content_parts else None),
+                        response_content=(
+                            "".join(content_parts) if content_parts else None
+                        ),
                         finish_reason=finish_reason,
                         duration_ms=duration_ms,
                     )
                 except Exception as e:
-                    self._handle_error(e, {"phase": "request_completed", "request_id": request_id})
+                    self._handle_error(
+                        e, {"phase": "request_completed", "request_id": request_id}
+                    )
 
             if self._config.log_tool_calls and function_calls:
                 for fc in function_calls:
@@ -377,7 +399,9 @@ class GeminiAdapter(BaseAdapter):
                         chunks_received=chunk_count,
                     )
                 except Exception as e:
-                    self._handle_error(e, {"phase": "stream_cancelled", "stream_id": stream_id})
+                    self._handle_error(
+                        e, {"phase": "stream_cancelled", "stream_id": stream_id}
+                    )
             self._invoke_stream_error(Exception("Generator closed"), stream_id)
             raise
 
@@ -426,7 +450,9 @@ class GeminiAdapter(BaseAdapter):
                     model=model,
                 )
             except Exception as e:
-                self._handle_error(e, {"phase": "tool_call_started", "tool_id": tool_id})
+                self._handle_error(
+                    e, {"phase": "tool_call_started", "tool_id": tool_id}
+                )
 
     def start_chat(self, **kwargs: Any) -> "GeminiChatSession":
         """Start a chat session with automatic event logging.
@@ -483,7 +509,9 @@ class GeminiChatSession:
 
                 if self._adapter._config.log_requests:
                     try:
-                        text_content = response.text if hasattr(response, "text") else ""
+                        text_content = (
+                            response.text if hasattr(response, "text") else ""
+                        )
                         self._adapter._client.log_llm_request_completed(
                             self._adapter._intent_id,
                             request_id=request_id,
@@ -540,7 +568,9 @@ class GeminiChatSession:
                     model=model,
                 )
             except Exception as e:
-                self._adapter._handle_error(e, {"phase": "stream_started", "stream_id": stream_id})
+                self._adapter._handle_error(
+                    e, {"phase": "stream_started", "stream_id": stream_id}
+                )
 
         response = self._chat.send_message(content, stream=True, **kwargs)
         return self._adapter._stream_wrapper(

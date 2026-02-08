@@ -90,7 +90,9 @@ class ContentCoordinator(Coordinator):
         for membership in portfolio.intents or []:
             intent = await self.client.get_intent(membership.intent_id)
             state = (
-                intent.state.to_dict() if hasattr(intent.state, "to_dict") else intent.state or {}
+                intent.state.to_dict()
+                if hasattr(intent.state, "to_dict")
+                else intent.state or {}
             )
             results[intent.title] = state
 
@@ -103,8 +105,12 @@ class ContentCoordinator(Coordinator):
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Coordinate multi-agent content creation")
-    parser.add_argument("--task", required=True, help="Topic to research and write about")
+    parser = argparse.ArgumentParser(
+        description="Coordinate multi-agent content creation"
+    )
+    parser.add_argument(
+        "--task", required=True, help="Topic to research and write about"
+    )
     parser.add_argument("--timeout", type=int, default=300, help="Timeout in seconds")
     args = parser.parse_args()
 
@@ -131,7 +137,11 @@ async def main():
     print(f"   Portfolio: {spec.name}")
     print(f"   Intents: {len(spec.intents)}")
     for i, intent in enumerate(spec.intents, 1):
-        deps = f" (depends on: {', '.join(intent.depends_on)})" if intent.depends_on else ""
+        deps = (
+            f" (depends on: {', '.join(intent.depends_on)})"
+            if intent.depends_on
+            else ""
+        )
         print(f"   {i}. {intent.title} -> {intent.assign}{deps}")
 
     # Execute the workflow
@@ -149,7 +159,9 @@ async def main():
             for phase, state in result["results"].items():
                 print(f"\n{phase}:")
                 if "research" in state:
-                    print(f"   Research by: {state['research'].get('agent', 'unknown')}")
+                    print(
+                        f"   Research by: {state['research'].get('agent', 'unknown')}"
+                    )
                 if "content" in state:
                     content = state["content"].get("text", "")
                     preview = content[:200] + "..." if len(content) > 200 else content

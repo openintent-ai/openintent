@@ -224,19 +224,22 @@ class TestWorker:
 
 
 class TestCoordinator:
-    """Tests for the Coordinator class."""
+    """Tests for the Coordinator decorator."""
 
     def test_coordinator_creation(self):
-        coordinator = Coordinator(
-            agent_id="test-coordinator",
-            base_url="http://localhost:5000",
-            api_key="test-key",
-        )
+        @Coordinator("test-coordinator")
+        class MyCoordinator:
+            pass
 
+        coordinator = MyCoordinator()
         assert coordinator._agent_id == "test-coordinator"
 
     def test_topological_sort(self):
-        coordinator = Coordinator("test", "http://localhost:5000", "key")
+        @Coordinator("test")
+        class MyCoordinator:
+            pass
+
+        coordinator = MyCoordinator()
 
         intents = [
             IntentSpec("C", depends_on=["A", "B"]),
@@ -252,7 +255,11 @@ class TestCoordinator:
         assert titles.index("B") < titles.index("C")
 
     def test_topological_sort_no_deps(self):
-        coordinator = Coordinator("test", "http://localhost:5000", "key")
+        @Coordinator("test")
+        class MyCoordinator:
+            pass
+
+        coordinator = MyCoordinator()
 
         intents = [
             IntentSpec("A"),

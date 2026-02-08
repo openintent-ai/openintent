@@ -222,7 +222,9 @@ class TestDatabaseRFC0013:
             lease = db.create_coordinator_lease(
                 session, agent_id="coordinator-1", intent_id=intent_id
             )
-            updated = db.update_coordinator_heartbeat(session, lease.id, "coordinator-1")
+            updated = db.update_coordinator_heartbeat(
+                session, lease.id, "coordinator-1"
+            )
             assert updated is not None
             assert updated.last_heartbeat is not None
         finally:
@@ -322,7 +324,11 @@ class TestDatabaseRFC0014:
         try:
             vault = db.create_vault(session, owner_id="user-1", name="Vault")
             cred = db.create_credential(
-                session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key"
+                session,
+                vault_id=vault.id,
+                service="openai",
+                label="Key",
+                auth_type="api_key",
             )
             found = db.get_credential(session, cred.id)
             assert found is not None
@@ -335,7 +341,11 @@ class TestDatabaseRFC0014:
         try:
             vault = db.create_vault(session, owner_id="user-1", name="Vault")
             cred = db.create_credential(
-                session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key"
+                session,
+                vault_id=vault.id,
+                service="openai",
+                label="Key",
+                auth_type="api_key",
             )
             grant = db.create_tool_grant(
                 session,
@@ -355,7 +365,11 @@ class TestDatabaseRFC0014:
         try:
             vault = db.create_vault(session, owner_id="user-1", name="Vault")
             cred = db.create_credential(
-                session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key"
+                session,
+                vault_id=vault.id,
+                service="openai",
+                label="Key",
+                auth_type="api_key",
             )
             db.create_tool_grant(
                 session, credential_id=cred.id, agent_id="agent-1", granted_by="admin"
@@ -373,7 +387,11 @@ class TestDatabaseRFC0014:
         try:
             vault = db.create_vault(session, owner_id="user-1", name="Vault")
             cred = db.create_credential(
-                session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key"
+                session,
+                vault_id=vault.id,
+                service="openai",
+                label="Key",
+                auth_type="api_key",
             )
             grant = db.create_tool_grant(
                 session, credential_id=cred.id, agent_id="agent-1", granted_by="admin"
@@ -389,13 +407,21 @@ class TestDatabaseRFC0014:
         try:
             vault = db.create_vault(session, owner_id="user-1", name="Vault")
             cred = db.create_credential(
-                session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key"
+                session,
+                vault_id=vault.id,
+                service="openai",
+                label="Key",
+                auth_type="api_key",
             )
             grant = db.create_tool_grant(
                 session, credential_id=cred.id, agent_id="agent-1", granted_by="admin"
             )
             inv = db.create_tool_invocation(
-                session, grant_id=grant.id, service="openai", tool="chat", agent_id="agent-1"
+                session,
+                grant_id=grant.id,
+                service="openai",
+                tool="chat",
+                agent_id="agent-1",
             )
             assert inv.id is not None
             assert inv.service == "openai"
@@ -407,16 +433,28 @@ class TestDatabaseRFC0014:
         try:
             vault = db.create_vault(session, owner_id="user-1", name="Vault")
             cred = db.create_credential(
-                session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key"
+                session,
+                vault_id=vault.id,
+                service="openai",
+                label="Key",
+                auth_type="api_key",
             )
             grant = db.create_tool_grant(
                 session, credential_id=cred.id, agent_id="agent-1", granted_by="admin"
             )
             db.create_tool_invocation(
-                session, grant_id=grant.id, service="openai", tool="chat", agent_id="agent-1"
+                session,
+                grant_id=grant.id,
+                service="openai",
+                tool="chat",
+                agent_id="agent-1",
             )
             db.create_tool_invocation(
-                session, grant_id=grant.id, service="openai", tool="embed", agent_id="agent-1"
+                session,
+                grant_id=grant.id,
+                service="openai",
+                tool="embed",
+                agent_id="agent-1",
             )
             invocations = db.list_tool_invocations(session, grant.id)
             assert len(invocations) == 2
@@ -530,7 +568,9 @@ class TestDatabaseRFC0015:
                 value={"old": True},
                 memory_type="working",
             )
-            updated = db.update_memory_entry(session, entry.id, entry.version, value={"new": True})
+            updated = db.update_memory_entry(
+                session, entry.id, entry.version, value={"new": True}
+            )
             assert updated is not None
             assert updated.value == {"new": True}
             assert updated.version == 2
@@ -733,7 +773,9 @@ class TestDatabaseRFC0017:
         session = db.get_session()
         try:
             trigger = db.create_trigger(session, name="T1", type="schedule")
-            db.update_trigger(session, trigger.trigger_id, trigger.version, enabled=False)
+            db.update_trigger(
+                session, trigger.trigger_id, trigger.version, enabled=False
+            )
             result = db.update_trigger(session, trigger.trigger_id, 1, enabled=True)
             assert result is None
         finally:

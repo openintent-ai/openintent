@@ -559,7 +559,11 @@ class TestIntentContext:
     def test_from_dict_with_peers(self):
         data = {
             "peers": [
-                {"principal_id": "bot-1", "principal_type": "agent", "permission": "read"},
+                {
+                    "principal_id": "bot-1",
+                    "principal_type": "agent",
+                    "permission": "read",
+                },
                 {"principal_id": "bot-2", "principal_type": "agent"},
             ],
         }

@@ -152,19 +152,25 @@ class OpenRouterAdapter(BaseAdapter):
                     model=model,
                     messages_count=len(messages),
                     tools_available=(
-                        [t.get("function", {}).get("name", "") for t in tools] if tools else None
+                        [t.get("function", {}).get("name", "") for t in tools]
+                        if tools
+                        else None
                     ),
                     stream=stream,
                     temperature=temperature,
                 )
             except Exception as e:
-                self._handle_error(e, {"phase": "request_started", "request_id": request_id})
+                self._handle_error(
+                    e, {"phase": "request_started", "request_id": request_id}
+                )
 
         start_time = time.time()
 
         try:
             if stream:
-                return self._handle_stream(kwargs, request_id, model, len(messages), start_time)
+                return self._handle_stream(
+                    kwargs, request_id, model, len(messages), start_time
+                )
             else:
                 return self._handle_completion(
                     kwargs, request_id, model, len(messages), start_time
@@ -212,17 +218,27 @@ class OpenRouterAdapter(BaseAdapter):
                     provider="openrouter",
                     model=model,
                     messages_count=messages_count,
-                    response_content=(getattr(message, "content", None) if message else None),
-                    finish_reason=(getattr(choice, "finish_reason", None) if choice else None),
-                    prompt_tokens=(getattr(usage, "prompt_tokens", None) if usage else None),
+                    response_content=(
+                        getattr(message, "content", None) if message else None
+                    ),
+                    finish_reason=(
+                        getattr(choice, "finish_reason", None) if choice else None
+                    ),
+                    prompt_tokens=(
+                        getattr(usage, "prompt_tokens", None) if usage else None
+                    ),
                     completion_tokens=(
                         getattr(usage, "completion_tokens", None) if usage else None
                     ),
-                    total_tokens=(getattr(usage, "total_tokens", None) if usage else None),
+                    total_tokens=(
+                        getattr(usage, "total_tokens", None) if usage else None
+                    ),
                     duration_ms=duration_ms,
                 )
             except Exception as e:
-                self._handle_error(e, {"phase": "request_completed", "request_id": request_id})
+                self._handle_error(
+                    e, {"phase": "request_completed", "request_id": request_id}
+                )
 
         if self._config.log_tool_calls and response.choices:
             self._log_tool_calls(response.choices[0], model)
@@ -249,7 +265,9 @@ class OpenRouterAdapter(BaseAdapter):
                     model=model,
                 )
             except Exception as e:
-                self._handle_error(e, {"phase": "stream_started", "stream_id": stream_id})
+                self._handle_error(
+                    e, {"phase": "stream_started", "stream_id": stream_id}
+                )
 
         self._invoke_stream_start(stream_id, model, "openrouter")
 
@@ -293,7 +311,9 @@ class OpenRouterAdapter(BaseAdapter):
                             chunk_index=chunk_count,
                         )
                     except Exception as e:
-                        self._handle_error(e, {"phase": "stream_chunk", "stream_id": stream_id})
+                        self._handle_error(
+                            e, {"phase": "stream_chunk", "stream_id": stream_id}
+                        )
 
                 if chunk.choices:
                     delta = chunk.choices[0].delta
@@ -310,7 +330,9 @@ class OpenRouterAdapter(BaseAdapter):
                             if hasattr(tc, "function") and tc.function:
                                 tc_dict["function"] = {
                                     "name": getattr(tc.function, "name", None),
-                                    "arguments": getattr(tc.function, "arguments", None),
+                                    "arguments": getattr(
+                                        tc.function, "arguments", None
+                                    ),
                                 }
                             tool_calls_accumulated.append(tc_dict)
                     if chunk.choices[0].finish_reason:
@@ -331,7 +353,9 @@ class OpenRouterAdapter(BaseAdapter):
                         tokens_streamed=len("".join(content_parts)),
                     )
                 except Exception as e:
-                    self._handle_error(e, {"phase": "stream_completed", "stream_id": stream_id})
+                    self._handle_error(
+                        e, {"phase": "stream_completed", "stream_id": stream_id}
+                    )
 
             self._invoke_stream_end(stream_id, "".join(content_parts), chunk_count)
 
@@ -343,12 +367,16 @@ class OpenRouterAdapter(BaseAdapter):
                         provider="openrouter",
                         model=model,
                         messages_count=messages_count,
-                        response_content=("".join(content_parts) if content_parts else None),
+                        response_content=(
+                            "".join(content_parts) if content_parts else None
+                        ),
                         finish_reason=finish_reason,
                         duration_ms=duration_ms,
                     )
                 except Exception as e:
-                    self._handle_error(e, {"phase": "request_completed", "request_id": request_id})
+                    self._handle_error(
+                        e, {"phase": "request_completed", "request_id": request_id}
+                    )
 
             if self._config.log_tool_calls and tool_calls_accumulated:
                 self._log_accumulated_tool_calls(tool_calls_accumulated, model)
@@ -366,7 +394,9 @@ class OpenRouterAdapter(BaseAdapter):
                         chunks_received=chunk_count,
                     )
                 except Exception as e:
-                    self._handle_error(e, {"phase": "stream_cancelled", "stream_id": stream_id})
+                    self._handle_error(
+                        e, {"phase": "stream_cancelled", "stream_id": stream_id}
+                    )
             self._invoke_stream_error(Exception("Generator closed"), stream_id)
             raise
 
@@ -425,7 +455,9 @@ class OpenRouterAdapter(BaseAdapter):
                     model=model,
                 )
             except Exception as e:
-                self._handle_error(e, {"phase": "tool_call_started", "tool_id": tool_id})
+                self._handle_error(
+                    e, {"phase": "tool_call_started", "tool_id": tool_id}
+                )
 
     def _log_accumulated_tool_calls(
         self,

@@ -25,7 +25,9 @@ This showcases:
 from openintent import IntentStatus, OpenIntentClient
 
 
-def create_incident_response_graph_sync(client: OpenIntentClient, incident_title: str) -> dict:
+def create_incident_response_graph_sync(
+    client: OpenIntentClient, incident_title: str
+) -> dict:
     """
     Create an incident response intent graph using the synchronous client.
 
@@ -65,7 +67,9 @@ def create_incident_response_graph_sync(client: OpenIntentClient, incident_title
         description="Deploy the hotfix to production",
         depends_on=[diagnose.id, hotfix.id],
     )
-    print(f"  Created child: {deploy.id} - {deploy.title} (depends on: Diagnose, Implement)")
+    print(
+        f"  Created child: {deploy.id} - {deploy.title} (depends on: Diagnose, Implement)"
+    )
 
     verify = client.create_child_intent(
         parent_id=parent.id,
@@ -155,7 +159,9 @@ def simulate_incident_resolution(client: OpenIntentClient, intents: dict):
             "customers_notified": 150,
         },
     )
-    communicate = client.set_status(communicate.id, communicate.version, IntentStatus.COMPLETED)
+    communicate = client.set_status(
+        communicate.id, communicate.version, IntentStatus.COMPLETED
+    )
     print(f"  Completed: {communicate.title}")
 
     hotfix = intents["hotfix"]
@@ -218,7 +224,9 @@ def simulate_incident_resolution(client: OpenIntentClient, intents: dict):
             ],
         },
     )
-    postmortem = client.set_status(postmortem.id, postmortem.version, IntentStatus.COMPLETED)
+    postmortem = client.set_status(
+        postmortem.id, postmortem.version, IntentStatus.COMPLETED
+    )
     print(f"  Completed: {postmortem.title}")
 
     parent = intents["parent"]
