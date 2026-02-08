@@ -18,9 +18,7 @@ import random
 import sys
 
 # Add parent to path for imports
-sys.path.insert(
-    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
 from openintent import Agent, Intent, on_assignment
 from openintent.models import RetryStrategy
@@ -170,9 +168,7 @@ class OCRAgent:
         print(f"   [OK] Total pages: {extracted_content['metadata']['pages']}")
 
         if attempt > 1:
-            print(
-                f"   [OK] Succeeded after {attempt} attempts (with {attempt - 1} retries)"
-            )
+            print(f"   [OK] Succeeded after {attempt} attempts (with {attempt - 1} retries)")
 
         # Clean up attempt tracking
         del self.attempt_counts[intent.id]

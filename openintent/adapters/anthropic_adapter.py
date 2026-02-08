@@ -136,16 +136,12 @@ class AnthropicAdapter(BaseAdapter):
                     provider="anthropic",
                     model=model,
                     messages_count=len(messages),
-                    tools_available=(
-                        [t.get("name", "") for t in tools] if tools else None
-                    ),
+                    tools_available=([t.get("name", "") for t in tools] if tools else None),
                     stream=False,
                     temperature=temperature,
                 )
             except Exception as e:
-                self._handle_error(
-                    e, {"phase": "request_started", "request_id": request_id}
-                )
+                self._handle_error(e, {"phase": "request_started", "request_id": request_id})
 
         start_time = time.time()
 
@@ -170,9 +166,7 @@ class AnthropicAdapter(BaseAdapter):
                         messages_count=len(messages),
                         response_content=text_content if text_content else None,
                         finish_reason=getattr(response, "stop_reason", None),
-                        prompt_tokens=(
-                            getattr(usage, "input_tokens", None) if usage else None
-                        ),
+                        prompt_tokens=(getattr(usage, "input_tokens", None) if usage else None),
                         completion_tokens=(
                             getattr(usage, "output_tokens", None) if usage else None
                         ),
@@ -187,9 +181,7 @@ class AnthropicAdapter(BaseAdapter):
                         duration_ms=duration_ms,
                     )
                 except Exception as e:
-                    self._handle_error(
-                        e, {"phase": "request_completed", "request_id": request_id}
-                    )
+                    self._handle_error(e, {"phase": "request_completed", "request_id": request_id})
 
             if self._config.log_tool_calls:
                 self._log_tool_use(response, model)
@@ -237,17 +229,13 @@ class AnthropicAdapter(BaseAdapter):
                     tool_name=name,
                     tool_id=tool_id,
                     arguments=(
-                        input_data
-                        if isinstance(input_data, dict)
-                        else {"raw": str(input_data)}
+                        input_data if isinstance(input_data, dict) else {"raw": str(input_data)}
                     ),
                     provider="anthropic",
                     model=model,
                 )
             except Exception as e:
-                self._handle_error(
-                    e, {"phase": "tool_call_started", "tool_id": tool_id}
-                )
+                self._handle_error(e, {"phase": "tool_call_started", "tool_id": tool_id})
 
 
 class AnthropicStreamContext:
@@ -284,9 +272,7 @@ class AnthropicStreamContext:
                     provider="anthropic",
                     model=model,
                     messages_count=len(messages),
-                    tools_available=(
-                        [t.get("name", "") for t in tools] if tools else None
-                    ),
+                    tools_available=([t.get("name", "") for t in tools] if tools else None),
                     stream=True,
                     temperature=temperature,
                 )
@@ -344,7 +330,9 @@ class AnthropicStreamContext:
                     self._adapter._handle_error(
                         e, {"phase": "stream_cancelled", "stream_id": stream_id}
                     )
-            self._adapter._invoke_stream_error(exc_val if exc_val else Exception("Stream cancelled"), self._stream_id or "")  # noqa: E501
+            self._adapter._invoke_stream_error(
+                exc_val if exc_val else Exception("Stream cancelled"), self._stream_id or ""
+            )  # noqa: E501
             return
 
         if self._adapter._config.log_streams and stream_id:
@@ -362,7 +350,9 @@ class AnthropicStreamContext:
                     e, {"phase": "stream_completed", "stream_id": stream_id}
                 )
 
-        self._adapter._invoke_stream_end(self._stream_id or "", "".join(self._content_parts), self._chunk_count)  # noqa: E501
+        self._adapter._invoke_stream_end(
+            self._stream_id or "", "".join(self._content_parts), self._chunk_count
+        )  # noqa: E501
 
         if self._adapter._config.log_requests and request_id:
             try:
@@ -382,12 +372,8 @@ class AnthropicStreamContext:
                         "".join(self._content_parts) if self._content_parts else None
                     ),
                     finish_reason=self._stop_reason,
-                    prompt_tokens=(
-                        self._usage.get("input_tokens") if self._usage else None
-                    ),
-                    completion_tokens=(
-                        self._usage.get("output_tokens") if self._usage else None
-                    ),
+                    prompt_tokens=(self._usage.get("input_tokens") if self._usage else None),
+                    completion_tokens=(self._usage.get("output_tokens") if self._usage else None),
                     total_tokens=total_tokens,
                     duration_ms=duration_ms,
                 )
@@ -432,8 +418,7 @@ class AnthropicStreamWrapper:
             if (
                 self._context._adapter._config.log_stream_chunks
                 and stream_id
-                and self._context._chunk_count
-                % self._context._adapter._config.chunk_log_interval
+                and self._context._chunk_count % self._context._adapter._config.chunk_log_interval
                 == 0
             ):
                 try:

@@ -1432,7 +1432,9 @@ class TestHeartbeatConfig:
         assert d["dead_after_seconds"] == 120
 
     def test_from_dict_round_trip(self):
-        hc = HeartbeatConfig(interval_seconds=10, unhealthy_after_seconds=30, dead_after_seconds=60)
+        hc = HeartbeatConfig(
+            interval_seconds=10, unhealthy_after_seconds=30, dead_after_seconds=60
+        )
         d = hc.to_dict()
         restored = HeartbeatConfig.from_dict(d)
         assert restored.interval_seconds == 10

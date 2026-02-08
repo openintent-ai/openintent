@@ -16,9 +16,7 @@ import os
 import sys
 
 # Add parent to path for imports
-sys.path.insert(
-    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
 from openintent import Agent, Intent, on_assignment
 
@@ -45,11 +43,7 @@ class AnalyzerAgent:
         print(f"\n[ANALYZER] Processing: {intent.title}")
 
         # Get extracted content from OCR phase
-        state = (
-            intent.state.to_dict()
-            if hasattr(intent.state, "to_dict")
-            else intent.state or {}
-        )
+        state = intent.state.to_dict() if hasattr(intent.state, "to_dict") else intent.state or {}
         ocr_data = state.get("ocr", {})
         extracted = ocr_data.get("extracted", {})
         sections = extracted.get("sections", [])
@@ -114,9 +108,7 @@ class AnalyzerAgent:
                 "sections": analyzed_sections,
                 "summary": {
                     "total_sections": len(analyzed_sections),
-                    "issues_found": sum(
-                        1 for s in analyzed_sections if s.get("issues")
-                    ),
+                    "issues_found": sum(1 for s in analyzed_sections if s.get("issues")),
                 },
             }
         }

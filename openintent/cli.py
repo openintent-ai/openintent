@@ -374,10 +374,7 @@ if __name__ == "__main__":
 
         # Try to find existing workflow, or create inline
         search_paths = [
-            Path(__file__).parent.parent
-            / "examples"
-            / "workflows"
-            / "hello_world.yaml",
+            Path(__file__).parent.parent / "examples" / "workflows" / "hello_world.yaml",
             Path.cwd() / "examples" / "workflows" / "hello_world.yaml",
         ]
 
@@ -403,9 +400,7 @@ workflow:
     assign: summarizer
     depends_on: [research]
 """
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".yaml", delete=False
-            ) as f:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
                 f.write(workflow_yaml)
                 workflow_path = Path(f.name)
                 workflow_file = workflow_path
@@ -530,13 +525,9 @@ def main() -> None:
     list_parser.set_defaults(func=cmd_list)
 
     # New command
-    new_parser = subparsers.add_parser(
-        "new", help="Create a new workflow from template"
-    )
+    new_parser = subparsers.add_parser("new", help="Create a new workflow from template")
     new_parser.add_argument("name", nargs="?", help="Workflow name")
-    new_parser.add_argument(
-        "--force", action="store_true", help="Overwrite existing file"
-    )
+    new_parser.add_argument("--force", action="store_true", help="Overwrite existing file")
     new_parser.set_defaults(func=cmd_new)
 
     # Demo command

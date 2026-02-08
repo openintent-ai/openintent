@@ -1,6 +1,6 @@
 # Agent Abstractions
 
-The `openintent.agents` module provides high-level, decorator-first abstractions for building agents with minimal boilerplate. The design philosophy is Pythonic and elegant: decorators and class parameters express protocol semantics so the framework handles the heavy lifting.
+The `openintent.agents` module provides high-level, decorator-first abstractions for building agents with minimal boilerplate. Decorators and class parameters express protocol semantics so the framework handles the heavy lifting.
 
 ## Three Levels of Abstraction
 
@@ -29,16 +29,16 @@ worker.run()
 Zero-boilerplate agent classes with auto-subscription, state auto-patching, and protocol-managed lifecycle:
 
 ```python
-from openintent import Agent, on_assignment, on_complete, on_state_change
+from openintent.agents import Agent, on_assignment, on_complete, on_state_change
 
 @Agent("research-agent")
 class ResearchAgent:
-    
+
     @on_assignment
     async def handle_new_intent(self, intent):
         """Called when assigned to a new intent."""
         return {"status": "researching"}  # Auto-patches state
-    
+
     @on_state_change(keys=["data"])
     async def on_data_ready(self, intent, old_state, new_state):
         """Called when 'data' key changes in state."""
@@ -54,12 +54,12 @@ if __name__ == "__main__":
     ResearchAgent.run()
 ```
 
-### v0.8.0: Agent with Memory and Tools
+### Agent with Memory and Tools
 
 The `@Agent` decorator accepts configuration that the framework manages automatically:
 
 ```python
-from openintent import Agent, on_assignment, on_task
+from openintent.agents import Agent, on_assignment, on_task
 
 @Agent("analyst",
     memory="episodic",           # RFC-0015: auto-configured memory tier
@@ -68,19 +68,19 @@ from openintent import Agent, on_assignment, on_task
     auto_heartbeat=True,         # RFC-0016: automatic health pings
 )
 class AnalystAgent:
-    
+
     @on_assignment
     async def research(self, intent):
         past = await self.memory.recall(tags=["research"])
-        
+
         findings = await do_research(intent.description, context=past)
-        
+
         await self.memory.store(
             key=f"research-{intent.id}",
             value=findings,
             tags=["research", intent.title]
         )
-        
+
         return {"findings": findings, "status": "analyzed"}
 
     @on_task(status="completed")
@@ -89,7 +89,7 @@ class AnalystAgent:
         return {"last_completed_task": task.title}
 ```
 
-### v0.8.0: Lifecycle Decorators
+### Lifecycle Decorators
 
 | Decorator | Trigger |
 |-----------|---------|
@@ -102,6 +102,7 @@ class AnalystAgent:
 | `@on_task(status)` | Task lifecycle event (RFC-0012) |
 | `@on_trigger(name)` | Trigger fires (RFC-0017) |
 | `@on_drain` | Graceful shutdown signal (RFC-0016) |
+| `@on_all_complete` | All portfolio intents complete |
 
 ### Memory Access (RFC-0015)
 
@@ -110,13 +111,13 @@ Agents configured with `memory=` get a natural `self.memory` proxy:
 ```python
 @Agent("note-taker", memory="episodic")
 class NoteTaker:
-    
+
     @on_assignment
     async def work(self, intent):
         await self.memory.store("key", {"data": "value"}, tags=["notes"])
-        
+
         results = await self.memory.recall(tags=["notes"])
-        
+
         await self.memory.pin("key")  # Prevent LRU eviction
 ```
 
@@ -125,85 +126,127 @@ class NoteTaker:
 Create and manage subtasks from within agent handlers:
 
 ```python
-@Agent("planner", capabilities=["planning"])
+@Agent("planner", memory="working")
 class PlannerAgent:
-    
+
     @on_assignment
     async def plan(self, intent):
         await self.tasks.create(
-            intent.id,
             title="Research phase",
-            assigned_to="researcher"
+            parent_intent_id=intent.id,
+            assign_to="researcher"
         )
         await self.tasks.create(
-            intent.id,
             title="Analysis phase",
-            assigned_to="analyst"
+            parent_intent_id=intent.id,
+            depends_on=["research-phase"],
+            assign_to="analyst"
         )
-        return {"status": "plan_created"}
+        return {"status": "planning", "tasks_created": 2}
 ```
 
-### Graceful Shutdown (RFC-0016)
+### Tool Access (RFC-0014)
+
+Agents configured with `tools=` get scoped tool access via `self.tools`:
 
 ```python
-from openintent import Agent, on_drain
+@Agent("data-agent", tools=["web_search", "sql_query"])
+class DataAgent:
 
-@Agent("worker", auto_heartbeat=True)
-class GracefulWorker:
-    
-    @on_drain
-    async def shutdown(self):
-        """Framework sends drain signal; finish in-progress work."""
-        await self.memory.store("checkpoint", self._progress)
-        print("Draining... saving state and finishing up")
+    @on_assignment
+    async def work(self, intent):
+        results = await self.tools.invoke("web_search", query=intent.description)
+        return {"search_results": results}
 ```
 
-## @Coordinator (Multi-Agent)
+## Protocol Decorators
 
-For orchestrating multiple agents with portfolios, governance, and decision auditing. The `@Coordinator` decorator mirrors `@Agent` with added orchestration capabilities:
+First-class declarative configuration for protocol features. Import from `openintent.agents`:
+
+### @Plan (RFC-0012)
+
+Declare task decomposition strategy:
 
 ```python
-from openintent import Coordinator, on_all_complete, on_conflict, on_escalation, on_quorum
+from openintent.agents import Agent, Plan, on_assignment
 
-@Coordinator("pipeline",
-    agents=["researcher", "analyst", "writer"],
-    strategy="sequential",
-    guardrails=["budget < 1000", "max_retries: 3"],
+@Plan(strategy="sequential", checkpoints=True)
+@Agent("pipeline-agent")
+class PipelineAgent:
+
+    @on_assignment
+    async def handle(self, intent):
+        return {"status": "processing"}
+```
+
+### @Vault (RFC-0014)
+
+Declare credential vault requirements:
+
+```python
+from openintent.agents import Agent, Vault, on_assignment
+
+@Vault(name="api-keys", rotation_policy="30d")
+@Agent("secure-agent")
+class SecureAgent:
+
+    @on_assignment
+    async def handle(self, intent):
+        return {"status": "authenticated"}
+```
+
+### @Memory (RFC-0015)
+
+Declare memory tier configuration:
+
+```python
+from openintent.agents import Agent, Memory, on_assignment
+
+@Memory(tier="episodic", capacity=1000, eviction="lru")
+@Agent("learning-agent")
+class LearningAgent:
+
+    @on_assignment
+    async def handle(self, intent):
+        past = await self.memory.recall(tags=["similar"])
+        return {"context_used": len(past)}
+```
+
+### @Trigger (RFC-0017)
+
+Declare reactive scheduling:
+
+```python
+from openintent.agents import Agent, Trigger, on_trigger
+
+@Trigger(type="schedule", cron="0 9 * * *")
+@Agent("morning-agent")
+class MorningAgent:
+
+    @on_trigger(name="daily-check")
+    async def daily_report(self, intent):
+        return {"report": "generated"}
+```
+
+## @Coordinator Decorator
+
+Multi-agent orchestration with governance features:
+
+```python
+from openintent.agents import (
+    Coordinator, on_conflict, on_escalation, on_quorum
 )
-class ResearchPipeline:
-    
-    @on_all_complete
-    async def finalize(self, portfolio):
-        """Called when all intents in the portfolio complete."""
-        return self._merge_results(portfolio)
 
-    async def run_pipeline(self, goal: str):
-        portfolio = await self.delegate(
-            goal,
-            agents=self.agents,
-            strategy="sequential"
-        )
-        return portfolio
-
-pipeline = ResearchPipeline()
-result = await pipeline.run_pipeline("Market Analysis")
-```
-
-### v0.8.0: Coordinator Lifecycle Decorators
-
-Coordinator-specific lifecycle decorators for governance, conflict resolution, and consensus:
-
-```python
-@Coordinator("governed",
+@Coordinator("team-lead",
     agents=["agent-a", "agent-b"],
     strategy="parallel",
     guardrails=["require_approval"],
 )
-class GovernedCoordinator:
-    
+class TeamCoordinator:
+
     @on_conflict
     async def handle_conflict(self, intent, conflict):
-        """Called on version conflicts — resolve optimistically."""
+        """Called on version conflicts."""
         await self.record_decision(
             decision_type="conflict_resolution",
             summary=f"Resolved conflict on {intent.id}",
@@ -212,12 +255,12 @@ class GovernedCoordinator:
 
     @on_escalation
     async def handle_escalation(self, intent, source_agent):
-        """Called when an agent escalates to the coordinator."""
+        """Called when an agent escalates."""
         await self.delegate(intent.title, agents=["senior-agent"])
 
     @on_quorum(threshold=0.6)
     async def on_vote_reached(self, intent, votes):
-        """Called when 60% of agents agree on a decision."""
+        """Called when 60% of agents agree."""
         await self.record_decision(
             decision_type="quorum",
             summary="Consensus reached",
@@ -227,6 +270,22 @@ class GovernedCoordinator:
     # Access the full decision audit log
     # audit = coordinator.decisions
 ```
+
+### Coordinator Lifecycle Decorators
+
+| Decorator | Trigger |
+|-----------|---------|
+| `@on_conflict` | Version conflict detected |
+| `@on_escalation` | Agent escalation received |
+| `@on_quorum(threshold)` | Voting threshold met |
+
+### Coordinator Methods
+
+| Method | Description |
+|--------|-------------|
+| `self.delegate(title, agents)` | Delegate work to agents |
+| `self.record_decision(...)` | Record governance decision |
+| `self.decisions` | Access decision audit log |
 
 ## Running Agents
 
@@ -242,4 +301,5 @@ asyncio.run(agent.run_async())
 ## Next Steps
 
 - [LLM Adapters](adapters.md) - Add LLM observability
+- [Built-in Server](server.md) - Run your own OpenIntent server
 - [Examples](../examples/multi-agent.md) - Full working examples

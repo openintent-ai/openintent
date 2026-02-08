@@ -368,6 +368,7 @@ class TaskCreate(BaseModel):
     requires_tools: List[Dict[str, Any]] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
+
 class TaskResponse(BaseModel):
     id: str
     intent_id: str
@@ -399,9 +400,11 @@ class TaskResponse(BaseModel):
     created_at: datetime
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
+
     class Config:
         from_attributes = True
         populate_by_name = True
+
 
 class TaskStatusUpdate(BaseModel):
     status: str
@@ -409,6 +412,7 @@ class TaskStatusUpdate(BaseModel):
     output: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     blocked_reason: Optional[str] = None
+
 
 class PlanCreate(BaseModel):
     intent_id: str
@@ -418,6 +422,7 @@ class PlanCreate(BaseModel):
     on_failure: str = "pause_and_escalate"
     on_complete: str = "notify"
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
 
 class PlanResponse(BaseModel):
     id: str
@@ -432,14 +437,17 @@ class PlanResponse(BaseModel):
     plan_metadata: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: Optional[datetime]
+
     class Config:
         from_attributes = True
         populate_by_name = True
+
 
 class PlanUpdate(BaseModel):
     state: Optional[str] = None
     tasks: Optional[List[str]] = None
     checkpoints: Optional[List[Dict[str, Any]]] = None
+
 
 # RFC-0013: Coordinator Governance
 class CoordinatorLeaseCreate(BaseModel):
@@ -454,6 +462,7 @@ class CoordinatorLeaseCreate(BaseModel):
     heartbeat_interval_seconds: int = 60
     expires_at: Optional[datetime] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
 
 class CoordinatorLeaseResponse(BaseModel):
     id: str
@@ -472,9 +481,11 @@ class CoordinatorLeaseResponse(BaseModel):
     expires_at: Optional[datetime]
     version: int
     lease_metadata: Optional[Dict[str, Any]] = None
+
     class Config:
         from_attributes = True
         populate_by_name = True
+
 
 class DecisionRecordCreate(BaseModel):
     coordinator_id: str
@@ -484,6 +495,7 @@ class DecisionRecordCreate(BaseModel):
     rationale: str
     alternatives_considered: List[Dict[str, Any]] = Field(default_factory=list)
     confidence: Optional[float] = None
+
 
 class DecisionRecordResponse(BaseModel):
     id: str
@@ -495,21 +507,26 @@ class DecisionRecordResponse(BaseModel):
     alternatives_considered: List[Dict[str, Any]]
     confidence: Optional[float]
     timestamp: datetime
+
     class Config:
         from_attributes = True
+
 
 # RFC-0014: Credential Vaults & Tool Scoping
 class VaultCreate(BaseModel):
     owner_id: str
     name: str
 
+
 class VaultResponse(BaseModel):
     id: str
     owner_id: str
     name: str
     created_at: datetime
+
     class Config:
         from_attributes = True
+
 
 class CredentialCreate(BaseModel):
     vault_id: str
@@ -518,6 +535,7 @@ class CredentialCreate(BaseModel):
     auth_type: str = "api_key"
     scopes_available: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
 
 class CredentialResponse(BaseModel):
     id: str
@@ -531,9 +549,11 @@ class CredentialResponse(BaseModel):
     created_at: datetime
     rotated_at: Optional[datetime]
     expires_at: Optional[datetime]
+
     class Config:
         from_attributes = True
         populate_by_name = True
+
 
 class GrantCreate(BaseModel):
     credential_id: str
@@ -544,6 +564,7 @@ class GrantCreate(BaseModel):
     delegatable: bool = False
     context: Dict[str, Any] = Field(default_factory=dict)
     expires_at: Optional[datetime] = None
+
 
 class GrantResponse(BaseModel):
     id: str
@@ -561,8 +582,10 @@ class GrantResponse(BaseModel):
     expires_at: Optional[datetime]
     created_at: datetime
     revoked_at: Optional[datetime]
+
     class Config:
         from_attributes = True
+
 
 class InvocationCreate(BaseModel):
     grant_id: str
@@ -577,6 +600,7 @@ class InvocationCreate(BaseModel):
     duration_ms: Optional[int] = None
     idempotency_key: Optional[str] = None
     context: Dict[str, Any] = Field(default_factory=dict)
+
 
 class InvocationResponse(BaseModel):
     id: str
@@ -593,8 +617,10 @@ class InvocationResponse(BaseModel):
     idempotency_key: Optional[str]
     context: Dict[str, Any]
     timestamp: datetime
+
     class Config:
         from_attributes = True
+
 
 # RFC-0015: Agent Memory
 class MemoryEntryCreate(BaseModel):
@@ -609,6 +635,7 @@ class MemoryEntryCreate(BaseModel):
     pinned: bool = False
     priority: str = "normal"
     sensitivity: Optional[str] = None
+
 
 class MemoryEntryResponse(BaseModel):
     id: str
@@ -628,8 +655,10 @@ class MemoryEntryResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime]
     expires_at: Optional[datetime]
+
     class Config:
         from_attributes = True
+
 
 class MemoryEntryUpdate(BaseModel):
     value: Optional[Dict[str, Any]] = None
@@ -637,6 +666,7 @@ class MemoryEntryUpdate(BaseModel):
     pinned: Optional[bool] = None
     priority: Optional[str] = None
     ttl: Optional[str] = None
+
 
 # RFC-0016: Agent Lifecycle
 class AgentRegister(BaseModel):
@@ -649,6 +679,7 @@ class AgentRegister(BaseModel):
     heartbeat_config: Optional[Dict[str, Any]] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
     drain_timeout_seconds: Optional[int] = None
+
 
 class AgentRecordResponse(BaseModel):
     agent_id: str
@@ -664,17 +695,21 @@ class AgentRecordResponse(BaseModel):
     last_heartbeat_at: Optional[datetime]
     drain_timeout_seconds: Optional[int]
     version: int
+
     class Config:
         from_attributes = True
         populate_by_name = True
+
 
 class HeartbeatRequest(BaseModel):
     status: str = "active"
     current_load: int = 0
     tasks_in_progress: List[str] = Field(default_factory=list)
 
+
 class AgentStatusUpdate(BaseModel):
     status: str
+
 
 # RFC-0017: Triggers
 class TriggerCreate(BaseModel):
@@ -684,6 +719,7 @@ class TriggerCreate(BaseModel):
     intent_template: Optional[Dict[str, Any]] = None
     deduplication: str = "allow"
     namespace: Optional[str] = None
+
 
 class TriggerResponse(BaseModel):
     trigger_id: str
@@ -699,8 +735,10 @@ class TriggerResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime]
     last_fired_at: Optional[datetime]
+
     class Config:
         from_attributes = True
+
 
 class TriggerUpdate(BaseModel):
     enabled: Optional[bool] = None
@@ -868,9 +906,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 {
                     "type": "intent_created",
                     "intent_id": created.id,
-                    "data": IntentResponse.model_validate(created).model_dump(
-                        mode="json"
-                    ),
+                    "data": IntentResponse.model_validate(created).model_dump(mode="json"),
                 },
             )
 
@@ -954,8 +990,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             children = db.get_children(session, intent_id)
             return {
                 "children": [
-                    IntentResponse.model_validate(c).model_dump(mode="json")
-                    for c in children
+                    IntentResponse.model_validate(c).model_dump(mode="json") for c in children
                 ]
             }
         finally:
@@ -976,8 +1011,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             descendants = _get_descendants_recursive(session, db, intent_id)
             return {
                 "descendants": [
-                    IntentResponse.model_validate(d).model_dump(mode="json")
-                    for d in descendants
+                    IntentResponse.model_validate(d).model_dump(mode="json") for d in descendants
                 ]
             }
         finally:
@@ -998,8 +1032,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             ancestors = _get_ancestors_recursive(session, db, intent_id)
             return {
                 "ancestors": [
-                    IntentResponse.model_validate(a).model_dump(mode="json")
-                    for a in ancestors
+                    IntentResponse.model_validate(a).model_dump(mode="json") for a in ancestors
                 ]
             }
         finally:
@@ -1020,8 +1053,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             deps = db.get_dependencies(session, intent_id)
             return {
                 "dependencies": [
-                    IntentResponse.model_validate(d).model_dump(mode="json")
-                    for d in deps
+                    IntentResponse.model_validate(d).model_dump(mode="json") for d in deps
                 ]
             }
         finally:
@@ -1042,8 +1074,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             dependents = db.get_dependents(session, intent_id)
             return {
                 "dependents": [
-                    IntentResponse.model_validate(d).model_dump(mode="json")
-                    for d in dependents
+                    IntentResponse.model_validate(d).model_dump(mode="json") for d in dependents
                 ]
             }
         finally:
@@ -1068,9 +1099,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
 
             dep = db.get_intent(session, request.dependency_id)
             if not dep:
-                raise HTTPException(
-                    status_code=404, detail="Dependency intent not found"
-                )
+                raise HTTPException(status_code=404, detail="Dependency intent not found")
 
             if intent.version != if_match:
                 raise HTTPException(status_code=409, detail="Version conflict")
@@ -1086,9 +1115,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                     status_code=400, detail=f"Dependency would create cycle: {cycle}"
                 )
 
-            updated = db.add_dependency(
-                session, intent_id, if_match, request.dependency_id
-            )
+            updated = db.add_dependency(session, intent_id, if_match, request.dependency_id)
             if not updated:
                 raise HTTPException(status_code=409, detail="Version conflict")
 
@@ -1158,10 +1185,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             children = db.get_children(session, intent_id)
             ready = [c for c in children if _all_dependencies_complete(session, db, c)]
             return {
-                "ready": [
-                    IntentResponse.model_validate(r).model_dump(mode="json")
-                    for r in ready
-                ]
+                "ready": [IntentResponse.model_validate(r).model_dump(mode="json") for r in ready]
             }
         finally:
             session.close()
@@ -1179,13 +1203,10 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 raise HTTPException(status_code=404, detail="Intent not found")
 
             children = db.get_children(session, intent_id)
-            blocked = [
-                c for c in children if not _all_dependencies_complete(session, db, c)
-            ]
+            blocked = [c for c in children if not _all_dependencies_complete(session, db, c)]
             return {
                 "blocked": [
-                    IntentResponse.model_validate(b).model_dump(mode="json")
-                    for b in blocked
+                    IntentResponse.model_validate(b).model_dump(mode="json") for b in blocked
                 ]
             }
         finally:
@@ -1218,9 +1239,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 "aggregate_status": {
                     "total": total,
                     "by_status": _count_by_status(nodes),
-                    "completion_percentage": int(
-                        (completed / total * 100) if total > 0 else 0
-                    ),
+                    "completion_percentage": int((completed / total * 100) if total > 0 else 0),
                 },
             }
         finally:
@@ -1247,9 +1266,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
 
         return None
 
-    def _get_descendants_recursive(
-        session, db: Database, intent_id: str
-    ) -> List[IntentModel]:
+    def _get_descendants_recursive(session, db: Database, intent_id: str) -> List[IntentModel]:
         """Get all descendants of an intent recursively."""
         result = []
         children = db.get_children(session, intent_id)
@@ -1258,9 +1275,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             result.extend(_get_descendants_recursive(session, db, child.id))
         return result
 
-    def _get_ancestors_recursive(
-        session, db: Database, intent_id: str
-    ) -> List[IntentModel]:
+    def _get_ancestors_recursive(session, db: Database, intent_id: str) -> List[IntentModel]:
         """Get all ancestors of an intent up to root."""
         result = []
         intent = db.get_intent(session, intent_id)
@@ -1357,9 +1372,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 {
                     "type": "state_patched",
                     "intent_id": intent_id,
-                    "data": IntentResponse.model_validate(updated).model_dump(
-                        mode="json"
-                    ),
+                    "data": IntentResponse.model_validate(updated).model_dump(mode="json"),
                 },
             )
 
@@ -1380,9 +1393,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
 
         session = db.get_session()
         try:
-            updated = db.update_intent_status(
-                session, intent_id, if_match, request.status
-            )
+            updated = db.update_intent_status(session, intent_id, if_match, request.status)
 
             if not updated:
                 intent = db.get_intent(session, intent_id)
@@ -1403,9 +1414,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 {
                     "type": "status_changed",
                     "intent_id": intent_id,
-                    "data": IntentResponse.model_validate(updated).model_dump(
-                        mode="json"
-                    ),
+                    "data": IntentResponse.model_validate(updated).model_dump(mode="json"),
                 },
             )
 
@@ -1454,9 +1463,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 {
                     "type": event.event_type,
                     "intent_id": intent_id,
-                    "data": EventResponse.model_validate(created).model_dump(
-                        mode="json"
-                    ),
+                    "data": EventResponse.model_validate(created).model_dump(mode="json"),
                 },
             )
 
@@ -1511,9 +1518,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                     "type": "agent_assigned",
                     "intent_id": intent_id,
                     "agent_id": agent.agent_id,
-                    "data": AgentResponse.model_validate(assigned).model_dump(
-                        mode="json"
-                    ),
+                    "data": AgentResponse.model_validate(assigned).model_dump(mode="json"),
                 },
             )
 
@@ -1556,9 +1561,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             )
 
             if not lease:
-                raise HTTPException(
-                    status_code=409, detail="Lease already held for this scope"
-                )
+                raise HTTPException(status_code=409, detail="Lease already held for this scope")
 
             db.create_event(
                 session,
@@ -1572,9 +1575,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
-    @app.patch(
-        "/api/v1/intents/{intent_id}/leases/{lease_id}", response_model=LeaseResponse
-    )
+    @app.patch("/api/v1/intents/{intent_id}/leases/{lease_id}", response_model=LeaseResponse)
     async def renew_lease(
         intent_id: str,
         lease_id: str,
@@ -1584,13 +1585,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
     ):
         session = db.get_session()
         try:
-            renewed = db.renew_lease(
-                session, lease_id, api_key, request.duration_seconds
-            )
+            renewed = db.renew_lease(session, lease_id, api_key, request.duration_seconds)
             if not renewed:
-                raise HTTPException(
-                    status_code=404, detail="Lease not found or not owned by you"
-                )
+                raise HTTPException(status_code=404, detail="Lease not found or not owned by you")
 
             db.create_event(
                 session,
@@ -1618,9 +1615,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         try:
             released = db.release_lease(session, lease_id, api_key)
             if not released:
-                raise HTTPException(
-                    status_code=404, detail="Lease not found or not owned by you"
-                )
+                raise HTTPException(status_code=404, detail="Lease not found or not owned by you")
 
             db.create_event(
                 session,
@@ -1650,9 +1645,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
-    @app.post(
-        "/api/v1/intents/{intent_id}/attachments", response_model=AttachmentResponse
-    )
+    @app.post("/api/v1/intents/{intent_id}/attachments", response_model=AttachmentResponse)
     async def create_attachment(
         intent_id: str,
         attachment: AttachmentCreate,
@@ -1695,9 +1688,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
-    @app.get(
-        "/api/v1/intents/{intent_id}/portfolios", response_model=List[PortfolioResponse]
-    )
+    @app.get("/api/v1/intents/{intent_id}/portfolios", response_model=List[PortfolioResponse])
     async def get_intent_portfolios(
         intent_id: str,
         db: Database = Depends(get_db),
@@ -1751,9 +1742,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
-    @app.get(
-        "/api/v1/intents/{intent_id}/retry-policy", response_model=RetryPolicyResponse
-    )
+    @app.get("/api/v1/intents/{intent_id}/retry-policy", response_model=RetryPolicyResponse)
     async def get_retry_policy(
         intent_id: str,
         db: Database = Depends(get_db),
@@ -1768,9 +1757,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
-    @app.put(
-        "/api/v1/intents/{intent_id}/retry-policy", response_model=RetryPolicyResponse
-    )
+    @app.put("/api/v1/intents/{intent_id}/retry-policy", response_model=RetryPolicyResponse)
     async def set_retry_policy(
         intent_id: str,
         policy: RetryPolicyCreate,
@@ -1876,7 +1863,8 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 raise HTTPException(status_code=404, detail="Intent not found")
 
             result = db.set_acl(
-                session, intent_id,
+                session,
+                intent_id,
                 default_policy=acl_request.default_policy,
                 entries=[e for e in acl_request.entries],
             )
@@ -2173,9 +2161,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 {
                     "type": "portfolio_created",
                     "portfolio_id": created.id,
-                    "data": PortfolioResponse.model_validate(created).model_dump(
-                        mode="json"
-                    ),
+                    "data": PortfolioResponse.model_validate(created).model_dump(mode="json"),
                 },
             )
 
@@ -2211,9 +2197,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
-    @app.patch(
-        "/api/v1/portfolios/{portfolio_id}/status", response_model=PortfolioResponse
-    )
+    @app.patch("/api/v1/portfolios/{portfolio_id}/status", response_model=PortfolioResponse)
     async def update_portfolio_status(
         portfolio_id: str,
         request: PortfolioStatusRequest,
@@ -2222,18 +2206,14 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
     ):
         session = db.get_session()
         try:
-            portfolio = db.update_portfolio_status(
-                session, portfolio_id, request.status
-            )
+            portfolio = db.update_portfolio_status(session, portfolio_id, request.status)
             if not portfolio:
                 raise HTTPException(status_code=404, detail="Portfolio not found")
             return PortfolioResponse.model_validate(portfolio)
         finally:
             session.close()
 
-    @app.get(
-        "/api/v1/portfolios/{portfolio_id}/intents", response_model=List[IntentResponse]
-    )
+    @app.get("/api/v1/portfolios/{portfolio_id}/intents", response_model=List[IntentResponse])
     async def get_portfolio_intents(
         portfolio_id: str,
         db: Database = Depends(get_db),
@@ -2685,7 +2665,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
-    @app.get("/api/v1/intents/{intent_id}/coordinators", response_model=List[CoordinatorLeaseResponse])  # noqa: E501
+    @app.get(
+        "/api/v1/intents/{intent_id}/coordinators", response_model=List[CoordinatorLeaseResponse]
+    )  # noqa: E501
     async def list_intent_coordinators(
         intent_id: str,
         db: Database = Depends(get_db),
@@ -2714,7 +2696,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             if not updated:
                 raise HTTPException(status_code=404, detail="Coordinator lease not found")
 
-            next_heartbeat = datetime.utcnow() + timedelta(seconds=updated.heartbeat_interval_seconds)  # noqa: E501
+            next_heartbeat = datetime.utcnow() + timedelta(
+                seconds=updated.heartbeat_interval_seconds
+            )  # noqa: E501
             return {"status": "ok", "next_heartbeat_at": next_heartbeat.isoformat()}
         finally:
             session.close()
@@ -3002,8 +2986,12 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         try:
             tag_list = tags.split(",") if tags else None
             entries = db.list_memory_entries(
-                session, agent_id, namespace=namespace,
-                memory_type=memory_type, tags=tag_list, limit=limit,
+                session,
+                agent_id,
+                namespace=namespace,
+                memory_type=memory_type,
+                tags=tag_list,
+                limit=limit,
             )
             return [MemoryEntryResponse.model_validate(e) for e in entries]
         finally:
@@ -3121,7 +3109,8 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         session = db.get_session()
         try:
             updated = db.update_agent_heartbeat(
-                session, agent_id,
+                session,
+                agent_id,
                 current_load=heartbeat.current_load,
                 tasks_in_progress=heartbeat.tasks_in_progress,
             )
@@ -3230,7 +3219,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
 
             updated = db.update_trigger(session, trigger_id, if_match, **kwargs)
             if not updated:
-                raise HTTPException(status_code=409, detail="Version conflict or trigger not found")  # noqa: E501
+                raise HTTPException(
+                    status_code=409, detail="Version conflict or trigger not found"
+                )  # noqa: E501
             return TriggerResponse.model_validate(updated)
         finally:
             session.close()

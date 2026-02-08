@@ -296,9 +296,7 @@ class OpenIntentClient:
             "parent_intent_id": parent_id,
             "depends_on": depends_on or [],
         }
-        response = self._client.post(
-            f"/api/v1/intents/{parent_id}/children", json=payload
-        )
+        response = self._client.post(f"/api/v1/intents/{parent_id}/children", json=payload)
         data = self._handle_response(response)
         return Intent.from_dict(data)
 
@@ -841,9 +839,7 @@ class OpenIntentClient:
         data = self._handle_response(response)
         return IntentPortfolio.from_dict(data)
 
-    def list_portfolios(
-        self, created_by: Optional[str] = None
-    ) -> list[IntentPortfolio]:
+    def list_portfolios(self, created_by: Optional[str] = None) -> list[IntentPortfolio]:
         """
         List portfolios, optionally filtered by creator.
 
@@ -918,15 +914,11 @@ class OpenIntentClient:
             portfolio_id: The portfolio ID.
             intent_id: The intent to remove.
         """
-        response = self._client.delete(
-            f"/api/v1/portfolios/{portfolio_id}/intents/{intent_id}"
-        )
+        response = self._client.delete(f"/api/v1/portfolios/{portfolio_id}/intents/{intent_id}")
         if response.status_code != 204:
             self._handle_response(response)
 
-    def get_portfolio_intents(
-        self, portfolio_id: str
-    ) -> tuple[list[Intent], AggregateStatus]:
+    def get_portfolio_intents(self, portfolio_id: str) -> tuple[list[Intent], AggregateStatus]:
         """
         Get all intents in a portfolio with aggregate status.
 
@@ -1015,9 +1007,7 @@ class OpenIntentClient:
             intent_id: The intent ID.
             attachment_id: The attachment ID to delete.
         """
-        response = self._client.delete(
-            f"/api/v1/intents/{intent_id}/attachments/{attachment_id}"
-        )
+        response = self._client.delete(f"/api/v1/intents/{intent_id}/attachments/{attachment_id}")
         if response.status_code != 204:
             self._handle_response(response)
 
@@ -1344,9 +1334,7 @@ class OpenIntentClient:
             intent_id: The intent ID.
             entry_id: The ACL entry ID to revoke.
         """
-        response = self._client.delete(
-            f"/api/v1/intents/{intent_id}/acl/entries/{entry_id}"
-        )
+        response = self._client.delete(f"/api/v1/intents/{intent_id}/acl/entries/{entry_id}")
         if response.status_code != 204:
             self._handle_response(response)
 
@@ -1541,9 +1529,7 @@ class OpenIntentClient:
             provider=provider,
             model=model,
         )
-        return self.log_event(
-            intent_id, EventType.TOOL_CALL_COMPLETED, payload.to_dict()
-        )
+        return self.log_event(intent_id, EventType.TOOL_CALL_COMPLETED, payload.to_dict())
 
     def log_tool_call_failed(
         self,
@@ -1624,9 +1610,7 @@ class OpenIntentClient:
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return self.log_event(
-            intent_id, EventType.LLM_REQUEST_STARTED, payload.to_dict()
-        )
+        return self.log_event(intent_id, EventType.LLM_REQUEST_STARTED, payload.to_dict())
 
     def log_llm_request_completed(
         self,
@@ -1676,9 +1660,7 @@ class OpenIntentClient:
             total_tokens=total_tokens,
             duration_ms=duration_ms,
         )
-        return self.log_event(
-            intent_id, EventType.LLM_REQUEST_COMPLETED, payload.to_dict()
-        )
+        return self.log_event(intent_id, EventType.LLM_REQUEST_COMPLETED, payload.to_dict())
 
     def log_llm_request_failed(
         self,
@@ -1713,9 +1695,7 @@ class OpenIntentClient:
             error=error,
             duration_ms=duration_ms,
         )
-        return self.log_event(
-            intent_id, EventType.LLM_REQUEST_FAILED, payload.to_dict()
-        )
+        return self.log_event(intent_id, EventType.LLM_REQUEST_FAILED, payload.to_dict())
 
     # ==================== Stream Coordination ====================
 
@@ -2013,7 +1993,13 @@ class OpenIntentClient:
         data = self._handle_response(response)
         return Task.from_dict(data)
 
-    def list_tasks(self, intent_id: str, status: Optional[TaskStatus] = None, limit: int = 100, offset: int = 0) -> list[Task]:  # noqa: E501
+    def list_tasks(
+        self,
+        intent_id: str,
+        status: Optional[TaskStatus] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Task]:  # noqa: E501
         """List tasks for an intent (RFC-0012)."""
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         if status:
@@ -2022,13 +2008,17 @@ class OpenIntentClient:
         data = self._handle_response(response)
         return [Task.from_dict(t) for t in data]
 
-    def update_task(self, task_id: str, version: int, status: Optional[str] = None, **kwargs) -> Task:  # noqa: E501
+    def update_task(
+        self, task_id: str, version: int, status: Optional[str] = None, **kwargs
+    ) -> Task:  # noqa: E501
         """Update task status with optimistic concurrency (RFC-0012)."""
         payload: dict[str, Any] = {}
         if status:
             payload["status"] = status
         payload.update(kwargs)
-        response = self._client.patch(f"/api/v1/tasks/{task_id}", json=payload, headers={"If-Match": str(version)})  # noqa: E501
+        response = self._client.patch(
+            f"/api/v1/tasks/{task_id}", json=payload, headers={"If-Match": str(version)}
+        )  # noqa: E501
         data = self._handle_response(response)
         return Task.from_dict(data)
 
@@ -2056,13 +2046,17 @@ class OpenIntentClient:
 
     def update_plan(self, plan_id: str, version: int, **kwargs) -> Plan:
         """Update a plan with optimistic concurrency (RFC-0012)."""
-        response = self._client.patch(f"/api/v1/plans/{plan_id}", json=kwargs, headers={"If-Match": str(version)})  # noqa: E501
+        response = self._client.patch(
+            f"/api/v1/plans/{plan_id}", json=kwargs, headers={"If-Match": str(version)}
+        )  # noqa: E501
         data = self._handle_response(response)
         return Plan.from_dict(data)
 
     # ==================== Coordinator Governance (RFC-0013) ====================
 
-    def create_coordinator_lease(self, agent_id: str, intent_id: Optional[str] = None, **kwargs) -> CoordinatorLease:  # noqa: E501
+    def create_coordinator_lease(
+        self, agent_id: str, intent_id: Optional[str] = None, **kwargs
+    ) -> CoordinatorLease:  # noqa: E501
         """Create a coordinator lease (RFC-0013)."""
         payload: dict[str, Any] = {"agent_id": agent_id}
         if intent_id:
@@ -2091,7 +2085,15 @@ class OpenIntentClient:
         response = self._client.post(f"/api/v1/coordinators/{lease_id}/heartbeat")
         return self._handle_response(response)
 
-    def create_decision_record(self, coordinator_id: str, intent_id: str, decision_type: DecisionType, summary: str, rationale: str, **kwargs) -> dict:  # noqa: E501
+    def create_decision_record(
+        self,
+        coordinator_id: str,
+        intent_id: str,
+        decision_type: DecisionType,
+        summary: str,
+        rationale: str,
+        **kwargs,
+    ) -> dict:  # noqa: E501
         """Record a coordination decision (RFC-0013)."""
         payload: dict[str, Any] = {
             "coordinator_id": coordinator_id,
@@ -2106,7 +2108,9 @@ class OpenIntentClient:
 
     def list_decision_records(self, intent_id: str, limit: int = 50) -> list[dict]:
         """List decision records for an intent (RFC-0013)."""
-        response = self._client.get(f"/api/v1/intents/{intent_id}/coordinator-decisions", params={"limit": limit})  # noqa: E501
+        response = self._client.get(
+            f"/api/v1/intents/{intent_id}/coordinator-decisions", params={"limit": limit}
+        )  # noqa: E501
         return self._handle_response(response)
 
     # ==================== Credential Vaults & Tool Scoping (RFC-0014) ====================
@@ -2121,9 +2125,16 @@ class OpenIntentClient:
         response = self._client.get(f"/api/v1/vaults/{vault_id}")
         return self._handle_response(response)
 
-    def create_credential(self, vault_id: str, service: str, label: str, auth_type: str = "api_key", **kwargs) -> dict:  # noqa: E501
+    def create_credential(
+        self, vault_id: str, service: str, label: str, auth_type: str = "api_key", **kwargs
+    ) -> dict:  # noqa: E501
         """Create a credential in a vault (RFC-0014)."""
-        payload: dict[str, Any] = {"vault_id": vault_id, "service": service, "label": label, "auth_type": auth_type}  # noqa: E501
+        payload: dict[str, Any] = {
+            "vault_id": vault_id,
+            "service": service,
+            "label": label,
+            "auth_type": auth_type,
+        }  # noqa: E501
         payload.update(kwargs)
         response = self._client.post("/api/v1/credentials", json=payload)
         return self._handle_response(response)
@@ -2133,9 +2144,21 @@ class OpenIntentClient:
         response = self._client.get(f"/api/v1/credentials/{credential_id}")
         return self._handle_response(response)
 
-    def create_tool_grant(self, credential_id: str, agent_id: str, granted_by: str, scopes: Optional[list[str]] = None, **kwargs) -> ToolGrant:  # noqa: E501
+    def create_tool_grant(
+        self,
+        credential_id: str,
+        agent_id: str,
+        granted_by: str,
+        scopes: Optional[list[str]] = None,
+        **kwargs,
+    ) -> ToolGrant:  # noqa: E501
         """Create a tool grant (RFC-0014)."""
-        payload: dict[str, Any] = {"credential_id": credential_id, "agent_id": agent_id, "granted_by": granted_by, "scopes": scopes or []}  # noqa: E501
+        payload: dict[str, Any] = {
+            "credential_id": credential_id,
+            "agent_id": agent_id,
+            "granted_by": granted_by,
+            "scopes": scopes or [],
+        }  # noqa: E501
         payload.update(kwargs)
         response = self._client.post("/api/v1/grants", json=payload)
         data = self._handle_response(response)
@@ -2158,23 +2181,46 @@ class OpenIntentClient:
         response = self._client.delete(f"/api/v1/grants/{grant_id}")
         return self._handle_response(response)
 
-    def record_invocation(self, grant_id: str, service: str, tool: str, agent_id: str, **kwargs) -> dict:  # noqa: E501
+    def record_invocation(
+        self, grant_id: str, service: str, tool: str, agent_id: str, **kwargs
+    ) -> dict:  # noqa: E501
         """Record a tool invocation (RFC-0014)."""
-        payload: dict[str, Any] = {"grant_id": grant_id, "service": service, "tool": tool, "agent_id": agent_id}  # noqa: E501
+        payload: dict[str, Any] = {
+            "grant_id": grant_id,
+            "service": service,
+            "tool": tool,
+            "agent_id": agent_id,
+        }  # noqa: E501
         payload.update(kwargs)
         response = self._client.post("/api/v1/invocations", json=payload)
         return self._handle_response(response)
 
     def list_invocations(self, grant_id: str, limit: int = 50) -> list[dict]:
         """List invocations for a grant (RFC-0014)."""
-        response = self._client.get(f"/api/v1/grants/{grant_id}/invocations", params={"limit": limit})  # noqa: E501
+        response = self._client.get(
+            f"/api/v1/grants/{grant_id}/invocations", params={"limit": limit}
+        )  # noqa: E501
         return self._handle_response(response)
 
     # ==================== Agent Memory (RFC-0015) ====================
 
-    def create_memory(self, agent_id: str, namespace: str, key: str, value: dict, memory_type: str = "working", **kwargs) -> MemoryEntry:  # noqa: E501
+    def create_memory(
+        self,
+        agent_id: str,
+        namespace: str,
+        key: str,
+        value: dict,
+        memory_type: str = "working",
+        **kwargs,
+    ) -> MemoryEntry:  # noqa: E501
         """Create a memory entry (RFC-0015)."""
-        payload: dict[str, Any] = {"agent_id": agent_id, "namespace": namespace, "key": key, "value": value, "memory_type": memory_type}  # noqa: E501
+        payload: dict[str, Any] = {
+            "agent_id": agent_id,
+            "namespace": namespace,
+            "key": key,
+            "value": value,
+            "memory_type": memory_type,
+        }  # noqa: E501
         payload.update(kwargs)
         response = self._client.post("/api/v1/memory", json=payload)
         data = self._handle_response(response)
@@ -2186,7 +2232,15 @@ class OpenIntentClient:
         data = self._handle_response(response)
         return MemoryEntry.from_dict(data)
 
-    def list_memory(self, agent_id: str, namespace: Optional[str] = None, memory_type: Optional[str] = None, tags: Optional[list[str]] = None, limit: int = 100, offset: int = 0) -> list[MemoryEntry]:  # noqa: E501
+    def list_memory(
+        self,
+        agent_id: str,
+        namespace: Optional[str] = None,
+        memory_type: Optional[str] = None,
+        tags: Optional[list[str]] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[MemoryEntry]:  # noqa: E501
         """List memory entries for an agent (RFC-0015)."""
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         if namespace:
@@ -2201,7 +2255,9 @@ class OpenIntentClient:
 
     def update_memory(self, entry_id: str, version: int, **kwargs) -> MemoryEntry:
         """Update a memory entry with optimistic concurrency (RFC-0015)."""
-        response = self._client.patch(f"/api/v1/memory/{entry_id}", json=kwargs, headers={"If-Match": str(version)})  # noqa: E501
+        response = self._client.patch(
+            f"/api/v1/memory/{entry_id}", json=kwargs, headers={"If-Match": str(version)}
+        )  # noqa: E501
         data = self._handle_response(response)
         return MemoryEntry.from_dict(data)
 
@@ -2213,7 +2269,9 @@ class OpenIntentClient:
 
     # ==================== Agent Lifecycle & Health (RFC-0016) ====================
 
-    def register_agent(self, agent_id: str, capabilities: Optional[list[str]] = None, **kwargs) -> AgentRecord:  # noqa: E501
+    def register_agent(
+        self, agent_id: str, capabilities: Optional[list[str]] = None, **kwargs
+    ) -> AgentRecord:  # noqa: E501
         """Register an agent (RFC-0016)."""
         payload: dict[str, Any] = {"agent_id": agent_id, "capabilities": capabilities or []}
         payload.update(kwargs)
@@ -2227,7 +2285,9 @@ class OpenIntentClient:
         data = self._handle_response(response)
         return AgentRecord.from_dict(data)
 
-    def list_agents(self, status: Optional[str] = None, role_id: Optional[str] = None) -> list[AgentRecord]:  # noqa: E501
+    def list_agents(
+        self, status: Optional[str] = None, role_id: Optional[str] = None
+    ) -> list[AgentRecord]:  # noqa: E501
         """List registered agents (RFC-0016)."""
         params: dict[str, Any] = {}
         if status:
@@ -2238,9 +2298,15 @@ class OpenIntentClient:
         data = self._handle_response(response)
         return [AgentRecord.from_dict(a) for a in data]
 
-    def agent_heartbeat(self, agent_id: str, current_load: int = 0, tasks_in_progress: Optional[list[str]] = None) -> dict:  # noqa: E501
+    def agent_heartbeat(
+        self, agent_id: str, current_load: int = 0, tasks_in_progress: Optional[list[str]] = None
+    ) -> dict:  # noqa: E501
         """Send agent heartbeat (RFC-0016)."""
-        payload: dict[str, Any] = {"status": "active", "current_load": current_load, "tasks_in_progress": tasks_in_progress or []}  # noqa: E501
+        payload: dict[str, Any] = {
+            "status": "active",
+            "current_load": current_load,
+            "tasks_in_progress": tasks_in_progress or [],
+        }  # noqa: E501
         response = self._client.post(f"/api/v1/agents/{agent_id}/heartbeat", json=payload)
         return self._handle_response(response)
 
@@ -2265,7 +2331,9 @@ class OpenIntentClient:
         data = self._handle_response(response)
         return Trigger.from_dict(data)
 
-    def list_triggers(self, namespace: Optional[str] = None, trigger_type: Optional[str] = None) -> list[Trigger]:  # noqa: E501
+    def list_triggers(
+        self, namespace: Optional[str] = None, trigger_type: Optional[str] = None
+    ) -> list[Trigger]:  # noqa: E501
         """List triggers (RFC-0017)."""
         params: dict[str, Any] = {}
         if namespace:
@@ -2278,7 +2346,9 @@ class OpenIntentClient:
 
     def update_trigger(self, trigger_id: str, version: int, **kwargs) -> Trigger:
         """Update a trigger with optimistic concurrency (RFC-0017)."""
-        response = self._client.patch(f"/api/v1/triggers/{trigger_id}", json=kwargs, headers={"If-Match": str(version)})  # noqa: E501
+        response = self._client.patch(
+            f"/api/v1/triggers/{trigger_id}", json=kwargs, headers={"If-Match": str(version)}
+        )  # noqa: E501
         data = self._handle_response(response)
         return Trigger.from_dict(data)
 
@@ -2519,9 +2589,7 @@ class AsyncOpenIntentClient:
 
     async def release_lease(self, intent_id: str, lease_id: str) -> None:
         """Release a previously acquired lease."""
-        response = await self._client.delete(
-            f"/api/v1/intents/{intent_id}/leases/{lease_id}"
-        )
+        response = await self._client.delete(f"/api/v1/intents/{intent_id}/leases/{lease_id}")
         self._handle_response(response)
 
     async def get_leases(self, intent_id: str) -> list[IntentLease]:
@@ -2572,9 +2640,7 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return [Decision.from_dict(item) for item in data.get("decisions", data)]
 
-    async def assign_agent(
-        self, intent_id: str, agent_id: Optional[str] = None
-    ) -> dict:
+    async def assign_agent(self, intent_id: str, agent_id: Optional[str] = None) -> dict:
         """Assign an agent to work on an intent."""
         response = await self._client.post(
             f"/api/v1/intents/{intent_id}/agents",
@@ -2582,14 +2648,10 @@ class AsyncOpenIntentClient:
         )
         return self._handle_response(response)
 
-    async def unassign_agent(
-        self, intent_id: str, agent_id: Optional[str] = None
-    ) -> None:
+    async def unassign_agent(self, intent_id: str, agent_id: Optional[str] = None) -> None:
         """Remove an agent from an intent."""
         aid = agent_id or self.agent_id
-        response = await self._client.delete(
-            f"/api/v1/intents/{intent_id}/agents/{aid}"
-        )
+        response = await self._client.delete(f"/api/v1/intents/{intent_id}/agents/{aid}")
         self._handle_response(response)
 
     async def create_portfolio(
@@ -2619,9 +2681,7 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return IntentPortfolio.from_dict(data)
 
-    async def list_portfolios(
-        self, created_by: Optional[str] = None
-    ) -> list[IntentPortfolio]:
+    async def list_portfolios(self, created_by: Optional[str] = None) -> list[IntentPortfolio]:
         """List portfolios, optionally filtered by creator."""
         params = {}
         if created_by:
@@ -2660,9 +2720,7 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return PortfolioMembership.from_dict(data)
 
-    async def remove_intent_from_portfolio(
-        self, portfolio_id: str, intent_id: str
-    ) -> None:
+    async def remove_intent_from_portfolio(self, portfolio_id: str, intent_id: str) -> None:
         """Remove an intent from a portfolio."""
         response = await self._client.delete(
             f"/api/v1/portfolios/{portfolio_id}/intents/{intent_id}"
@@ -2835,9 +2893,7 @@ class AsyncOpenIntentClient:
                 "subscriber_id": self.agent_id,
                 "webhook_url": webhook_url,
                 "event_types": event_types or [],
-                "expires_at": (
-                    datetime.now() + timedelta(hours=expires_in_hours)
-                ).isoformat(),
+                "expires_at": (datetime.now() + timedelta(hours=expires_in_hours)).isoformat(),
             },
         )
         data = self._handle_response(response)
@@ -2972,9 +3028,7 @@ class AsyncOpenIntentClient:
             intent_id: The intent ID.
             entry_id: The ACL entry ID to revoke.
         """
-        response = await self._client.delete(
-            f"/api/v1/intents/{intent_id}/acl/entries/{entry_id}"
-        )
+        response = await self._client.delete(f"/api/v1/intents/{intent_id}/acl/entries/{entry_id}")
         if response.status_code != 204:
             self._handle_response(response)
 
@@ -3117,9 +3171,7 @@ class AsyncOpenIntentClient:
             model=model,
             parent_request_id=parent_request_id,
         )
-        return await self.log_event(
-            intent_id, EventType.TOOL_CALL_STARTED, payload.to_dict()
-        )
+        return await self.log_event(intent_id, EventType.TOOL_CALL_STARTED, payload.to_dict())
 
     async def log_tool_call_completed(
         self,
@@ -3142,9 +3194,7 @@ class AsyncOpenIntentClient:
             provider=provider,
             model=model,
         )
-        return await self.log_event(
-            intent_id, EventType.TOOL_CALL_COMPLETED, payload.to_dict()
-        )
+        return await self.log_event(intent_id, EventType.TOOL_CALL_COMPLETED, payload.to_dict())
 
     async def log_tool_call_failed(
         self,
@@ -3167,9 +3217,7 @@ class AsyncOpenIntentClient:
             provider=provider,
             model=model,
         )
-        return await self.log_event(
-            intent_id, EventType.TOOL_CALL_FAILED, payload.to_dict()
-        )
+        return await self.log_event(intent_id, EventType.TOOL_CALL_FAILED, payload.to_dict())
 
     # ==================== LLM Request Logging ====================
 
@@ -3196,9 +3244,7 @@ class AsyncOpenIntentClient:
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return await self.log_event(
-            intent_id, EventType.LLM_REQUEST_STARTED, payload.to_dict()
-        )
+        return await self.log_event(intent_id, EventType.LLM_REQUEST_STARTED, payload.to_dict())
 
     async def log_llm_request_completed(
         self,
@@ -3229,9 +3275,7 @@ class AsyncOpenIntentClient:
             total_tokens=total_tokens,
             duration_ms=duration_ms,
         )
-        return await self.log_event(
-            intent_id, EventType.LLM_REQUEST_COMPLETED, payload.to_dict()
-        )
+        return await self.log_event(intent_id, EventType.LLM_REQUEST_COMPLETED, payload.to_dict())
 
     async def log_llm_request_failed(
         self,
@@ -3252,9 +3296,7 @@ class AsyncOpenIntentClient:
             error=error,
             duration_ms=duration_ms,
         )
-        return await self.log_event(
-            intent_id, EventType.LLM_REQUEST_FAILED, payload.to_dict()
-        )
+        return await self.log_event(intent_id, EventType.LLM_REQUEST_FAILED, payload.to_dict())
 
     # ==================== Stream Coordination ====================
 
@@ -3275,9 +3317,7 @@ class AsyncOpenIntentClient:
             model=model,
             started_at=datetime.now(),
         )
-        return await self.log_event(
-            intent_id, EventType.STREAM_STARTED, payload.to_dict()
-        )
+        return await self.log_event(intent_id, EventType.STREAM_STARTED, payload.to_dict())
 
     async def log_stream_chunk(
         self,
@@ -3318,9 +3358,7 @@ class AsyncOpenIntentClient:
             tokens_streamed=tokens_streamed,
             completed_at=datetime.now(),
         )
-        return await self.log_event(
-            intent_id, EventType.STREAM_COMPLETED, payload.to_dict()
-        )
+        return await self.log_event(intent_id, EventType.STREAM_COMPLETED, payload.to_dict())
 
     async def cancel_stream(
         self,
@@ -3345,9 +3383,7 @@ class AsyncOpenIntentClient:
             cancelled_at=datetime.now(),
             cancel_reason=reason,
         )
-        return await self.log_event(
-            intent_id, EventType.STREAM_CANCELLED, payload.to_dict()
-        )
+        return await self.log_event(intent_id, EventType.STREAM_CANCELLED, payload.to_dict())
 
     # ==================== Task Decomposition & Planning (RFC-0012) ====================
 
@@ -3364,7 +3400,13 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return Task.from_dict(data)
 
-    async def list_tasks(self, intent_id: str, status: Optional[TaskStatus] = None, limit: int = 100, offset: int = 0) -> list[Task]:  # noqa: E501
+    async def list_tasks(
+        self,
+        intent_id: str,
+        status: Optional[TaskStatus] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Task]:  # noqa: E501
         """List tasks for an intent (RFC-0012)."""
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         if status:
@@ -3373,17 +3415,23 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return [Task.from_dict(t) for t in data]
 
-    async def update_task(self, task_id: str, version: int, status: Optional[str] = None, **kwargs) -> Task:  # noqa: E501
+    async def update_task(
+        self, task_id: str, version: int, status: Optional[str] = None, **kwargs
+    ) -> Task:  # noqa: E501
         """Update task status with optimistic concurrency (RFC-0012)."""
         payload: dict[str, Any] = {}
         if status:
             payload["status"] = status
         payload.update(kwargs)
-        response = await self._client.patch(f"/api/v1/tasks/{task_id}", json=payload, headers={"If-Match": str(version)})  # noqa: E501
+        response = await self._client.patch(
+            f"/api/v1/tasks/{task_id}", json=payload, headers={"If-Match": str(version)}
+        )  # noqa: E501
         data = self._handle_response(response)
         return Task.from_dict(data)
 
-    async def create_plan(self, intent_id: str, tasks: Optional[list[str]] = None, **kwargs) -> Plan:  # noqa: E501
+    async def create_plan(
+        self, intent_id: str, tasks: Optional[list[str]] = None, **kwargs
+    ) -> Plan:  # noqa: E501
         """Create a plan for an intent (RFC-0012)."""
         payload: dict[str, Any] = {"intent_id": intent_id}
         if tasks:
@@ -3407,13 +3455,17 @@ class AsyncOpenIntentClient:
 
     async def update_plan(self, plan_id: str, version: int, **kwargs) -> Plan:
         """Update a plan with optimistic concurrency (RFC-0012)."""
-        response = await self._client.patch(f"/api/v1/plans/{plan_id}", json=kwargs, headers={"If-Match": str(version)})  # noqa: E501
+        response = await self._client.patch(
+            f"/api/v1/plans/{plan_id}", json=kwargs, headers={"If-Match": str(version)}
+        )  # noqa: E501
         data = self._handle_response(response)
         return Plan.from_dict(data)
 
     # ==================== Coordinator Governance (RFC-0013) ====================
 
-    async def create_coordinator_lease(self, agent_id: str, intent_id: Optional[str] = None, **kwargs) -> CoordinatorLease:  # noqa: E501
+    async def create_coordinator_lease(
+        self, agent_id: str, intent_id: Optional[str] = None, **kwargs
+    ) -> CoordinatorLease:  # noqa: E501
         """Create a coordinator lease (RFC-0013)."""
         payload: dict[str, Any] = {"agent_id": agent_id}
         if intent_id:
@@ -3429,7 +3481,9 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return CoordinatorLease.from_dict(data)
 
-    async def list_coordinator_leases(self, intent_id: Optional[str] = None) -> list[CoordinatorLease]:  # noqa: E501
+    async def list_coordinator_leases(
+        self, intent_id: Optional[str] = None
+    ) -> list[CoordinatorLease]:  # noqa: E501
         """List coordinator leases (RFC-0013)."""
         if intent_id:
             response = await self._client.get(f"/api/v1/intents/{intent_id}/coordinators")
@@ -3442,7 +3496,15 @@ class AsyncOpenIntentClient:
         response = await self._client.post(f"/api/v1/coordinators/{lease_id}/heartbeat")
         return self._handle_response(response)
 
-    async def create_decision_record(self, coordinator_id: str, intent_id: str, decision_type: DecisionType, summary: str, rationale: str, **kwargs) -> dict:  # noqa: E501
+    async def create_decision_record(
+        self,
+        coordinator_id: str,
+        intent_id: str,
+        decision_type: DecisionType,
+        summary: str,
+        rationale: str,
+        **kwargs,
+    ) -> dict:  # noqa: E501
         """Record a coordination decision (RFC-0013)."""
         payload: dict[str, Any] = {
             "coordinator_id": coordinator_id,
@@ -3457,14 +3519,18 @@ class AsyncOpenIntentClient:
 
     async def list_decision_records(self, intent_id: str, limit: int = 50) -> list[dict]:
         """List decision records for an intent (RFC-0013)."""
-        response = await self._client.get(f"/api/v1/intents/{intent_id}/coordinator-decisions", params={"limit": limit})  # noqa: E501
+        response = await self._client.get(
+            f"/api/v1/intents/{intent_id}/coordinator-decisions", params={"limit": limit}
+        )  # noqa: E501
         return self._handle_response(response)
 
     # ==================== Credential Vaults & Tool Scoping (RFC-0014) ====================
 
     async def create_vault(self, owner_id: str, name: str) -> dict:
         """Create a credential vault (RFC-0014)."""
-        response = await self._client.post("/api/v1/vaults", json={"owner_id": owner_id, "name": name})  # noqa: E501
+        response = await self._client.post(
+            "/api/v1/vaults", json={"owner_id": owner_id, "name": name}
+        )  # noqa: E501
         return self._handle_response(response)
 
     async def get_vault(self, vault_id: str) -> dict:
@@ -3472,9 +3538,16 @@ class AsyncOpenIntentClient:
         response = await self._client.get(f"/api/v1/vaults/{vault_id}")
         return self._handle_response(response)
 
-    async def create_credential(self, vault_id: str, service: str, label: str, auth_type: str = "api_key", **kwargs) -> dict:  # noqa: E501
+    async def create_credential(
+        self, vault_id: str, service: str, label: str, auth_type: str = "api_key", **kwargs
+    ) -> dict:  # noqa: E501
         """Create a credential in a vault (RFC-0014)."""
-        payload: dict[str, Any] = {"vault_id": vault_id, "service": service, "label": label, "auth_type": auth_type}  # noqa: E501
+        payload: dict[str, Any] = {
+            "vault_id": vault_id,
+            "service": service,
+            "label": label,
+            "auth_type": auth_type,
+        }  # noqa: E501
         payload.update(kwargs)
         response = await self._client.post("/api/v1/credentials", json=payload)
         return self._handle_response(response)
@@ -3484,9 +3557,21 @@ class AsyncOpenIntentClient:
         response = await self._client.get(f"/api/v1/credentials/{credential_id}")
         return self._handle_response(response)
 
-    async def create_tool_grant(self, credential_id: str, agent_id: str, granted_by: str, scopes: Optional[list[str]] = None, **kwargs) -> ToolGrant:  # noqa: E501
+    async def create_tool_grant(
+        self,
+        credential_id: str,
+        agent_id: str,
+        granted_by: str,
+        scopes: Optional[list[str]] = None,
+        **kwargs,
+    ) -> ToolGrant:  # noqa: E501
         """Create a tool grant (RFC-0014)."""
-        payload: dict[str, Any] = {"credential_id": credential_id, "agent_id": agent_id, "granted_by": granted_by, "scopes": scopes or []}  # noqa: E501
+        payload: dict[str, Any] = {
+            "credential_id": credential_id,
+            "agent_id": agent_id,
+            "granted_by": granted_by,
+            "scopes": scopes or [],
+        }  # noqa: E501
         payload.update(kwargs)
         response = await self._client.post("/api/v1/grants", json=payload)
         data = self._handle_response(response)
@@ -3509,23 +3594,46 @@ class AsyncOpenIntentClient:
         response = await self._client.delete(f"/api/v1/grants/{grant_id}")
         return self._handle_response(response)
 
-    async def record_invocation(self, grant_id: str, service: str, tool: str, agent_id: str, **kwargs) -> dict:  # noqa: E501
+    async def record_invocation(
+        self, grant_id: str, service: str, tool: str, agent_id: str, **kwargs
+    ) -> dict:  # noqa: E501
         """Record a tool invocation (RFC-0014)."""
-        payload: dict[str, Any] = {"grant_id": grant_id, "service": service, "tool": tool, "agent_id": agent_id}  # noqa: E501
+        payload: dict[str, Any] = {
+            "grant_id": grant_id,
+            "service": service,
+            "tool": tool,
+            "agent_id": agent_id,
+        }  # noqa: E501
         payload.update(kwargs)
         response = await self._client.post("/api/v1/invocations", json=payload)
         return self._handle_response(response)
 
     async def list_invocations(self, grant_id: str, limit: int = 50) -> list[dict]:
         """List invocations for a grant (RFC-0014)."""
-        response = await self._client.get(f"/api/v1/grants/{grant_id}/invocations", params={"limit": limit})  # noqa: E501
+        response = await self._client.get(
+            f"/api/v1/grants/{grant_id}/invocations", params={"limit": limit}
+        )  # noqa: E501
         return self._handle_response(response)
 
     # ==================== Agent Memory (RFC-0015) ====================
 
-    async def create_memory(self, agent_id: str, namespace: str, key: str, value: dict, memory_type: str = "working", **kwargs) -> MemoryEntry:  # noqa: E501
+    async def create_memory(
+        self,
+        agent_id: str,
+        namespace: str,
+        key: str,
+        value: dict,
+        memory_type: str = "working",
+        **kwargs,
+    ) -> MemoryEntry:  # noqa: E501
         """Create a memory entry (RFC-0015)."""
-        payload: dict[str, Any] = {"agent_id": agent_id, "namespace": namespace, "key": key, "value": value, "memory_type": memory_type}  # noqa: E501
+        payload: dict[str, Any] = {
+            "agent_id": agent_id,
+            "namespace": namespace,
+            "key": key,
+            "value": value,
+            "memory_type": memory_type,
+        }  # noqa: E501
         payload.update(kwargs)
         response = await self._client.post("/api/v1/memory", json=payload)
         data = self._handle_response(response)
@@ -3537,7 +3645,15 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return MemoryEntry.from_dict(data)
 
-    async def list_memory(self, agent_id: str, namespace: Optional[str] = None, memory_type: Optional[str] = None, tags: Optional[list[str]] = None, limit: int = 100, offset: int = 0) -> list[MemoryEntry]:  # noqa: E501
+    async def list_memory(
+        self,
+        agent_id: str,
+        namespace: Optional[str] = None,
+        memory_type: Optional[str] = None,
+        tags: Optional[list[str]] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[MemoryEntry]:  # noqa: E501
         """List memory entries for an agent (RFC-0015)."""
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         if namespace:
@@ -3552,7 +3668,9 @@ class AsyncOpenIntentClient:
 
     async def update_memory(self, entry_id: str, version: int, **kwargs) -> MemoryEntry:
         """Update a memory entry with optimistic concurrency (RFC-0015)."""
-        response = await self._client.patch(f"/api/v1/memory/{entry_id}", json=kwargs, headers={"If-Match": str(version)})  # noqa: E501
+        response = await self._client.patch(
+            f"/api/v1/memory/{entry_id}", json=kwargs, headers={"If-Match": str(version)}
+        )  # noqa: E501
         data = self._handle_response(response)
         return MemoryEntry.from_dict(data)
 
@@ -3564,7 +3682,9 @@ class AsyncOpenIntentClient:
 
     # ==================== Agent Lifecycle & Health (RFC-0016) ====================
 
-    async def register_agent(self, agent_id: str, capabilities: Optional[list[str]] = None, **kwargs) -> AgentRecord:  # noqa: E501
+    async def register_agent(
+        self, agent_id: str, capabilities: Optional[list[str]] = None, **kwargs
+    ) -> AgentRecord:  # noqa: E501
         """Register an agent (RFC-0016)."""
         payload: dict[str, Any] = {"agent_id": agent_id, "capabilities": capabilities or []}
         payload.update(kwargs)
@@ -3578,7 +3698,9 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return AgentRecord.from_dict(data)
 
-    async def list_agents(self, status: Optional[str] = None, role_id: Optional[str] = None) -> list[AgentRecord]:  # noqa: E501
+    async def list_agents(
+        self, status: Optional[str] = None, role_id: Optional[str] = None
+    ) -> list[AgentRecord]:  # noqa: E501
         """List registered agents (RFC-0016)."""
         params: dict[str, Any] = {}
         if status:
@@ -3589,15 +3711,23 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return [AgentRecord.from_dict(a) for a in data]
 
-    async def agent_heartbeat(self, agent_id: str, current_load: int = 0, tasks_in_progress: Optional[list[str]] = None) -> dict:  # noqa: E501
+    async def agent_heartbeat(
+        self, agent_id: str, current_load: int = 0, tasks_in_progress: Optional[list[str]] = None
+    ) -> dict:  # noqa: E501
         """Send agent heartbeat (RFC-0016)."""
-        payload: dict[str, Any] = {"status": "active", "current_load": current_load, "tasks_in_progress": tasks_in_progress or []}  # noqa: E501
+        payload: dict[str, Any] = {
+            "status": "active",
+            "current_load": current_load,
+            "tasks_in_progress": tasks_in_progress or [],
+        }  # noqa: E501
         response = await self._client.post(f"/api/v1/agents/{agent_id}/heartbeat", json=payload)
         return self._handle_response(response)
 
     async def update_agent_status(self, agent_id: str, status: str) -> dict:
         """Update agent status (RFC-0016)."""
-        response = await self._client.patch(f"/api/v1/agents/{agent_id}/status", json={"status": status})  # noqa: E501
+        response = await self._client.patch(
+            f"/api/v1/agents/{agent_id}/status", json={"status": status}
+        )  # noqa: E501
         return self._handle_response(response)
 
     # ==================== Triggers & Reactive Scheduling (RFC-0017) ====================
@@ -3616,7 +3746,9 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return Trigger.from_dict(data)
 
-    async def list_triggers(self, namespace: Optional[str] = None, trigger_type: Optional[str] = None) -> list[Trigger]:  # noqa: E501
+    async def list_triggers(
+        self, namespace: Optional[str] = None, trigger_type: Optional[str] = None
+    ) -> list[Trigger]:  # noqa: E501
         """List triggers (RFC-0017)."""
         params: dict[str, Any] = {}
         if namespace:
@@ -3629,7 +3761,9 @@ class AsyncOpenIntentClient:
 
     async def update_trigger(self, trigger_id: str, version: int, **kwargs) -> Trigger:
         """Update a trigger with optimistic concurrency (RFC-0017)."""
-        response = await self._client.patch(f"/api/v1/triggers/{trigger_id}", json=kwargs, headers={"If-Match": str(version)})  # noqa: E501
+        response = await self._client.patch(
+            f"/api/v1/triggers/{trigger_id}", json=kwargs, headers={"If-Match": str(version)}
+        )  # noqa: E501
         data = self._handle_response(response)
         return Trigger.from_dict(data)
 

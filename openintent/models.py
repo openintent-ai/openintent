@@ -214,6 +214,7 @@ class CostType(str, Enum):
 
 class Permission(str, Enum):
     """Permission level for intent access control (RFC-0011)."""
+
     READ = "read"
     WRITE = "write"
     ADMIN = "admin"
@@ -221,12 +222,14 @@ class Permission(str, Enum):
 
 class AccessPolicy(str, Enum):
     """Default access policy when no ACL entry matches (RFC-0011)."""
+
     OPEN = "open"
     CLOSED = "closed"
 
 
 class AccessRequestStatus(str, Enum):
     """Status of an access request (RFC-0011)."""
+
     PENDING = "pending"
     APPROVED = "approved"
     DENIED = "denied"
@@ -236,8 +239,10 @@ class AccessRequestStatus(str, Enum):
 # RFC-0012: Task Decomposition & Planning
 # ---------------------------------------------------------------------------
 
+
 class TaskStatus(str, Enum):
     """Status of a task in its lifecycle (RFC-0012)."""
+
     PENDING = "pending"
     READY = "ready"
     CLAIMED = "claimed"
@@ -251,6 +256,7 @@ class TaskStatus(str, Enum):
 
 class PlanState(str, Enum):
     """State of a plan (RFC-0012)."""
+
     DRAFT = "draft"
     ACTIVE = "active"
     PAUSED = "paused"
@@ -261,6 +267,7 @@ class PlanState(str, Enum):
 
 class CheckpointTimeoutAction(str, Enum):
     """Action when a checkpoint times out (RFC-0012)."""
+
     ESCALATE = "escalate"
     AUTO_APPROVE = "auto_approve"
     FAIL = "fail"
@@ -268,6 +275,7 @@ class CheckpointTimeoutAction(str, Enum):
 
 class PlanFailureAction(str, Enum):
     """Action when a plan encounters a failure (RFC-0012)."""
+
     PAUSE_AND_ESCALATE = "pause_and_escalate"
     NOTIFY = "notify"
     FAIL = "fail"
@@ -278,8 +286,10 @@ class PlanFailureAction(str, Enum):
 # RFC-0013: Coordinator Governance & Meta-Coordination
 # ---------------------------------------------------------------------------
 
+
 class CoordinatorType(str, Enum):
     """Type of coordinator (RFC-0013)."""
+
     LLM = "llm"
     HUMAN = "human"
     COMPOSITE = "composite"
@@ -288,6 +298,7 @@ class CoordinatorType(str, Enum):
 
 class CoordinatorStatus(str, Enum):
     """Lifecycle state of a coordinator (RFC-0013)."""
+
     REGISTERING = "registering"
     ACTIVE = "active"
     PAUSED = "paused"
@@ -299,12 +310,14 @@ class CoordinatorStatus(str, Enum):
 
 class CoordinatorScope(str, Enum):
     """Scope of a coordinator lease (RFC-0013)."""
+
     INTENT = "intent"
     PORTFOLIO = "portfolio"
 
 
 class CompositeMode(str, Enum):
     """Mode for composite coordinators (RFC-0013)."""
+
     PROPOSE_APPROVE = "propose-approve"
     ACT_NOTIFY = "act-notify"
     ACT_AUDIT = "act-audit"
@@ -312,6 +325,7 @@ class CompositeMode(str, Enum):
 
 class DecisionType(str, Enum):
     """Type of coordinator decision (RFC-0013)."""
+
     PLAN_CREATED = "plan_created"
     PLAN_MODIFIED = "plan_modified"
     TASK_ASSIGNED = "task_assigned"
@@ -326,6 +340,7 @@ class DecisionType(str, Enum):
 
 class GuardrailExceedAction(str, Enum):
     """Action when a guardrail is exceeded (RFC-0013)."""
+
     PAUSE = "pause"
     ESCALATE = "escalate"
     PAUSE_AND_ESCALATE = "pause_and_escalate"
@@ -336,8 +351,10 @@ class GuardrailExceedAction(str, Enum):
 # RFC-0014: Credential Vaults & Tool Scoping
 # ---------------------------------------------------------------------------
 
+
 class AuthType(str, Enum):
     """Authentication type for a credential (RFC-0014)."""
+
     API_KEY = "api_key"
     OAUTH2_TOKEN = "oauth2_token"
     OAUTH2_CLIENT_CREDENTIALS = "oauth2_client_credentials"
@@ -349,6 +366,7 @@ class AuthType(str, Enum):
 
 class CredentialStatus(str, Enum):
     """Status of a credential (RFC-0014)."""
+
     ACTIVE = "active"
     EXPIRED = "expired"
     REVOKED = "revoked"
@@ -356,6 +374,7 @@ class CredentialStatus(str, Enum):
 
 class GrantStatus(str, Enum):
     """Status of a tool grant (RFC-0014)."""
+
     ACTIVE = "active"
     EXPIRED = "expired"
     REVOKED = "revoked"
@@ -364,12 +383,14 @@ class GrantStatus(str, Enum):
 
 class GrantSource(str, Enum):
     """Source of a tool grant (RFC-0014)."""
+
     DIRECT = "direct"
     DELEGATED = "delegated"
 
 
 class InvocationStatus(str, Enum):
     """Status of a tool invocation (RFC-0014)."""
+
     SUCCESS = "success"
     DENIED = "denied"
     ERROR = "error"
@@ -379,8 +400,10 @@ class InvocationStatus(str, Enum):
 # RFC-0015: Agent Memory & Persistent State
 # ---------------------------------------------------------------------------
 
+
 class MemoryType(str, Enum):
     """Memory tier for a memory entry (RFC-0015)."""
+
     WORKING = "working"
     EPISODIC = "episodic"
     SEMANTIC = "semantic"
@@ -388,6 +411,7 @@ class MemoryType(str, Enum):
 
 class MemoryPriority(str, Enum):
     """Priority level for episodic memory entries (RFC-0015)."""
+
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
@@ -395,11 +419,13 @@ class MemoryPriority(str, Enum):
 
 class EvictionPolicy(str, Enum):
     """Eviction policy for episodic memory (RFC-0015)."""
+
     LRU = "lru"
 
 
 class MemorySensitivity(str, Enum):
     """Sensitivity classification for memory entries (RFC-0015)."""
+
     PUBLIC = "public"
     INTERNAL = "internal"
     CONFIDENTIAL = "confidential"
@@ -410,8 +436,10 @@ class MemorySensitivity(str, Enum):
 # RFC-0016: Agent Lifecycle & Health
 # ---------------------------------------------------------------------------
 
+
 class AgentStatus(str, Enum):
     """Lifecycle status of an agent (RFC-0016)."""
+
     REGISTERING = "registering"
     ACTIVE = "active"
     DRAINING = "draining"
@@ -424,8 +452,10 @@ class AgentStatus(str, Enum):
 # RFC-0017: Triggers & Reactive Scheduling
 # ---------------------------------------------------------------------------
 
+
 class TriggerType(str, Enum):
     """Type of trigger (RFC-0017)."""
+
     SCHEDULE = "schedule"
     EVENT = "event"
     WEBHOOK = "webhook"
@@ -433,6 +463,7 @@ class TriggerType(str, Enum):
 
 class DeduplicationMode(str, Enum):
     """Deduplication behavior when a trigger fires (RFC-0017)."""
+
     ALLOW = "allow"
     SKIP = "skip"
     QUEUE = "queue"
@@ -440,6 +471,7 @@ class DeduplicationMode(str, Enum):
 
 class TriggerState(str, Enum):
     """Lifecycle state of a trigger (RFC-0017)."""
+
     ENABLED = "enabled"
     DISABLED = "disabled"
     DELETED = "deleted"
@@ -536,14 +568,10 @@ class Intent:
             parent_intent_id=data.get("parent_intent_id") or data.get("parentIntentId"),
             depends_on=data.get("depends_on") or data.get("dependsOn") or [],
             created_at=(
-                datetime.fromisoformat(data["created_at"])
-                if data.get("created_at")
-                else None
+                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
             ),
             updated_at=(
-                datetime.fromisoformat(data["updated_at"])
-                if data.get("updated_at")
-                else None
+                datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else None
             ),
             created_by=data.get("created_by"),
             confidence=data.get("confidence", 0),
@@ -828,18 +856,12 @@ class IntentPortfolio:
             created_by=data.get("created_by", data.get("createdBy", "")),
             status=PortfolioStatus(data.get("status", "active")),
             metadata=data.get("metadata", {}),
-            governance_policy=data.get(
-                "governance_policy", data.get("governancePolicy", {})
-            ),
+            governance_policy=data.get("governance_policy", data.get("governancePolicy", {})),
             created_at=(
-                datetime.fromisoformat(data["createdAt"])
-                if data.get("createdAt")
-                else None
+                datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
             ),
             updated_at=(
-                datetime.fromisoformat(data["updatedAt"])
-                if data.get("updatedAt")
-                else None
+                datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
             ),
             intents=intents,
             aggregate_status=aggregate,
@@ -887,9 +909,7 @@ class IntentAttachment:
             metadata=data.get("metadata", {}),
             uploaded_by=data.get("uploaded_by", data.get("uploadedBy", "")),
             created_at=(
-                datetime.fromisoformat(data["createdAt"])
-                if data.get("createdAt")
-                else None
+                datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
             ),
         )
 
@@ -935,9 +955,7 @@ class IntentCost:
             provider=data.get("provider"),
             metadata=data.get("metadata", {}),
             recorded_at=(
-                datetime.fromisoformat(data["recordedAt"])
-                if data.get("recordedAt")
-                else None
+                datetime.fromisoformat(data["recordedAt"]) if data.get("recordedAt") else None
             ),
         )
 
@@ -1006,21 +1024,13 @@ class RetryPolicy:
             max_retries=data.get("max_retries", data.get("maxRetries", 3)),
             base_delay_ms=data.get("base_delay_ms", data.get("baseDelayMs", 1000)),
             max_delay_ms=data.get("max_delay_ms", data.get("maxDelayMs", 60000)),
-            fallback_agent_id=data.get(
-                "fallback_agent_id", data.get("fallbackAgentId")
-            ),
-            failure_threshold=data.get(
-                "failure_threshold", data.get("failureThreshold", 3)
-            ),
+            fallback_agent_id=data.get("fallback_agent_id", data.get("fallbackAgentId")),
+            failure_threshold=data.get("failure_threshold", data.get("failureThreshold", 3)),
             created_at=(
-                datetime.fromisoformat(data["createdAt"])
-                if data.get("createdAt")
-                else None
+                datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
             ),
             updated_at=(
-                datetime.fromisoformat(data["updatedAt"])
-                if data.get("updatedAt")
-                else None
+                datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
             ),
         )
 
@@ -1072,15 +1082,11 @@ class IntentFailure:
                 else None
             ),
             resolved_at=(
-                datetime.fromisoformat(data["resolvedAt"])
-                if data.get("resolvedAt")
-                else None
+                datetime.fromisoformat(data["resolvedAt"]) if data.get("resolvedAt") else None
             ),
             metadata=data.get("metadata", {}),
             created_at=(
-                datetime.fromisoformat(data["createdAt"])
-                if data.get("createdAt")
-                else None
+                datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
             ),
         )
 
@@ -1124,14 +1130,10 @@ class IntentSubscription:
             webhook_url=data.get("webhook_url", data.get("webhookUrl")),
             active=bool(data.get("active", 1)),
             expires_at=(
-                datetime.fromisoformat(data["expiresAt"])
-                if data.get("expiresAt")
-                else None
+                datetime.fromisoformat(data["expiresAt"]) if data.get("expiresAt") else None
             ),
             created_at=(
-                datetime.fromisoformat(data["createdAt"])
-                if data.get("createdAt")
-                else None
+                datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
             ),
         )
 
@@ -1326,19 +1328,13 @@ class StreamState:
             chunks_received=data.get("chunks_received", 0),
             tokens_streamed=data.get("tokens_streamed", 0),
             started_at=(
-                datetime.fromisoformat(data["started_at"])
-                if data.get("started_at")
-                else None
+                datetime.fromisoformat(data["started_at"]) if data.get("started_at") else None
             ),
             completed_at=(
-                datetime.fromisoformat(data["completed_at"])
-                if data.get("completed_at")
-                else None
+                datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None
             ),
             cancelled_at=(
-                datetime.fromisoformat(data["cancelled_at"])
-                if data.get("cancelled_at")
-                else None
+                datetime.fromisoformat(data["cancelled_at"]) if data.get("cancelled_at") else None
             ),
             cancel_reason=data.get("cancel_reason"),
             error=data.get("error"),
@@ -1379,14 +1375,10 @@ class ACLEntry:
             permission=Permission(data.get("permission", "read")),
             granted_by=data.get("granted_by", ""),
             granted_at=(
-                datetime.fromisoformat(data["granted_at"])
-                if data.get("granted_at")
-                else None
+                datetime.fromisoformat(data["granted_at"]) if data.get("granted_at") else None
             ),
             expires_at=(
-                datetime.fromisoformat(data["expires_at"])
-                if data.get("expires_at")
-                else None
+                datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None
             ),
             reason=data.get("reason"),
         )
@@ -1462,15 +1454,11 @@ class AccessRequest:
             capabilities=data.get("capabilities", []),
             decided_by=data.get("decided_by"),
             decided_at=(
-                datetime.fromisoformat(data["decided_at"])
-                if data.get("decided_at")
-                else None
+                datetime.fromisoformat(data["decided_at"]) if data.get("decided_at") else None
             ),
             decision_reason=data.get("decision_reason"),
             created_at=(
-                datetime.fromisoformat(data["created_at"])
-                if data.get("created_at")
-                else None
+                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
             ),
         )
 
@@ -1560,6 +1548,7 @@ class IntentContext:
 # RFC-0012: Task Decomposition & Planning — Dataclasses
 # ===========================================================================
 
+
 @dataclass
 class Checkpoint:
     """A named gate in a plan where execution pauses for review (RFC-0012)."""
@@ -1606,9 +1595,7 @@ class Checkpoint:
             status=data.get("status", "pending"),
             approved_by=data.get("approved_by"),
             approved_at=(
-                datetime.fromisoformat(data["approved_at"])
-                if data.get("approved_at")
-                else None
+                datetime.fromisoformat(data["approved_at"]) if data.get("approved_at") else None
             ),
         )
 
@@ -1784,9 +1771,7 @@ class Task:
         memory_policy = None
         if data.get("memory_policy"):
             memory_policy = MemoryPolicy.from_dict(data["memory_policy"])
-        requires_tools = [
-            ToolRequirement.from_dict(t) for t in data.get("requires_tools", [])
-        ]
+        requires_tools = [ToolRequirement.from_dict(t) for t in data.get("requires_tools", [])]
         return cls(
             id=data["id"],
             intent_id=data.get("intent_id", ""),
@@ -1816,19 +1801,13 @@ class Task:
             error=data.get("error"),
             metadata=data.get("metadata", {}),
             created_at=(
-                datetime.fromisoformat(data["created_at"])
-                if data.get("created_at")
-                else None
+                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
             ),
             started_at=(
-                datetime.fromisoformat(data["started_at"])
-                if data.get("started_at")
-                else None
+                datetime.fromisoformat(data["started_at"]) if data.get("started_at") else None
             ),
             completed_at=(
-                datetime.fromisoformat(data["completed_at"])
-                if data.get("completed_at")
-                else None
+                datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None
             ),
         )
 
@@ -1877,26 +1856,16 @@ class Plan:
             version=data.get("version", 1),
             state=PlanState(data.get("state", "draft")),
             tasks=data.get("tasks", []),
-            checkpoints=[
-                Checkpoint.from_dict(c) for c in data.get("checkpoints", [])
-            ],
-            conditions=[
-                PlanCondition.from_dict(c) for c in data.get("conditions", [])
-            ],
-            on_failure=PlanFailureAction(
-                data.get("on_failure", "pause_and_escalate")
-            ),
+            checkpoints=[Checkpoint.from_dict(c) for c in data.get("checkpoints", [])],
+            conditions=[PlanCondition.from_dict(c) for c in data.get("conditions", [])],
+            on_failure=PlanFailureAction(data.get("on_failure", "pause_and_escalate")),
             on_complete=data.get("on_complete", "notify"),
             metadata=data.get("metadata", {}),
             created_at=(
-                datetime.fromisoformat(data["created_at"])
-                if data.get("created_at")
-                else None
+                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
             ),
             updated_at=(
-                datetime.fromisoformat(data["updated_at"])
-                if data.get("updated_at")
-                else None
+                datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else None
             ),
         )
 
@@ -1904,6 +1873,7 @@ class Plan:
 # ===========================================================================
 # RFC-0013: Coordinator Governance & Meta-Coordination — Dataclasses
 # ===========================================================================
+
 
 @dataclass
 class Guardrails:
@@ -1971,9 +1941,7 @@ class Guardrails:
         return cls(
             max_budget_usd=data.get("max_budget_usd"),
             warn_at_percentage=data.get("warn_at_percentage", 80),
-            on_exceed=GuardrailExceedAction(
-                data.get("on_exceed", "pause_and_escalate")
-            ),
+            on_exceed=GuardrailExceedAction(data.get("on_exceed", "pause_and_escalate")),
             max_tasks_per_plan=data.get("max_tasks_per_plan", 20),
             max_delegation_depth=data.get("max_delegation_depth", 3),
             max_concurrent_tasks=data.get("max_concurrent_tasks", 10),
@@ -1986,9 +1954,7 @@ class Guardrails:
             requires_plan_review=data.get("requires_plan_review", False),
             requires_replan_review=data.get("requires_replan_review", False),
             auto_escalate_after_failures=data.get("auto_escalate_after_failures", 3),
-            require_human_for_capabilities=data.get(
-                "require_human_for_capabilities", []
-            ),
+            require_human_for_capabilities=data.get("require_human_for_capabilities", []),
             max_working_memory_per_task=data.get("max_working_memory_per_task"),
             max_episodic_memory_per_agent=data.get("max_episodic_memory_per_agent"),
             allowed_semantic_namespaces=data.get("allowed_semantic_namespaces"),
@@ -2071,14 +2037,10 @@ class CoordinatorLease:
                 else None
             ),
             granted_at=(
-                datetime.fromisoformat(data["granted_at"])
-                if data.get("granted_at")
-                else None
+                datetime.fromisoformat(data["granted_at"]) if data.get("granted_at") else None
             ),
             expires_at=(
-                datetime.fromisoformat(data["expires_at"])
-                if data.get("expires_at")
-                else None
+                datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None
             ),
             version=data.get("version", 1),
             metadata=data.get("metadata", {}),
@@ -2128,9 +2090,7 @@ class DecisionRecord:
             alternatives_considered=data.get("alternatives_considered", []),
             confidence=data.get("confidence"),
             timestamp=(
-                datetime.fromisoformat(data["timestamp"])
-                if data.get("timestamp")
-                else None
+                datetime.fromisoformat(data["timestamp"]) if data.get("timestamp") else None
             ),
         )
 
@@ -2138,6 +2098,7 @@ class DecisionRecord:
 # ===========================================================================
 # RFC-0014: Credential Vaults & Tool Scoping — Dataclasses
 # ===========================================================================
+
 
 @dataclass
 class CredentialVault:
@@ -2168,9 +2129,7 @@ class CredentialVault:
             name=data.get("name", ""),
             credentials=data.get("credentials", []),
             created_at=(
-                datetime.fromisoformat(data["created_at"])
-                if data.get("created_at")
-                else None
+                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
             ),
         )
 
@@ -2222,19 +2181,13 @@ class Credential:
             status=CredentialStatus(data.get("status", "active")),
             metadata=data.get("metadata", {}),
             created_at=(
-                datetime.fromisoformat(data["created_at"])
-                if data.get("created_at")
-                else None
+                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
             ),
             rotated_at=(
-                datetime.fromisoformat(data["rotated_at"])
-                if data.get("rotated_at")
-                else None
+                datetime.fromisoformat(data["rotated_at"]) if data.get("rotated_at") else None
             ),
             expires_at=(
-                datetime.fromisoformat(data["expires_at"])
-                if data.get("expires_at")
-                else None
+                datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None
             ),
         )
 
@@ -2338,19 +2291,13 @@ class ToolGrant:
             context=data.get("context", {}),
             status=GrantStatus(data.get("status", "active")),
             expires_at=(
-                datetime.fromisoformat(data["expires_at"])
-                if data.get("expires_at")
-                else None
+                datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None
             ),
             created_at=(
-                datetime.fromisoformat(data["created_at"])
-                if data.get("created_at")
-                else None
+                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
             ),
             revoked_at=(
-                datetime.fromisoformat(data["revoked_at"])
-                if data.get("revoked_at")
-                else None
+                datetime.fromisoformat(data["revoked_at"]) if data.get("revoked_at") else None
             ),
         )
 
@@ -2415,9 +2362,7 @@ class ToolInvocation:
             idempotency_key=data.get("idempotency_key"),
             context=data.get("context", {}),
             timestamp=(
-                datetime.fromisoformat(data["timestamp"])
-                if data.get("timestamp")
-                else None
+                datetime.fromisoformat(data["timestamp"]) if data.get("timestamp") else None
             ),
         )
 
@@ -2425,6 +2370,7 @@ class ToolInvocation:
 # ===========================================================================
 # RFC-0015: Agent Memory & Persistent State — Dataclasses
 # ===========================================================================
+
 
 @dataclass
 class MemoryScope:
@@ -2519,25 +2465,17 @@ class MemoryEntry:
             pinned=data.get("pinned", False),
             priority=MemoryPriority(data.get("priority", "normal")),
             sensitivity=(
-                MemorySensitivity(data["sensitivity"])
-                if data.get("sensitivity")
-                else None
+                MemorySensitivity(data["sensitivity"]) if data.get("sensitivity") else None
             ),
             curated_by=data.get("curated_by"),
             created_at=(
-                datetime.fromisoformat(data["created_at"])
-                if data.get("created_at")
-                else None
+                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
             ),
             updated_at=(
-                datetime.fromisoformat(data["updated_at"])
-                if data.get("updated_at")
-                else None
+                datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else None
             ),
             expires_at=(
-                datetime.fromisoformat(data["expires_at"])
-                if data.get("expires_at")
-                else None
+                datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None
             ),
         )
 
@@ -2572,6 +2510,7 @@ class NamespacePermissions:
 # ===========================================================================
 # RFC-0016: Agent Lifecycle & Health — Dataclasses
 # ===========================================================================
+
 
 @dataclass
 class HeartbeatConfig:
@@ -2735,6 +2674,7 @@ class Heartbeat:
 # RFC-0017: Triggers & Reactive Scheduling — Dataclasses
 # ===========================================================================
 
+
 @dataclass
 class IntentTemplate:
     """Template for the intent created when a trigger fires (RFC-0017)."""
@@ -2818,20 +2758,10 @@ class TriggerCondition:
             cron=data.get("cron"),
             timezone=data.get("timezone", "UTC"),
             starts_at=(
-                datetime.fromisoformat(data["starts_at"])
-                if data.get("starts_at")
-                else None
+                datetime.fromisoformat(data["starts_at"]) if data.get("starts_at") else None
             ),
-            ends_at=(
-                datetime.fromisoformat(data["ends_at"])
-                if data.get("ends_at")
-                else None
-            ),
-            at=(
-                datetime.fromisoformat(data["at"])
-                if data.get("at")
-                else None
-            ),
+            ends_at=(datetime.fromisoformat(data["ends_at"]) if data.get("ends_at") else None),
+            at=(datetime.fromisoformat(data["at"]) if data.get("at") else None),
             event=data.get("event"),
             filter=data.get("filter"),
             path=data.get("path"),
@@ -2933,14 +2863,10 @@ class Trigger:
             fire_count=data.get("fire_count", 0),
             version=data.get("version", 1),
             created_at=(
-                datetime.fromisoformat(data["created_at"])
-                if data.get("created_at")
-                else None
+                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
             ),
             updated_at=(
-                datetime.fromisoformat(data["updated_at"])
-                if data.get("updated_at")
-                else None
+                datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else None
             ),
             last_fired_at=(
                 datetime.fromisoformat(data["last_fired_at"])

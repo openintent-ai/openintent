@@ -385,12 +385,8 @@ class TestDatabase:
             intent1 = db.create_intent(session, title="Intent 1", created_by="user")
             intent2 = db.create_intent(session, title="Intent 2", created_by="user")
 
-            db.add_intent_to_portfolio(
-                session, portfolio_id=portfolio.id, intent_id=intent1.id
-            )
-            db.add_intent_to_portfolio(
-                session, portfolio_id=portfolio.id, intent_id=intent2.id
-            )
+            db.add_intent_to_portfolio(session, portfolio_id=portfolio.id, intent_id=intent1.id)
+            db.add_intent_to_portfolio(session, portfolio_id=portfolio.id, intent_id=intent2.id)
 
             intents = db.get_portfolio_intents(session, portfolio.id)
             assert len(intents) == 2
@@ -505,9 +501,7 @@ class TestPatchApplication:
         os.unlink(db_path)
 
     def test_set_simple(self, db):
-        result = db._apply_patches(
-            {}, [{"op": "set", "path": "/key", "value": "value"}]
-        )
+        result = db._apply_patches({}, [{"op": "set", "path": "/key", "value": "value"}])
         assert result == {"key": "value"}
 
     def test_set_nested(self, db):
@@ -521,9 +515,7 @@ class TestPatchApplication:
         assert result == {"items": ["new"]}
 
     def test_append_creates_array(self, db):
-        result = db._apply_patches(
-            {}, [{"op": "append", "path": "/items", "value": "first"}]
-        )
+        result = db._apply_patches({}, [{"op": "append", "path": "/items", "value": "first"}])
         assert result == {"items": ["first"]}
 
     def test_remove(self, db):
@@ -531,9 +523,7 @@ class TestPatchApplication:
         assert result == {"b": 2}
 
     def test_remove_nested(self, db):
-        result = db._apply_patches(
-            {"a": {"b": 1, "c": 2}}, [{"op": "remove", "path": "/a/b"}]
-        )
+        result = db._apply_patches({"a": {"b": 1, "c": 2}}, [{"op": "remove", "path": "/a/b"}])
         assert result == {"a": {"c": 2}}
 
 

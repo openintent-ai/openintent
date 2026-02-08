@@ -44,9 +44,7 @@ class ComplianceCoordinator(Coordinator):
     Demonstrates all 17 RFCs working together.
     """
 
-    async def plan(
-        self, document_name: str, document_description: str = ""
-    ) -> PortfolioSpec:
+    async def plan(self, document_name: str, document_description: str = "") -> PortfolioSpec:
         """
         Create the compliance review workflow plan.
 
@@ -54,8 +52,7 @@ class ComplianceCoordinator(Coordinator):
         """
         return PortfolioSpec(
             name=f"Compliance Review: {document_name[:50]}",
-            description=document_description
-            or f"Full compliance review for {document_name}",
+            description=document_description or f"Full compliance review for {document_name}",
             governance_policy={
                 "require_approval_for_high_risk": True,
                 "max_cost_usd": 5.00,
@@ -153,9 +150,7 @@ class ComplianceCoordinator(Coordinator):
         for membership in portfolio.intents or []:
             intent = await self.client.get_intent(membership.intent_id)
             state = (
-                intent.state.to_dict()
-                if hasattr(intent.state, "to_dict")
-                else intent.state or {}
+                intent.state.to_dict() if hasattr(intent.state, "to_dict") else intent.state or {}
             )
             results[intent.title] = state
 
@@ -176,12 +171,8 @@ class ComplianceCoordinator(Coordinator):
                     reason="High-risk compliance review requires human approval",
                     requested_by=self.agent_id,
                     context={
-                        "risk_category": final_report.get("summary", {}).get(
-                            "risk_category"
-                        ),
-                        "total_issues": final_report.get("summary", {}).get(
-                            "total_issues"
-                        ),
+                        "risk_category": final_report.get("summary", {}).get("risk_category"),
+                        "total_issues": final_report.get("summary", {}).get("total_issues"),
                         "portfolio_id": portfolio.id,
                     },
                 )
@@ -253,15 +244,11 @@ async def main():
             print(
                 f"    Risk Category: {result.get('summary', {}).get('risk_category', 'UNKNOWN')}"
             )
-            print(
-                f"    Issues Found: {result.get('summary', {}).get('total_issues', 0)}"
-            )
+            print(f"    Issues Found: {result.get('summary', {}).get('total_issues', 0)}")
             print("    Use the dashboard to approve or reject.")
         else:
             print("\n[OK] Workflow completed and auto-approved")
-            print(
-                f"    Risk Category: {result.get('summary', {}).get('risk_category', 'LOW')}"
-            )
+            print(f"    Risk Category: {result.get('summary', {}).get('risk_category', 'LOW')}")
 
     except TimeoutError:
         print(f"\n[TIMEOUT] After {args.timeout}s")

@@ -26,7 +26,9 @@ class TestDatabaseRFC0012:
         """Helper to create a test intent."""
         session = db.get_session()
         try:
-            intent = db.create_intent(session, title="Test", description="Test intent", created_by="agent-1")
+            intent = db.create_intent(
+                session, title="Test", description="Test intent", created_by="agent-1"
+            )
             return intent.id
         finally:
             session.close()
@@ -169,7 +171,9 @@ class TestDatabaseRFC0013:
     def _create_test_intent(self, db):
         session = db.get_session()
         try:
-            intent = db.create_intent(session, title="Test", description="Test", created_by="agent-1")
+            intent = db.create_intent(
+                session, title="Test", description="Test", created_by="agent-1"
+            )
             return intent.id
         finally:
             session.close()
@@ -178,7 +182,9 @@ class TestDatabaseRFC0013:
         intent_id = self._create_test_intent(db)
         session = db.get_session()
         try:
-            lease = db.create_coordinator_lease(session, agent_id="coordinator-1", intent_id=intent_id)
+            lease = db.create_coordinator_lease(
+                session, agent_id="coordinator-1", intent_id=intent_id
+            )
             assert lease.id is not None
             assert lease.agent_id == "coordinator-1"
             assert lease.status == "active"
@@ -189,7 +195,9 @@ class TestDatabaseRFC0013:
         intent_id = self._create_test_intent(db)
         session = db.get_session()
         try:
-            lease = db.create_coordinator_lease(session, agent_id="coordinator-1", intent_id=intent_id)
+            lease = db.create_coordinator_lease(
+                session, agent_id="coordinator-1", intent_id=intent_id
+            )
             found = db.get_coordinator_lease(session, lease.id)
             assert found is not None
             assert found.agent_id == "coordinator-1"
@@ -211,7 +219,9 @@ class TestDatabaseRFC0013:
         intent_id = self._create_test_intent(db)
         session = db.get_session()
         try:
-            lease = db.create_coordinator_lease(session, agent_id="coordinator-1", intent_id=intent_id)
+            lease = db.create_coordinator_lease(
+                session, agent_id="coordinator-1", intent_id=intent_id
+            )
             updated = db.update_coordinator_heartbeat(session, lease.id, "coordinator-1")
             assert updated is not None
             assert updated.last_heartbeat is not None
@@ -237,8 +247,22 @@ class TestDatabaseRFC0013:
     def test_list_decision_records(self, db):
         session = db.get_session()
         try:
-            db.create_decision_record(session, coordinator_id="c-1", intent_id="i-1", decision_type="assignment", summary="D1", rationale="R1")
-            db.create_decision_record(session, coordinator_id="c-1", intent_id="i-1", decision_type="escalation", summary="D2", rationale="R2")
+            db.create_decision_record(
+                session,
+                coordinator_id="c-1",
+                intent_id="i-1",
+                decision_type="assignment",
+                summary="D1",
+                rationale="R1",
+            )
+            db.create_decision_record(
+                session,
+                coordinator_id="c-1",
+                intent_id="i-1",
+                decision_type="escalation",
+                summary="D2",
+                rationale="R2",
+            )
             records = db.list_decision_records(session, "i-1")
             assert len(records) == 2
         finally:
@@ -280,7 +304,13 @@ class TestDatabaseRFC0014:
         session = db.get_session()
         try:
             vault = db.create_vault(session, owner_id="user-1", name="Vault")
-            cred = db.create_credential(session, vault_id=vault.id, service="openai", label="GPT-4 Key", auth_type="api_key")
+            cred = db.create_credential(
+                session,
+                vault_id=vault.id,
+                service="openai",
+                label="GPT-4 Key",
+                auth_type="api_key",
+            )
             assert cred.id is not None
             assert cred.service == "openai"
             assert cred.status == "active"
@@ -291,7 +321,9 @@ class TestDatabaseRFC0014:
         session = db.get_session()
         try:
             vault = db.create_vault(session, owner_id="user-1", name="Vault")
-            cred = db.create_credential(session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key")
+            cred = db.create_credential(
+                session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key"
+            )
             found = db.get_credential(session, cred.id)
             assert found is not None
             assert found.service == "openai"
@@ -302,8 +334,16 @@ class TestDatabaseRFC0014:
         session = db.get_session()
         try:
             vault = db.create_vault(session, owner_id="user-1", name="Vault")
-            cred = db.create_credential(session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key")
-            grant = db.create_tool_grant(session, credential_id=cred.id, agent_id="agent-1", granted_by="admin", scopes=["chat"])
+            cred = db.create_credential(
+                session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key"
+            )
+            grant = db.create_tool_grant(
+                session,
+                credential_id=cred.id,
+                agent_id="agent-1",
+                granted_by="admin",
+                scopes=["chat"],
+            )
             assert grant.id is not None
             assert grant.scopes == ["chat"]
             assert grant.status == "active"
@@ -314,9 +354,15 @@ class TestDatabaseRFC0014:
         session = db.get_session()
         try:
             vault = db.create_vault(session, owner_id="user-1", name="Vault")
-            cred = db.create_credential(session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key")
-            db.create_tool_grant(session, credential_id=cred.id, agent_id="agent-1", granted_by="admin")
-            db.create_tool_grant(session, credential_id=cred.id, agent_id="agent-1", granted_by="admin")
+            cred = db.create_credential(
+                session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key"
+            )
+            db.create_tool_grant(
+                session, credential_id=cred.id, agent_id="agent-1", granted_by="admin"
+            )
+            db.create_tool_grant(
+                session, credential_id=cred.id, agent_id="agent-1", granted_by="admin"
+            )
             grants = db.list_agent_grants(session, "agent-1")
             assert len(grants) == 2
         finally:
@@ -326,8 +372,12 @@ class TestDatabaseRFC0014:
         session = db.get_session()
         try:
             vault = db.create_vault(session, owner_id="user-1", name="Vault")
-            cred = db.create_credential(session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key")
-            grant = db.create_tool_grant(session, credential_id=cred.id, agent_id="agent-1", granted_by="admin")
+            cred = db.create_credential(
+                session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key"
+            )
+            grant = db.create_tool_grant(
+                session, credential_id=cred.id, agent_id="agent-1", granted_by="admin"
+            )
             revoked = db.revoke_grant(session, grant.id)
             assert revoked is not None
             assert revoked.status == "revoked"
@@ -338,9 +388,15 @@ class TestDatabaseRFC0014:
         session = db.get_session()
         try:
             vault = db.create_vault(session, owner_id="user-1", name="Vault")
-            cred = db.create_credential(session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key")
-            grant = db.create_tool_grant(session, credential_id=cred.id, agent_id="agent-1", granted_by="admin")
-            inv = db.create_tool_invocation(session, grant_id=grant.id, service="openai", tool="chat", agent_id="agent-1")
+            cred = db.create_credential(
+                session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key"
+            )
+            grant = db.create_tool_grant(
+                session, credential_id=cred.id, agent_id="agent-1", granted_by="admin"
+            )
+            inv = db.create_tool_invocation(
+                session, grant_id=grant.id, service="openai", tool="chat", agent_id="agent-1"
+            )
             assert inv.id is not None
             assert inv.service == "openai"
         finally:
@@ -350,10 +406,18 @@ class TestDatabaseRFC0014:
         session = db.get_session()
         try:
             vault = db.create_vault(session, owner_id="user-1", name="Vault")
-            cred = db.create_credential(session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key")
-            grant = db.create_tool_grant(session, credential_id=cred.id, agent_id="agent-1", granted_by="admin")
-            db.create_tool_invocation(session, grant_id=grant.id, service="openai", tool="chat", agent_id="agent-1")
-            db.create_tool_invocation(session, grant_id=grant.id, service="openai", tool="embed", agent_id="agent-1")
+            cred = db.create_credential(
+                session, vault_id=vault.id, service="openai", label="Key", auth_type="api_key"
+            )
+            grant = db.create_tool_grant(
+                session, credential_id=cred.id, agent_id="agent-1", granted_by="admin"
+            )
+            db.create_tool_invocation(
+                session, grant_id=grant.id, service="openai", tool="chat", agent_id="agent-1"
+            )
+            db.create_tool_invocation(
+                session, grant_id=grant.id, service="openai", tool="embed", agent_id="agent-1"
+            )
             invocations = db.list_tool_invocations(session, grant.id)
             assert len(invocations) == 2
         finally:
@@ -375,7 +439,14 @@ class TestDatabaseRFC0015:
     def test_create_memory_entry(self, db):
         session = db.get_session()
         try:
-            entry = db.create_memory_entry(session, agent_id="agent-1", namespace="default", key="greeting", value={"text": "hello"}, memory_type="working")
+            entry = db.create_memory_entry(
+                session,
+                agent_id="agent-1",
+                namespace="default",
+                key="greeting",
+                value={"text": "hello"},
+                memory_type="working",
+            )
             assert entry.id is not None
             assert entry.key == "greeting"
             assert entry.version == 1
@@ -385,7 +456,14 @@ class TestDatabaseRFC0015:
     def test_get_memory_entry(self, db):
         session = db.get_session()
         try:
-            entry = db.create_memory_entry(session, agent_id="agent-1", namespace="default", key="k", value={"v": 1}, memory_type="working")
+            entry = db.create_memory_entry(
+                session,
+                agent_id="agent-1",
+                namespace="default",
+                key="k",
+                value={"v": 1},
+                memory_type="working",
+            )
             found = db.get_memory_entry(session, entry.id)
             assert found is not None
             assert found.value == {"v": 1}
@@ -395,8 +473,22 @@ class TestDatabaseRFC0015:
     def test_list_memory_entries(self, db):
         session = db.get_session()
         try:
-            db.create_memory_entry(session, agent_id="agent-1", namespace="ns1", key="k1", value={}, memory_type="working")
-            db.create_memory_entry(session, agent_id="agent-1", namespace="ns2", key="k2", value={}, memory_type="episodic")
+            db.create_memory_entry(
+                session,
+                agent_id="agent-1",
+                namespace="ns1",
+                key="k1",
+                value={},
+                memory_type="working",
+            )
+            db.create_memory_entry(
+                session,
+                agent_id="agent-1",
+                namespace="ns2",
+                key="k2",
+                value={},
+                memory_type="episodic",
+            )
             entries = db.list_memory_entries(session, "agent-1")
             assert len(entries) == 2
         finally:
@@ -405,8 +497,22 @@ class TestDatabaseRFC0015:
     def test_list_memory_entries_with_namespace_filter(self, db):
         session = db.get_session()
         try:
-            db.create_memory_entry(session, agent_id="agent-1", namespace="ns1", key="k1", value={}, memory_type="working")
-            db.create_memory_entry(session, agent_id="agent-1", namespace="ns2", key="k2", value={}, memory_type="episodic")
+            db.create_memory_entry(
+                session,
+                agent_id="agent-1",
+                namespace="ns1",
+                key="k1",
+                value={},
+                memory_type="working",
+            )
+            db.create_memory_entry(
+                session,
+                agent_id="agent-1",
+                namespace="ns2",
+                key="k2",
+                value={},
+                memory_type="episodic",
+            )
             entries = db.list_memory_entries(session, "agent-1", namespace="ns1")
             assert len(entries) == 1
             assert entries[0].namespace == "ns1"
@@ -416,7 +522,14 @@ class TestDatabaseRFC0015:
     def test_update_memory_entry(self, db):
         session = db.get_session()
         try:
-            entry = db.create_memory_entry(session, agent_id="agent-1", namespace="default", key="k", value={"old": True}, memory_type="working")
+            entry = db.create_memory_entry(
+                session,
+                agent_id="agent-1",
+                namespace="default",
+                key="k",
+                value={"old": True},
+                memory_type="working",
+            )
             updated = db.update_memory_entry(session, entry.id, entry.version, value={"new": True})
             assert updated is not None
             assert updated.value == {"new": True}
@@ -427,7 +540,14 @@ class TestDatabaseRFC0015:
     def test_update_memory_entry_version_conflict(self, db):
         session = db.get_session()
         try:
-            entry = db.create_memory_entry(session, agent_id="agent-1", namespace="default", key="k", value={}, memory_type="working")
+            entry = db.create_memory_entry(
+                session,
+                agent_id="agent-1",
+                namespace="default",
+                key="k",
+                value={},
+                memory_type="working",
+            )
             db.update_memory_entry(session, entry.id, entry.version, value={"v": 1})
             result = db.update_memory_entry(session, entry.id, 1, value={"v": 2})
             assert result is None
@@ -437,7 +557,14 @@ class TestDatabaseRFC0015:
     def test_delete_memory_entry(self, db):
         session = db.get_session()
         try:
-            entry = db.create_memory_entry(session, agent_id="agent-1", namespace="default", key="k", value={}, memory_type="working")
+            entry = db.create_memory_entry(
+                session,
+                agent_id="agent-1",
+                namespace="default",
+                key="k",
+                value={},
+                memory_type="working",
+            )
             assert db.delete_memory_entry(session, entry.id) is True
             assert db.get_memory_entry(session, entry.id) is None
         finally:
@@ -466,7 +593,9 @@ class TestDatabaseRFC0016:
     def test_register_agent(self, db):
         session = db.get_session()
         try:
-            agent = db.register_agent(session, agent_id="agent-1", capabilities=["research", "code"])
+            agent = db.register_agent(
+                session, agent_id="agent-1", capabilities=["research", "code"]
+            )
             assert agent.agent_id == "agent-1"
             assert agent.status == "active"
             assert agent.capabilities == ["research", "code"]
@@ -591,7 +720,9 @@ class TestDatabaseRFC0017:
         session = db.get_session()
         try:
             trigger = db.create_trigger(session, name="T1", type="schedule")
-            updated = db.update_trigger(session, trigger.trigger_id, trigger.version, enabled=False)
+            updated = db.update_trigger(
+                session, trigger.trigger_id, trigger.version, enabled=False
+            )
             assert updated is not None
             assert updated.enabled is False
             assert updated.version == 2

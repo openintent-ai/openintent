@@ -36,9 +36,7 @@ def get_llm_client(provider: str = "auto") -> tuple[Any, str, str]:
         elif os.getenv("OPENAI_API_KEY"):
             provider = "openai"
         else:
-            raise EnvironmentError(
-                "No LLM API key found. Set OPENAI_API_KEY or ANTHROPIC_API_KEY"
-            )
+            raise EnvironmentError("No LLM API key found. Set OPENAI_API_KEY or ANTHROPIC_API_KEY")
 
     if provider == "anthropic":
         try:
@@ -82,9 +80,7 @@ def call_llm(
         return str(response.content[0].text)
 
     else:  # openai
-        response = client.chat.completions.create(
-            model=model, messages=messages, **kwargs
-        )
+        response = client.chat.completions.create(model=model, messages=messages, **kwargs)
         return str(response.choices[0].message.content)
 
 
@@ -248,11 +244,7 @@ class AnalyzerAgent(DemoAgent):
 Be analytical and precise."""
 
     async def handle_intent(self, intent: Any) -> dict[str, Any]:
-        data = (
-            intent.state.get("data", intent.description)
-            if intent.state
-            else intent.description
-        )
+        data = intent.state.get("data", intent.description) if intent.state else intent.description
 
         prompt = f"Analyze the following:\n\n{data}"
 

@@ -2,6 +2,18 @@
 
 LLM provider adapters for automatic observability.
 
+## AdapterConfig
+
+::: openintent.adapters.base.AdapterConfig
+    options:
+      show_source: false
+
+## BaseAdapter
+
+::: openintent.adapters.base.BaseAdapter
+    options:
+      show_source: false
+
 ## OpenAI Adapter
 
 ::: openintent.adapters.openai_adapter.OpenAIAdapter
@@ -21,6 +33,26 @@ LLM provider adapters for automatic observability.
         - __init__
         - messages_create
         - messages_stream
+
+## Azure OpenAI Adapter
+
+::: openintent.adapters.azure_openai_adapter.AzureOpenAIAdapter
+    options:
+      show_source: false
+      members:
+        - __init__
+        - chat_complete
+        - chat_complete_stream
+
+## OpenRouter Adapter
+
+::: openintent.adapters.openrouter_adapter.OpenRouterAdapter
+    options:
+      show_source: false
+      members:
+        - __init__
+        - chat_complete
+        - chat_complete_stream
 
 ## Gemini Adapter
 

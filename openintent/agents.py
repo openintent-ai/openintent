@@ -46,6 +46,7 @@ logger = logging.getLogger("openintent.agents")
 
 class _MemoryProxy:
     """Proxy for agent memory operations."""
+
     def __init__(self, agent):
         self._agent = agent
 
@@ -60,24 +61,22 @@ class _MemoryProxy:
         )
 
     async def pin(self, key):
-        return await self._agent.async_client.memory.pin(
-            agent_id=self._agent._agent_id, key=key
-        )
+        return await self._agent.async_client.memory.pin(agent_id=self._agent._agent_id, key=key)
 
 
 class _TasksProxy:
     """Proxy for agent task operations."""
+
     def __init__(self, agent):
         self._agent = agent
 
     async def create(self, intent_id, **kwargs):
-        return await self._agent.async_client.tasks.create(
-            intent_id=intent_id, **kwargs
-        )
+        return await self._agent.async_client.tasks.create(intent_id=intent_id, **kwargs)
 
 
 class _ToolsProxy:
     """Proxy for agent tool operations."""
+
     def __init__(self, agent):
         self._agent = agent
 
@@ -243,10 +242,12 @@ def on_task(status: Optional[str] = None) -> Callable:
         status: Optional task status filter (e.g., "completed", "failed").
                 If None, triggers on any task event.
     """
+
     def decorator(func: Callable) -> Callable:
         func._openintent_handler = "task"
         func._openintent_task_status = status
         return func
+
     return decorator
 
 
@@ -257,10 +258,12 @@ def on_trigger(name: Optional[str] = None) -> Callable:
     Args:
         name: Optional trigger name filter. If None, handles any trigger.
     """
+
     def decorator(func: Callable) -> Callable:
         func._openintent_handler = "trigger"
         func._openintent_trigger_name = name
         return func
+
     return decorator
 
 
@@ -293,10 +296,12 @@ def on_quorum(threshold: float = 0.5) -> Callable:
     """Decorator: Called when multi-agent voting reaches a threshold.
     Args: threshold - fraction of agents needed (0.0 to 1.0).
     Handler receives (self, intent, votes)."""
+
     def decorator(func: Callable) -> Callable:
         func._openintent_handler = "quorum"
         func._openintent_quorum_threshold = threshold
         return func
+
     return decorator
 
 
@@ -524,9 +529,7 @@ class BaseAgent(ABC):
         if final_state:
             await self.async_client.update_state(intent_id, intent.version, final_state)
             intent = await self.async_client.get_intent(intent_id)
-        await self.async_client.set_status(
-            intent_id, IntentStatus.COMPLETED, intent.version
-        )
+        await self.async_client.set_status(intent_id, IntentStatus.COMPLETED, intent.version)
 
     async def log(self, intent_id: str, message: str, **data: Any) -> None:
         """Log a comment event to an intent."""
@@ -569,11 +572,13 @@ class BaseAgent(ABC):
             for entry in acl.entries:
                 if entry.principal_id == self._agent_id:
                     ctx.my_permission = entry.permission
-                ctx.peers.append(PeerInfo(
-                    principal_id=entry.principal_id,
-                    principal_type=entry.principal_type,
-                    permission=entry.permission,
-                ))
+                ctx.peers.append(
+                    PeerInfo(
+                        principal_id=entry.principal_id,
+                        principal_type=entry.principal_type,
+                        permission=entry.permission,
+                    )
+                )
         except Exception:
             pass
 
@@ -637,7 +642,9 @@ class BaseAgent(ABC):
         )
         await self.async_client.assign_agent(intent_id, target_agent_id)
 
-    async def escalate(self, intent_id: str, reason: str, data: Optional[dict[str, Any]] = None) -> None:  # noqa: E501
+    async def escalate(
+        self, intent_id: str, reason: str, data: Optional[dict[str, Any]] = None
+    ) -> None:  # noqa: E501
         """
         Escalate an intent to administrators for review.
 
@@ -654,30 +661,15 @@ class BaseAgent(ABC):
     async def _handle_event(self, event: SSEEvent) -> None:
         """Route SSE events to appropriate handlers."""
         try:
-            if (
-                event.type == SSEEventType.AGENT_ASSIGNED
-                or event.type == "AGENT_ASSIGNED"
-            ):
+            if event.type == SSEEventType.AGENT_ASSIGNED or event.type == "AGENT_ASSIGNED":
                 await self._on_assignment(event)
-            elif (
-                event.type == SSEEventType.STATUS_CHANGED
-                or event.type == "STATUS_CHANGED"
-            ):
+            elif event.type == SSEEventType.STATUS_CHANGED or event.type == "STATUS_CHANGED":
                 await self._on_status_change(event)
-            elif (
-                event.type == SSEEventType.LEASE_RELEASED
-                or event.type == "LEASE_RELEASED"
-            ):
+            elif event.type == SSEEventType.LEASE_RELEASED or event.type == "LEASE_RELEASED":
                 await self._on_lease_released(event)
-            elif (
-                event.type == SSEEventType.STATE_CHANGED
-                or event.type == "STATE_CHANGED"
-            ):
+            elif event.type == SSEEventType.STATE_CHANGED or event.type == "STATE_CHANGED":
                 await self._on_state_change(event)
-            elif (
-                event.type == SSEEventType.INTENT_COMPLETED
-                or event.type == "INTENT_COMPLETED"
-            ):
+            elif event.type == SSEEventType.INTENT_COMPLETED or event.type == "INTENT_COMPLETED":
                 await self._on_intent_complete(event)
             elif (
                 event.type == SSEEventType.ACCESS_REQUESTED
@@ -796,13 +788,15 @@ class BaseAgent(ABC):
                 result = await self._call_handler(handler, intent, request)
                 if result == "approve":
                     await self.async_client.approve_access_request(
-                        intent_id, request.id,
+                        intent_id,
+                        request.id,
                         permission=request.requested_permission,
                         reason="Auto-approved by agent policy",
                     )
                 elif result == "deny":
                     await self.async_client.deny_access_request(
-                        intent_id, request.id,
+                        intent_id,
+                        request.id,
                         reason="Denied by agent policy",
                     )
             except Exception as e:
@@ -871,7 +865,13 @@ class BaseAgent(ABC):
 class _MemoryProxy:
     """Proxy for natural memory access from agent methods."""
 
-    def __init__(self, client_ref, agent_id: str, memory_type: str = "episodic", namespace: Optional[str] = None):  # noqa: E501
+    def __init__(
+        self,
+        client_ref,
+        agent_id: str,
+        memory_type: str = "episodic",
+        namespace: Optional[str] = None,
+    ):  # noqa: E501
         self._client_ref = client_ref
         self._agent_id = agent_id
         self._memory_type = memory_type
@@ -880,16 +880,21 @@ class _MemoryProxy:
     async def store(self, key: str, value: Any, tags: Optional[list[str]] = None) -> Any:
         """Store a memory entry."""
         return await self._client_ref.memory.store(
-            agent_id=self._agent_id, key=key, value=value,
-            memory_type=self._memory_type, tags=tags or [],
+            agent_id=self._agent_id,
+            key=key,
+            value=value,
+            memory_type=self._memory_type,
+            tags=tags or [],
             namespace=self._namespace,
         )
 
     async def recall(self, key: Optional[str] = None, tags: Optional[list[str]] = None) -> Any:
         """Recall memories by key or tags."""
         return await self._client_ref.memory.query(
-            agent_id=self._agent_id, namespace=self._namespace,
-            key=key, tags=tags,
+            agent_id=self._agent_id,
+            namespace=self._namespace,
+            key=key,
+            tags=tags,
         )
 
     async def forget(self, key: str) -> None:
@@ -911,14 +916,17 @@ class _TasksProxy:
     async def create(self, intent_id: str, title: str, **kwargs) -> Any:
         """Create a subtask within an intent."""
         return await self._client_ref.tasks.create(
-            intent_id=intent_id, title=title,
+            intent_id=intent_id,
+            title=title,
             assigned_to=kwargs.get("assigned_to", self._agent_id),
             **{k: v for k, v in kwargs.items() if k != "assigned_to"},
         )
 
     async def complete(self, task_id: str, result: Optional[dict] = None) -> Any:
         """Mark a task as completed."""
-        return await self._client_ref.tasks.update_status(task_id, status="completed", result=result)  # noqa: E501
+        return await self._client_ref.tasks.update_status(
+            task_id, status="completed", result=result
+        )  # noqa: E501
 
     async def fail(self, task_id: str, error: Optional[str] = None) -> Any:
         """Mark a task as failed."""
@@ -1010,9 +1018,7 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
     def decorator(cls: type) -> type:
         original_init = cls.__init__ if hasattr(cls, "__init__") else None
 
-        def new_init(
-            self, base_url: Optional[str] = None, api_key: Optional[str] = None
-        ):
+        def new_init(self, base_url: Optional[str] = None, api_key: Optional[str] = None):
             BaseAgent.__init__(self, base_url, api_key, config)
             self._agent_id = agent_id
             if capabilities:
@@ -1037,9 +1043,7 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
                 setattr(cls, prop_name, getattr(BaseAgent, prop_name))
 
         @classmethod
-        def run_agent(
-            cls_self, base_url: Optional[str] = None, api_key: Optional[str] = None
-        ):
+        def run_agent(cls_self, base_url: Optional[str] = None, api_key: Optional[str] = None):
             instance = cls_self(base_url, api_key)
             instance.run()
 
@@ -1097,9 +1101,7 @@ def Coordinator(  # noqa: N802
     def decorator(cls: type) -> type:
         original_init = cls.__init__ if hasattr(cls, "__init__") else None
 
-        def new_init(
-            self, base_url: Optional[str] = None, api_key: Optional[str] = None
-        ):
+        def new_init(self, base_url: Optional[str] = None, api_key: Optional[str] = None):
             BaseAgent.__init__(self, base_url, api_key, config)
             self._agent_id = coordinator_id
             if capabilities:
@@ -1270,7 +1272,9 @@ def Coordinator(  # noqa: N802
 
         async def coord_delegate(self, intent_id: str, agent_id: str, **kw):
             """Delegate work on an intent to another agent."""
-            await self.record_decision("delegation", f"Delegating to {agent_id}", agent_id=agent_id)  # noqa: E501
+            await self.record_decision(
+                "delegation", f"Delegating to {agent_id}", agent_id=agent_id
+            )  # noqa: E501
             return await self.async_client.assign_agent(intent_id, agent_id)
 
         cls.delegate = coord_delegate
@@ -1279,12 +1283,16 @@ def Coordinator(  # noqa: N802
             """Escalate an intent to the coordinator for review."""
             await self.record_decision("escalation", reason)
             return await self.async_client.request_arbitration(
-                intent_id, reason=reason, context=kw,
+                intent_id,
+                reason=reason,
+                context=kw,
             )
 
         cls.escalate = coord_escalate
 
-        async def record_decision(self, decision_type: str, summary: str, rationale: str = "", **data: Any) -> dict[str, Any]:  # noqa: E501
+        async def record_decision(
+            self, decision_type: str, summary: str, rationale: str = "", **data: Any
+        ) -> dict[str, Any]:  # noqa: E501
             """Record an auditable coordinator decision (RFC-0013)."""
             record = {
                 "type": decision_type,
@@ -1307,9 +1315,7 @@ def Coordinator(  # noqa: N802
         cls.agents = agents_prop
 
         @classmethod
-        def run_agent(
-            cls_self, base_url: Optional[str] = None, api_key: Optional[str] = None
-        ):
+        def run_agent(cls_self, base_url: Optional[str] = None, api_key: Optional[str] = None):
             instance = cls_self(base_url, api_key)
             instance.run()
 
@@ -1330,6 +1336,7 @@ def Plan(  # noqa: N802
     failure_policy: str = "fail_fast",
 ) -> Callable[[type], type]:
     """Declarative plan definition (RFC-0012). Defines task decomposition strategy."""
+
     def decorator(cls: type) -> type:
         cls._plan_name = name
         cls._plan_strategy = strategy
@@ -1347,6 +1354,7 @@ def Plan(  # noqa: N802
 
         cls.to_spec = to_spec
         return cls
+
     return decorator
 
 
@@ -1355,6 +1363,7 @@ def Vault(  # noqa: N802
     rotate_keys: bool = False,
 ) -> Callable[[type], type]:
     """Declarative credential vault (RFC-0014). Defines tool access and credential policies."""
+
     def decorator(cls: type) -> type:
         cls._vault_name = name
         cls._vault_rotate_keys = rotate_keys
@@ -1371,6 +1380,7 @@ def Vault(  # noqa: N802
 
         cls.get_tools = get_tools
         return cls
+
     return decorator
 
 
@@ -1381,12 +1391,14 @@ def Memory(  # noqa: N802
     max_entries: int = 1000,
 ) -> Callable[[type], type]:
     """Declarative memory configuration (RFC-0015). Defines memory tier and policies."""
+
     def decorator(cls: type) -> type:
         cls._memory_namespace = namespace
         cls._memory_tier = tier
         cls._memory_ttl = ttl
         cls._memory_max_entries = max_entries
         return cls
+
     return decorator
 
 
@@ -1398,6 +1410,7 @@ def Trigger(  # noqa: N802
     dedup: str = "skip",
 ) -> Callable[[type], type]:
     """Declarative trigger definition (RFC-0017). Creates intents when conditions are met."""
+
     def decorator(cls: type) -> type:
         cls._trigger_name = name
         cls._trigger_type = type
@@ -1405,6 +1418,7 @@ def Trigger(  # noqa: N802
         cls._trigger_cron = cron
         cls._trigger_dedup = dedup
         return cls
+
     return decorator
 
 
@@ -1478,9 +1492,7 @@ class Worker:
                             await client.update_state(intent_id, intent.version, result)
                             intent = await client.get_intent(intent_id)
 
-                        await client.set_status(
-                            intent_id, IntentStatus.COMPLETED, intent.version
-                        )
+                        await client.set_status(intent_id, IntentStatus.COMPLETED, intent.version)
                     except Exception as e:
                         logger.exception(f"Worker error: {e}")
 

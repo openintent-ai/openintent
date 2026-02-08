@@ -8,26 +8,32 @@ theme:
   name: material
   palette:
     - scheme: default
-      primary: deep purple
-      accent: purple
+      primary: indigo
+      accent: teal
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - scheme: slate
-      primary: deep purple
-      accent: purple
+      primary: indigo
+      accent: teal
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
   features:
     - navigation.tabs
     - navigation.sections
     - navigation.expand
     - navigation.top
+    - navigation.footer
     - search.suggest
     - search.highlight
     - content.code.copy
     - content.code.annotate
+    - content.tabs.link
+    - toc.follow
 
 plugins:
   - search
@@ -82,6 +88,14 @@ nav:
     - Exceptions: api/exceptions.md
   - Specification:
     - Workflow YAML: spec/workflow-yaml.md
+  - RFCs:
+    - "0012 \u2014 Task Decomposition": rfcs/0012-task-decomposition-planning.md
+    - "0013 \u2014 Coordinator Governance": rfcs/0013-coordinator-governance.md
+    - "0014 \u2014 Credential Vaults": rfcs/0014-credential-vaults-tool-scoping.md
+    - "0015 \u2014 Agent Memory": rfcs/0015-agent-memory-persistent-state.md
+    - "0016 \u2014 Agent Lifecycle": rfcs/0016-agent-lifecycle-health.md
+    - "0017 \u2014 Triggers": rfcs/0017-triggers-reactive-scheduling.md
+  - Changelog: changelog.md
   - Examples:
     - Multi-Agent Workflow: examples/multi-agent.md
     - Streaming: examples/streaming.md

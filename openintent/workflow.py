@@ -298,8 +298,7 @@ class WorkflowSpec:
         """
         if yaml is None:
             raise WorkflowError(
-                "PyYAML is required for YAML workflows.\n"
-                "Install with: pip install pyyaml"
+                "PyYAML is required for YAML workflows.\nInstall with: pip install pyyaml"
             )
 
         path = Path(path)
@@ -326,9 +325,7 @@ class WorkflowSpec:
         return spec
 
     @classmethod
-    def from_string(
-        cls, yaml_content: str, source_name: str = "<string>"
-    ) -> "WorkflowSpec":
+    def from_string(cls, yaml_content: str, source_name: str = "<string>") -> "WorkflowSpec":
         """
         Load and validate a workflow from a YAML string.
 
@@ -341,8 +338,7 @@ class WorkflowSpec:
         """
         if yaml is None:
             raise WorkflowError(
-                "PyYAML is required for YAML workflows.\n"
-                "Install with: pip install pyyaml"
+                "PyYAML is required for YAML workflows.\nInstall with: pip install pyyaml"
             )
 
         try:
@@ -433,19 +429,34 @@ class WorkflowSpec:
                         merged["default"] = legacy_access.get("default_permission", "read")
                         acl = legacy_access.get("acl", [])
                         merged["allow"] = [
-                            {"agent": e.get("principal_id", e.get("agent", "")), "level": e.get("permission", e.get("level", "read"))}  # noqa: E501
+                            {
+                                "agent": e.get("principal_id", e.get("agent", "")),
+                                "level": e.get("permission", e.get("level", "read")),
+                            }  # noqa: E501
                             for e in acl
                         ]
                     if legacy_delegation:
                         merged["delegate"] = {
-                            "to": legacy_delegation.get("targets", legacy_delegation.get("to", [])),  # noqa: E501
-                            "level": legacy_delegation.get("default_permission", legacy_delegation.get("level", "read")),  # noqa: E501
+                            "to": legacy_delegation.get(
+                                "targets", legacy_delegation.get("to", [])
+                            ),  # noqa: E501
+                            "level": legacy_delegation.get(
+                                "default_permission", legacy_delegation.get("level", "read")
+                            ),  # noqa: E501
                         }
                     if legacy_context:
-                        merged["context"] = legacy_context.get("inject", legacy_context) if isinstance(legacy_context, dict) else legacy_context  # noqa: E501
+                        merged["context"] = (
+                            legacy_context.get("inject", legacy_context)
+                            if isinstance(legacy_context, dict)
+                            else legacy_context
+                        )  # noqa: E501
                     permissions_data = merged
 
-            permissions = PermissionsConfig.from_yaml(permissions_data) if permissions_data is not None else None  # noqa: E501
+            permissions = (
+                PermissionsConfig.from_yaml(permissions_data)
+                if permissions_data is not None
+                else None
+            )  # noqa: E501
 
             phase = PhaseConfig(
                 name=phase_name,
@@ -508,9 +519,7 @@ class WorkflowSpec:
             for dep in phase.depends_on:
                 if dep not in phase_names:
                     # Try matching by title
-                    title_match = next(
-                        (p.name for p in self.phases if p.title == dep), None
-                    )
+                    title_match = next((p.name for p in self.phases if p.title == dep), None)
                     if title_match:
                         # Allow title references
                         continue
@@ -589,11 +598,19 @@ class WorkflowSpec:
 
             if phase.permissions:
                 perm = phase.permissions
-                perm_state: dict[str, Any] = {"policy": perm.policy.value, "default": perm.default.value}  # noqa: E501
+                perm_state: dict[str, Any] = {
+                    "policy": perm.policy.value,
+                    "default": perm.default.value,
+                }  # noqa: E501
                 if perm.allow:
-                    perm_state["allow"] = [{"agent": e.agent, "level": e.level.value} for e in perm.allow]  # noqa: E501
+                    perm_state["allow"] = [
+                        {"agent": e.agent, "level": e.level.value} for e in perm.allow
+                    ]  # noqa: E501
                 if perm.delegate:
-                    perm_state["delegate"] = {"to": perm.delegate.to, "level": perm.delegate.level.value}  # noqa: E501
+                    perm_state["delegate"] = {
+                        "to": perm.delegate.to,
+                        "level": perm.delegate.level.value,
+                    }  # noqa: E501
                 if perm.context != "auto":
                     perm_state["context"] = perm.context
                 initial_state["permissions"] = perm_state
@@ -667,11 +684,7 @@ class WorkflowSpec:
             print(f"Server: {server_url}")
             print(f"Phases: {len(self.phases)}")
             for i, phase in enumerate(self.phases, 1):
-                deps = (
-                    f" (after: {', '.join(phase.depends_on)})"
-                    if phase.depends_on
-                    else ""
-                )
+                deps = f" (after: {', '.join(phase.depends_on)})" if phase.depends_on else ""
                 print(f"  {i}. {phase.title} -> {phase.assign}{deps}")
             print()
 

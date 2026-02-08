@@ -1,8 +1,8 @@
 # LLM Adapters
 
-LLM Adapters provide automatic observability for popular LLM providers. They log every LLM call with model, tokens, latency, and cost.
+LLM Adapters provide automatic observability for popular LLM providers. They log every LLM call with model, tokens, latency, and cost — plus optional streaming hooks for real-time monitoring.
 
-## Supported Providers
+## Supported Providers (7 adapters)
 
 | Provider | Adapter | Package |
 |----------|---------|---------|
@@ -11,13 +11,15 @@ LLM Adapters provide automatic observability for popular LLM providers. They log
 | Google Gemini | `GeminiAdapter` | `openintent[gemini]` |
 | xAI Grok | `GrokAdapter` | `openintent[grok]` |
 | DeepSeek | `DeepSeekAdapter` | `openintent[deepseek]` |
+| Azure OpenAI | `AzureOpenAIAdapter` | `openintent[azure]` |
+| OpenRouter | `OpenRouterAdapter` | `openintent[openrouter]` |
 
 ## Installation
 
 ```bash
-# Install the adapter you need
 pip install openintent[openai]
 pip install openintent[anthropic]
+pip install openintent[azure]
 
 # Or all adapters
 pip install openintent[all-adapters]
@@ -30,14 +32,11 @@ from openai import OpenAI
 from openintent import OpenIntentClient
 from openintent.adapters import OpenAIAdapter
 
-# Setup
 openai_client = OpenAI()
 oi_client = OpenIntentClient(base_url="...", agent_id="my-agent")
 
-# Create adapter
 adapter = OpenAIAdapter(openai_client, oi_client, intent_id)
 
-# Make LLM calls - automatically logged!
 response = adapter.chat_complete(
     model="gpt-4",
     messages=[{"role": "user", "content": "Hello"}]
@@ -69,6 +68,101 @@ response = adapter.messages_create(
     messages=[{"role": "user", "content": "Hello"}]
 )
 ```
+
+## Azure OpenAI Adapter
+
+For Azure-hosted OpenAI deployments:
+
+```python
+from openai import AzureOpenAI
+from openintent.adapters import AzureOpenAIAdapter
+
+azure_client = AzureOpenAI(
+    azure_endpoint="https://my-resource.openai.azure.com/",
+    api_key="...",
+    api_version="2024-02-01"
+)
+adapter = AzureOpenAIAdapter(azure_client, oi_client, intent_id)
+
+response = adapter.chat_complete(
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Hello"}]
+)
+```
+
+## OpenRouter Adapter
+
+Access 100+ models through OpenRouter's unified API:
+
+```python
+from openintent.adapters import OpenRouterAdapter
+
+adapter = OpenRouterAdapter(openrouter_client, oi_client, intent_id)
+
+response = adapter.chat_complete(
+    model="anthropic/claude-3-sonnet",
+    messages=[{"role": "user", "content": "Hello"}]
+)
+```
+
+## Google Gemini Adapter
+
+```python
+from openintent.adapters import GeminiAdapter
+
+adapter = GeminiAdapter(gemini_client, oi_client, intent_id)
+
+response = adapter.generate_content(
+    model="gemini-pro",
+    contents=[{"role": "user", "parts": [{"text": "Hello"}]}]
+)
+```
+
+## Grok & DeepSeek Adapters
+
+Both follow the OpenAI-compatible interface:
+
+```python
+from openintent.adapters import GrokAdapter, DeepSeekAdapter
+
+grok = GrokAdapter(grok_client, oi_client, intent_id)
+deepseek = DeepSeekAdapter(deepseek_client, oi_client, intent_id)
+
+response = grok.chat_complete(model="grok-1", messages=[...])
+response = deepseek.chat_complete(model="deepseek-chat", messages=[...])
+```
+
+## Streaming Hooks (v0.8.0)
+
+All adapters accept an `AdapterConfig` with streaming hooks for real-time monitoring:
+
+```python
+from openintent.adapters import OpenAIAdapter, AdapterConfig
+
+config = AdapterConfig(
+    on_stream_start=lambda stream_id, model, provider:
+        print(f"Stream {stream_id} started: {model}"),
+    on_token=lambda token, stream_id:
+        print(token, end=""),
+    on_stream_end=lambda stream_id, model, total_tokens:
+        print(f"\nDone: {total_tokens} tokens"),
+    on_stream_error=lambda error, stream_id:
+        print(f"Error in {stream_id}: {error}"),
+)
+
+adapter = OpenAIAdapter(openai_client, oi_client, intent_id, config=config)
+```
+
+### Hook Reference
+
+| Hook | Signature | When |
+|------|-----------|------|
+| `on_stream_start` | `(stream_id, model, provider)` | Stream begins |
+| `on_token` | `(token, stream_id)` | Each content token received |
+| `on_stream_end` | `(stream_id, model, total_tokens)` | Stream completes |
+| `on_stream_error` | `(error, stream_id)` | Stream fails |
+
+All hooks use a fail-safe pattern — exceptions in hooks are caught and logged without breaking the main flow.
 
 ## What Gets Logged
 
@@ -103,7 +197,7 @@ Each LLM call creates events with full observability data:
 }
 ```
 
-## Cost Tracking (v0.6.0)
+## Cost Tracking
 
 The adapters automatically log token counts for cost estimation:
 
@@ -114,37 +208,9 @@ The adapters automatically log token counts for cost estimation:
 | `total_tokens` | Sum of prompt + completion |
 | `duration_ms` | Request latency in milliseconds |
 
-Use these to calculate costs based on your provider's pricing:
-
 ```python
-# Example cost calculation for gpt-4o-mini
 cost_per_token = 0.00000015  # $0.15 per 1M tokens
 total_cost = event.payload["total_tokens"] * cost_per_token
-```
-
-## Distributed Tracing
-
-When using adapters with the demo or CLI, you get a complete workflow trace:
-
-```
-◉ ORCHESTRATOR
-│
-├─► ⬤ research │ Intent: Research AI Agent Coordination
-│   ├── ★ LLM → gpt-4o-mini (156 tokens, 892ms)
-│   └── ✓ COMPLETE
-│
-└─► ⬤ summary │ depends_on: research
-    ├── ★ LLM → gpt-4o-mini (89 tokens, 423ms)
-    └── ✓ COMPLETE
-
-┌────────────────────────────────────────────────────────────────┐
-│  LLM OPERATIONS                                                │
-├────────────────────────────────────────────────────────────────┤
-│  ★ research   │ gpt-4o-mini │  156 tok │ 892ms │ $0.000023    │
-│  ★ summary    │ gpt-4o-mini │   89 tok │ 423ms │ $0.000013    │
-├────────────────────────────────────────────────────────────────┤
-│  TOTAL: 2 calls │ 245 tokens │ $0.000036 estimated cost       │
-└────────────────────────────────────────────────────────────────┘
 ```
 
 ## Using with @Agent
@@ -158,38 +224,23 @@ from openai import OpenAI
 class SmartAgent:
     def __init__(self):
         self.openai = OpenAI()
-    
+
     @on_assignment
     async def handle(self, intent):
-        # Create adapter with current intent
         adapter = OpenAIAdapter(self.openai, self.client, intent.id)
-        
+
         response = adapter.chat_complete(
             model="gpt-4",
             messages=[
                 {"role": "user", "content": intent.description}
             ]
         )
-        
+
         return {"response": response.choices[0].message.content}
-```
-
-## Tool Calls
-
-Track function/tool calls within LLM responses:
-
-```python
-# Automatically logged when using function calling
-response = adapter.chat_complete(
-    model="gpt-4",
-    messages=messages,
-    tools=[{"type": "function", "function": {...}}]
-)
-
-# Tool calls are logged as separate events
 ```
 
 ## Next Steps
 
+- [Agent Abstractions](agents.md) - Build agents with decorators
 - [Built-in Server](server.md) - Run your own OpenIntent server
 - [API Reference](../api/adapters.md) - Complete adapter API
