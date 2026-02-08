@@ -1,0 +1,150 @@
+# Credential Vaults & Tool Scoping
+
+Securely manage API keys, grant tools to agents with scoped permissions, and maintain audit trails.
+
+## Declarative Vault with @Agent
+
+```python
+from openintent.agents import Agent, on_assignment, Vault
+
+@Vault
+class MyVault:
+    secrets = {
+        "openai_key": {"env": "OPENAI_API_KEY"},
+        "github_token": {"env": "GITHUB_TOKEN"},
+    }
+    auto_rotate = True
+    rotation_interval_hours = 24
+
+@Agent("secure-agent", tools=["web_search", "code_review"])
+class SecureAgent:
+
+    @on_assignment
+    async def handle(self, intent):
+        # Tools are automatically scoped — agent can only use granted tools
+        results = await self.tools.invoke("web_search", query=intent.title)
+        return {"results": results}
+```
+
+## Imperative Vault Management
+
+```python
+from openintent import OpenIntentClient
+
+client = OpenIntentClient(
+    base_url="http://localhost:8000",
+    agent_id="vault-admin"
+)
+
+# Store a credential
+client.vault_store(
+    key="openai_api_key",
+    value="sk-...",
+    metadata={"provider": "openai", "tier": "production"}
+)
+
+# Grant tool access to an agent
+client.grant_tool(
+    agent_id="researcher",
+    tool_name="web_search",
+    scopes=["read"],
+    expires_in_seconds=3600
+)
+
+# Grant with delegation rights
+client.grant_tool(
+    agent_id="coordinator",
+    tool_name="code_review",
+    scopes=["read", "execute"],
+    can_delegate=True,
+    max_delegation_depth=2
+)
+
+# Coordinator delegates to a sub-agent
+client.delegate_grant(
+    from_agent="coordinator",
+    to_agent="dev-agent",
+    tool_name="code_review",
+    scopes=["read"]  # Can narrow scopes, never widen
+)
+```
+
+## Tool Registry and Invocation
+
+```python
+# Register a custom tool
+client.register_tool(
+    name="sentiment_analysis",
+    description="Analyze sentiment of text",
+    parameters={
+        "text": {"type": "string", "required": True},
+        "language": {"type": "string", "default": "en"}
+    },
+    endpoint="https://api.example.com/sentiment"
+)
+
+# Invoke tool through the proxy (audit trail is automatic)
+result = client.tools.invoke(
+    "sentiment_analysis",
+    text="This product is amazing!",
+    language="en"
+)
+
+# Audit trail
+audit = client.list_tool_invocations(agent_id="researcher")
+for entry in audit:
+    print(f"[{entry.timestamp}] {entry.tool_name}: {entry.status}")
+```
+
+## Revoking Grants
+
+```python
+# Revoke a specific grant
+client.revoke_grant(agent_id="researcher", tool_name="web_search")
+
+# Cascading revocation — revoking a delegator's grant
+# also revokes all downstream delegations
+client.revoke_grant(agent_id="coordinator", tool_name="code_review")
+# This also revokes dev-agent's delegated grant
+```
+
+## YAML Workflow with Tools and Vaults
+
+```yaml
+openintent: "1.0"
+info:
+  name: "Secure Research Pipeline"
+
+tools:
+  - name: web_search
+    description: "Search the web"
+    endpoint: "https://api.search.example.com"
+  - name: summarize
+    description: "Summarize text with LLM"
+    endpoint: "internal://llm/summarize"
+
+workflow:
+  research:
+    title: "Gather Information"
+    assign: researcher
+    tools: [web_search, summarize]
+
+  analyze:
+    title: "Analyze Results"
+    assign: analyst
+    depends_on: [research]
+    tools: [summarize]
+
+  report:
+    title: "Generate Report"
+    assign: reporter
+    depends_on: [analyze]
+    tools: []  # No tool access needed
+```
+
+```python
+from openintent.workflow import load_workflow
+
+wf = load_workflow("secure_research.yaml")
+wf.run()
+```

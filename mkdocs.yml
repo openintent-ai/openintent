@@ -24,8 +24,8 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
   font:
-    text: Inter
-    code: JetBrains Mono
+    text: IBM Plex Sans
+    code: IBM Plex Mono
   icon:
     repo: fontawesome/brands/github
     logo: material/vector-polygon
@@ -144,7 +144,21 @@ nav:
   - Changelog: changelog.md
   - Examples:
     - Multi-Agent Workflow: examples/multi-agent.md
-    - Streaming: examples/streaming.md
+    - Decorator-First Agents: examples/decorator-agents.md
+    - Coordinator Patterns: examples/coordinators.md
+    - Intent Lifecycle: examples/intent-lifecycle.md
+    - Leasing & Concurrency: examples/leasing-concurrency.md
+    - Governance & Arbitration: examples/governance-arbitration.md
+    - LLM Adapters: examples/llm-adapters.md
+    - Task Planning: examples/task-planning.md
+    - Credential Vaults: examples/credential-vaults.md
+    - Agent Memory: examples/agent-memory.md
+    - Agent Lifecycle: examples/agent-lifecycle.md
+    - Triggers: examples/triggers.md
+    - Cost & Retry: examples/cost-retry.md
+    - SSE & Streaming: examples/subscriptions-streaming.md
+    - YAML Workflows: examples/yaml-workflows.md
+    - Server & Deployment: examples/server-deployment.md
     - Portfolios: examples/portfolios.md
 
 extra:

@@ -1,127 +1,75 @@
 /* ============================================================
-   OpenIntent Docs — Custom Design System
-   Stripe-inspired: clean, spacious, confident typography
+   OpenIntent Docs — Design System v4
+   Light, readable, clean grayscale
    ============================================================ */
 
-/* ----------------------------------------------------------
-   1. CSS Custom Properties (Design Tokens)
-   ---------------------------------------------------------- */
-
 :root {
-  /* Brand */
-  --oi-primary: #635bff;
-  --oi-primary-light: #7a73ff;
-  --oi-primary-dark: #4b44d1;
-  --oi-accent: #00d4aa;
-  --oi-accent-light: #33ddbb;
-
-  /* Surfaces */
   --oi-surface: #ffffff;
-  --oi-surface-raised: #f6f8fa;
-  --oi-surface-sunken: #f0f2f5;
-  --oi-surface-code: #f7f8fb;
+  --oi-surface-raised: #f9f9f9;
+  --oi-surface-sunken: #f4f4f5;
 
-  /* Text */
-  --oi-text-primary: #0a2540;
-  --oi-text-secondary: #425466;
-  --oi-text-tertiary: #6b7c93;
-  --oi-text-on-primary: #ffffff;
+  --oi-text-primary: #18181b;
+  --oi-text-secondary: #52525b;
+  --oi-text-tertiary: #a1a1aa;
 
-  /* Borders */
-  --oi-border: #e3e8ee;
-  --oi-border-light: #eef1f6;
+  --oi-border: #e4e4e7;
+  --oi-border-light: #f0f0f2;
 
-  /* Gradients */
-  --oi-gradient-hero: linear-gradient(135deg, #635bff 0%, #00d4aa 100%);
-  --oi-gradient-subtle: linear-gradient(135deg, rgba(99,91,255,0.06) 0%, rgba(0,212,170,0.06) 100%);
-  --oi-gradient-code: linear-gradient(135deg, rgba(99,91,255,0.03) 0%, rgba(0,212,170,0.03) 100%);
-
-  /* Shadows */
-  --oi-shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
-  --oi-shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.08);
-  --oi-shadow-lg: 0 12px 40px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.06);
-
-  /* Radius */
   --oi-radius-sm: 6px;
-  --oi-radius-md: 10px;
-  --oi-radius-lg: 16px;
+  --oi-radius-md: 8px;
+  --oi-radius-lg: 12px;
 
-  /* Spacing */
-  --oi-space-xs: 4px;
-  --oi-space-sm: 8px;
-  --oi-space-md: 16px;
-  --oi-space-lg: 24px;
-  --oi-space-xl: 40px;
-  --oi-space-2xl: 64px;
+  --md-primary-fg-color: #18181b;
+  --md-primary-fg-color--light: #3f3f46;
+  --md-primary-fg-color--dark: #09090b;
+  --md-accent-fg-color: #3f3f46;
+  --md-accent-fg-color--transparent: rgba(63,63,70,0.1);
 }
 
 [data-md-color-scheme="slate"] {
-  --oi-surface: #0f1419;
-  --oi-surface-raised: #1a2030;
-  --oi-surface-sunken: #0a0f16;
-  --oi-surface-code: #151d2b;
+  --oi-surface: #18181b;
+  --oi-surface-raised: #1f1f23;
+  --oi-surface-sunken: #111114;
 
-  --oi-text-primary: #e6edf3;
-  --oi-text-secondary: #a1b0c4;
-  --oi-text-tertiary: #7d8da0;
+  --oi-text-primary: #fafafa;
+  --oi-text-secondary: #a1a1aa;
+  --oi-text-tertiary: #71717a;
 
-  --oi-border: #2a3544;
-  --oi-border-light: #1e2a38;
+  --oi-border: #27272a;
+  --oi-border-light: #1f1f23;
 
-  --oi-gradient-subtle: linear-gradient(135deg, rgba(99,91,255,0.08) 0%, rgba(0,212,170,0.08) 100%);
-  --oi-gradient-code: linear-gradient(135deg, rgba(99,91,255,0.05) 0%, rgba(0,212,170,0.05) 100%);
-
-  --oi-shadow-sm: 0 1px 3px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.3);
-  --oi-shadow-md: 0 4px 12px rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.3);
-  --oi-shadow-lg: 0 12px 40px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.25);
+  --md-default-bg-color: #18181b;
+  --md-default-fg-color: #fafafa;
+  --md-default-fg-color--light: #a1a1aa;
+  --md-default-fg-color--lighter: #71717a;
+  --md-primary-fg-color: #fafafa;
+  --md-primary-fg-color--light: #d4d4d8;
+  --md-primary-fg-color--dark: #fafafa;
 }
 
 
-/* ----------------------------------------------------------
-   2. Material Theme Overrides
-   ---------------------------------------------------------- */
-
-:root {
-  --md-primary-fg-color: #635bff;
-  --md-primary-fg-color--light: #7a73ff;
-  --md-primary-fg-color--dark: #4b44d1;
-  --md-accent-fg-color: #00d4aa;
-  --md-accent-fg-color--transparent: rgba(0,212,170,0.1);
-}
-
-[data-md-color-scheme="slate"] {
-  --md-default-bg-color: #0f1419;
-  --md-default-fg-color: #e6edf3;
-  --md-default-fg-color--light: #a1b0c4;
-  --md-default-fg-color--lighter: #7d8da0;
-}
-
-
-/* ----------------------------------------------------------
-   3. Typography
-   ---------------------------------------------------------- */
+/* --- Typography --- */
 
 .md-typeset {
-  font-size: 0.82rem;
-  line-height: 1.75;
+  font-size: 0.8rem;
+  line-height: 1.7;
   color: var(--oi-text-primary);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 .md-typeset h1 {
-  font-weight: 700;
-  font-size: 2.2em;
-  letter-spacing: -0.025em;
+  font-weight: 600;
+  font-size: 1.6em;
+  letter-spacing: -0.02em;
   line-height: 1.2;
   margin-bottom: 0.6em;
   color: var(--oi-text-primary);
 }
 
 .md-typeset h2 {
-  font-weight: 650;
-  font-size: 1.6em;
-  letter-spacing: -0.02em;
+  font-weight: 600;
+  font-size: 1.25em;
+  letter-spacing: -0.015em;
   line-height: 1.3;
   margin-top: 2em;
   margin-bottom: 0.5em;
@@ -131,32 +79,31 @@
 
 .md-typeset h3 {
   font-weight: 600;
-  font-size: 1.25em;
-  letter-spacing: -0.015em;
+  font-size: 1.05em;
+  letter-spacing: -0.01em;
   line-height: 1.4;
   margin-top: 1.6em;
 }
 
 .md-typeset h4 {
   font-weight: 600;
-  font-size: 1.05em;
-  letter-spacing: -0.01em;
-  text-transform: none;
+  font-size: 0.92em;
 }
 
 .md-typeset p {
-  margin-bottom: 1.2em;
+  margin-bottom: 1.1em;
 }
 
 .md-typeset a {
-  color: var(--oi-primary);
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  transition: border-color 0.15s ease;
+  color: var(--oi-text-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--oi-border);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s ease;
 }
 
 .md-typeset a:hover {
-  border-bottom-color: var(--oi-primary);
+  text-decoration-color: var(--oi-text-secondary);
 }
 
 .md-content {
@@ -164,50 +111,38 @@
 }
 
 
-/* ----------------------------------------------------------
-   4. Code Blocks
-   ---------------------------------------------------------- */
+/* --- Code --- */
 
 .md-typeset code {
-  font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
-  font-size: 0.82em;
-  border-radius: var(--oi-radius-sm);
-  padding: 0.15em 0.45em;
-  background: var(--oi-surface-raised);
-  border: 1px solid var(--oi-border-light);
-  color: var(--oi-primary-dark);
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.84em;
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  background: var(--oi-surface-sunken);
+  border: 1px solid var(--oi-border);
+  color: var(--oi-text-primary);
   font-variant-ligatures: none;
-}
-
-[data-md-color-scheme="slate"] .md-typeset code {
-  color: var(--oi-primary-light);
 }
 
 .md-typeset pre {
   border-radius: var(--oi-radius-md);
-  box-shadow: var(--oi-shadow-sm);
   border: 1px solid var(--oi-border);
   overflow: hidden;
-  position: relative;
 }
 
 .md-typeset pre > code {
-  font-size: 0.8em;
+  font-size: 0.82em;
   line-height: 1.7;
-  padding: 1.2em 1.4em;
-  background: var(--oi-surface-code);
+  padding: 1.1em 1.3em;
+  background: var(--oi-surface-sunken);
   border: none;
   border-radius: 0;
   color: var(--oi-text-primary);
   display: block;
 }
 
-[data-md-color-scheme="slate"] .md-typeset pre > code {
-  background: var(--oi-surface-code);
-}
-
 .md-typeset pre > code::-webkit-scrollbar {
-  height: 6px;
+  height: 5px;
 }
 
 .md-typeset pre > code::-webkit-scrollbar-thumb {
@@ -217,88 +152,46 @@
 
 .md-clipboard {
   color: var(--oi-text-tertiary) !important;
-  transition: color 0.15s ease, opacity 0.15s ease;
+  transition: color 0.15s ease;
 }
 
 .md-clipboard:hover {
-  color: var(--oi-primary) !important;
+  color: var(--oi-text-primary) !important;
 }
 
 
-/* ----------------------------------------------------------
-   5. Admonitions (Card Style)
-   ---------------------------------------------------------- */
+/* --- Admonitions --- */
 
 .md-typeset .admonition,
 .md-typeset details {
   border-radius: var(--oi-radius-md);
   border: 1px solid var(--oi-border);
-  border-left: 4px solid;
-  box-shadow: var(--oi-shadow-sm);
+  border-left: 3px solid var(--oi-text-tertiary);
   overflow: hidden;
-  margin: 1.6em 0;
-  font-size: 0.92em;
+  margin: 1.4em 0;
+  font-size: 0.94em;
 }
 
 .md-typeset .admonition .admonition-title,
 .md-typeset details summary {
   font-weight: 600;
-  font-size: 0.9em;
-  letter-spacing: 0.01em;
-  padding: 0.7em 1em;
+  font-size: 0.88em;
+  padding: 0.6em 1em;
   border-bottom: 1px solid var(--oi-border-light);
 }
 
 .md-typeset .admonition > :last-child,
 .md-typeset details > :last-child {
-  margin-bottom: 0.8em;
-}
-
-.md-typeset .admonition.note,
-.md-typeset details.note {
-  border-left-color: var(--oi-primary);
-}
-
-.md-typeset .admonition.tip,
-.md-typeset details.tip {
-  border-left-color: var(--oi-accent);
-}
-
-.md-typeset .admonition.warning,
-.md-typeset details.warning {
-  border-left-color: #f5a623;
-}
-
-.md-typeset .admonition.danger,
-.md-typeset details.danger {
-  border-left-color: #e25950;
-}
-
-.md-typeset .admonition.example,
-.md-typeset details.example {
-  border-left-color: var(--oi-primary-light);
-}
-
-.md-typeset .admonition.info,
-.md-typeset details.info {
-  border-left-color: #3b82f6;
-}
-
-.md-typeset .admonition.abstract,
-.md-typeset details.abstract {
-  border-left-color: #06b6d4;
+  margin-bottom: 0.7em;
 }
 
 
-/* ----------------------------------------------------------
-   6. Tables
-   ---------------------------------------------------------- */
+/* --- Tables --- */
 
 .md-typeset table:not([class]) {
   border-radius: var(--oi-radius-md);
   overflow: hidden;
   border: 1px solid var(--oi-border);
-  box-shadow: var(--oi-shadow-sm);
   border-collapse: separate;
   border-spacing: 0;
   width: 100%;
@@ -311,17 +204,17 @@
 
 .md-typeset table:not([class]) th {
   font-weight: 600;
-  font-size: 0.85em;
-  letter-spacing: 0.03em;
+  font-size: 0.82em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--oi-text-secondary);
-  padding: 0.85em 1.1em;
-  border-bottom: 2px solid var(--oi-border);
+  padding: 0.7em 1em;
+  border-bottom: 1px solid var(--oi-border);
   text-align: left;
 }
 
 .md-typeset table:not([class]) td {
-  padding: 0.75em 1.1em;
+  padding: 0.6em 1em;
   border-bottom: 1px solid var(--oi-border-light);
   vertical-align: top;
 }
@@ -330,30 +223,23 @@
   border-bottom: none;
 }
 
-.md-typeset table:not([class]) tbody tr:hover {
-  background: var(--oi-gradient-subtle);
-}
 
-
-/* ----------------------------------------------------------
-   7. Navigation
-   ---------------------------------------------------------- */
+/* --- Navigation --- */
 
 .md-nav__link {
   font-size: 0.82rem;
-  transition: color 0.15s ease;
 }
 
 .md-nav__item--active > .md-nav__link {
   font-weight: 600;
-  color: var(--oi-primary) !important;
+  color: var(--oi-text-primary) !important;
 }
 
 .md-tabs__link {
   font-weight: 500;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   letter-spacing: 0.01em;
-  opacity: 0.8;
+  opacity: 0.7;
   transition: opacity 0.15s ease;
 }
 
@@ -367,21 +253,43 @@
 }
 
 [data-md-color-scheme="slate"] .md-header {
-  background: #0f1419;
+  background: #18181b;
   box-shadow: 0 1px 0 var(--oi-border);
 }
 
+[data-md-color-scheme="slate"] .md-tabs {
+  background: #18181b;
+}
 
-/* ----------------------------------------------------------
-   8. Tabbed Content
-   ---------------------------------------------------------- */
+[data-md-color-scheme="slate"] .md-tabs__link {
+  color: #d4d4d8;
+}
+
+[data-md-color-scheme="slate"] .md-tabs__link--active {
+  color: #fafafa;
+}
+
+[data-md-color-scheme="slate"] .md-header__topic {
+  color: #fafafa;
+}
+
+[data-md-color-scheme="slate"] .md-header .md-icon {
+  color: #d4d4d8;
+}
+
+[data-md-color-scheme="slate"] .md-search__input {
+  background: #27272a;
+  color: #fafafa;
+}
+
+
+/* --- Content Tabs --- */
 
 .md-typeset .tabbed-set {
   border-radius: var(--oi-radius-md);
   border: 1px solid var(--oi-border);
   overflow: hidden;
-  box-shadow: var(--oi-shadow-sm);
-  margin: 1.6em 0;
+  margin: 1.4em 0;
 }
 
 .md-typeset .tabbed-labels {
@@ -391,14 +299,14 @@
 
 .md-typeset .tabbed-labels > label {
   font-weight: 500;
-  font-size: 0.85em;
-  padding: 0.7em 1.2em;
-  opacity: 0.7;
-  transition: opacity 0.15s ease, color 0.15s ease;
+  font-size: 0.84em;
+  padding: 0.6em 1.1em;
+  opacity: 0.5;
+  transition: opacity 0.15s ease;
 }
 
 .md-typeset .tabbed-labels > label:hover {
-  opacity: 1;
+  opacity: 0.8;
 }
 
 .md-typeset .tabbed-labels > .tabbed-labels__active {
@@ -410,9 +318,7 @@
 }
 
 
-/* ----------------------------------------------------------
-   9. Search
-   ---------------------------------------------------------- */
+/* --- Search --- */
 
 .md-search__form {
   border-radius: var(--oi-radius-md);
@@ -424,156 +330,320 @@
 }
 
 
-/* ----------------------------------------------------------
-   10. Footer
-   ---------------------------------------------------------- */
+/* --- Footer --- */
 
 .md-footer {
   border-top: 1px solid var(--oi-border);
 }
 
 
-/* ----------------------------------------------------------
-   11. Hero Section (Homepage)
-   ---------------------------------------------------------- */
+/* --- Announcement Bar --- */
 
-.oi-hero {
-  background: var(--oi-gradient-hero);
-  padding: var(--oi-space-2xl) var(--oi-space-lg);
-  text-align: center;
-  margin: calc(-1 * var(--oi-space-lg)) calc(-1 * var(--oi-space-lg)) var(--oi-space-xl);
-  border-radius: 0 0 var(--oi-radius-lg) var(--oi-radius-lg);
-  position: relative;
-  overflow: hidden;
+.md-banner {
+  background: #27272a;
+  color: rgba(255,255,255,0.85);
+  font-size: 0.78em;
+  font-weight: 500;
 }
 
-.oi-hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 30% 50%, rgba(255,255,255,0.15) 0%, transparent 70%);
-  pointer-events: none;
+.md-banner a {
+  color: #ffffff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+[data-md-color-scheme="slate"] .md-banner {
+  background: #27272a;
+  border-bottom: 1px solid #3f3f46;
+}
+
+
+/* --- Mermaid --- */
+
+.md-typeset .mermaid {
+  text-align: center;
+  margin: 1.4em 0;
+}
+
+
+/* ============================================================
+   HOMEPAGE — Full-width, no sidebar
+   ============================================================ */
+
+.oi-home .md-sidebar {
+  display: none !important;
+}
+
+.oi-home .md-content {
+  max-width: none;
+  margin: 0;
+}
+
+.oi-home .md-content__inner {
+  max-width: none;
+  padding: 0;
+  margin: 0;
+}
+
+.oi-home .md-typeset h2 {
+  border-bottom: none;
+  margin-top: 0;
+}
+
+.oi-home .md-main__inner {
+  max-width: none;
+}
+
+
+/* --- Hero (Light Warm Gray) --- */
+
+.oi-hero {
+  background: linear-gradient(180deg, #f4f4f5 0%, #e4e4e7 100%);
+  padding: 4.5rem 2rem 3.5rem;
+  text-align: center;
+  position: relative;
+}
+
+[data-md-color-scheme="slate"] .oi-hero {
+  background: linear-gradient(180deg, #27272a 0%, #18181b 100%);
 }
 
 .oi-hero__badge {
   display: inline-block;
-  background: rgba(255,255,255,0.18);
-  color: #fff;
-  padding: 0.35em 1em;
+  background: rgba(0,0,0,0.06);
+  color: var(--oi-text-secondary);
+  padding: 0.3em 0.9em;
   border-radius: 999px;
-  font-size: 0.82em;
+  font-size: 0.78em;
   font-weight: 500;
   letter-spacing: 0.02em;
-  margin-bottom: var(--oi-space-md);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255,255,255,0.2);
+  margin-bottom: 1.4rem;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+[data-md-color-scheme="slate"] .oi-hero__badge {
+  background: rgba(255,255,255,0.08);
+  color: #a1a1aa;
+  border-color: rgba(255,255,255,0.1);
 }
 
 .oi-hero__title {
-  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-size: clamp(2.8rem, 6vw, 4rem);
   font-weight: 800;
-  color: #fff;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
-  margin: 0 auto var(--oi-space-md);
-  max-width: 700px;
+  color: #18181b;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  margin: 0 auto 1.5rem;
+  text-align: center;
+}
+
+[data-md-color-scheme="slate"] .oi-hero__title {
+  color: #fafafa;
 }
 
 .oi-hero__subtitle {
-  font-size: clamp(1rem, 2vw, 1.2rem);
-  color: rgba(255,255,255,0.85);
+  font-size: clamp(0.82rem, 1.2vw, 0.92rem);
+  color: #71717a;
   line-height: 1.6;
-  max-width: 560px;
-  margin: 0 auto var(--oi-space-lg);
+  max-width: 480px;
+  margin: 0 auto 2rem;
   font-weight: 400;
+}
+
+[data-md-color-scheme="slate"] .oi-hero__subtitle {
+  color: #a1a1aa;
 }
 
 .oi-hero__actions {
   display: flex;
-  gap: var(--oi-space-md);
+  gap: 0.7rem;
   justify-content: center;
   flex-wrap: wrap;
 }
 
+
+/* --- Buttons --- */
+
 .oi-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5em;
-  padding: 0.75em 1.8em;
+  gap: 0.4em;
+  padding: 0.6em 1.5em;
   border-radius: var(--oi-radius-sm);
   font-weight: 600;
-  font-size: 0.95em;
-  text-decoration: none;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  border: none;
+  font-size: 0.84em;
+  text-decoration: none !important;
+  border-bottom: none !important;
+  transition: transform 0.1s ease, box-shadow 0.15s ease, background 0.15s ease;
   cursor: pointer;
 }
 
 .oi-btn:hover {
   transform: translateY(-1px);
-  box-shadow: var(--oi-shadow-md);
 }
 
 .oi-btn--primary {
-  background: #fff;
-  color: var(--oi-primary);
+  background: #18181b;
+  color: #ffffff !important;
+  border: 1px solid #18181b;
+}
+
+.oi-btn--primary:hover {
+  background: #27272a;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+[data-md-color-scheme="slate"] .oi-btn--primary {
+  background: #fafafa;
+  color: #18181b !important;
+  border-color: #fafafa;
+}
+
+[data-md-color-scheme="slate"] .oi-btn--primary:hover {
+  background: #e4e4e7;
+  box-shadow: 0 4px 12px rgba(255,255,255,0.08);
 }
 
 .oi-btn--secondary {
-  background: rgba(255,255,255,0.15);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.3);
-  backdrop-filter: blur(8px);
+  background: transparent;
+  color: #18181b !important;
+  border: 1px solid #d4d4d8;
+}
+
+.oi-btn--secondary:hover {
+  background: rgba(0,0,0,0.04);
+  border-color: #a1a1aa;
+}
+
+[data-md-color-scheme="slate"] .oi-btn--secondary {
+  color: #fafafa !important;
+  border-color: #3f3f46;
+}
+
+[data-md-color-scheme="slate"] .oi-btn--secondary:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: #52525b;
 }
 
 
-/* ----------------------------------------------------------
-   12. Feature Grid (Homepage)
-   ---------------------------------------------------------- */
+/* --- Stats --- */
+
+.oi-stats {
+  display: flex;
+  justify-content: center;
+  gap: 3rem;
+  flex-wrap: wrap;
+  padding: 1.4rem 0;
+  margin: 0;
+  background: var(--oi-surface);
+  border-bottom: 1px solid var(--oi-border);
+}
+
+.oi-stat {
+  text-align: center;
+}
+
+.oi-stat__number {
+  font-size: 1.5em;
+  font-weight: 800;
+  color: var(--oi-text-primary);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.oi-stat__label {
+  font-size: 0.68em;
+  color: var(--oi-text-tertiary);
+  font-weight: 600;
+  margin-top: 0.25em;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+
+/* --- Section --- */
+
+.oi-section {
+  max-width: 58rem;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.oi-section__header {
+  text-align: center;
+  margin-bottom: 1.8rem;
+}
+
+.oi-section__title {
+  font-size: 1.4em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--oi-text-primary);
+  margin: 0 0 0.25em;
+}
+
+.oi-section__subtitle {
+  font-size: 0.92em;
+  color: var(--oi-text-secondary);
+  margin: 0;
+}
+
+
+/* --- Features --- */
 
 .oi-features {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: var(--oi-space-lg);
-  margin: var(--oi-space-xl) 0;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin: 0 0 3rem;
 }
 
 .oi-feature {
   background: var(--oi-surface);
   border: 1px solid var(--oi-border);
   border-radius: var(--oi-radius-md);
-  padding: var(--oi-space-lg);
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  padding: 1.4rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .oi-feature:hover {
-  box-shadow: var(--oi-shadow-md);
-  transform: translateY(-2px);
+  border-color: #d4d4d8;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+[data-md-color-scheme="slate"] .oi-feature:hover {
+  border-color: #3f3f46;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
 
 .oi-feature__icon {
-  width: 44px;
-  height: 44px;
+  width: 34px;
+  height: 34px;
   border-radius: var(--oi-radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: var(--oi-space-md);
-  font-size: 1.4em;
-  background: var(--oi-gradient-subtle);
-  color: var(--oi-primary);
+  margin-bottom: 0.8rem;
+  background: var(--oi-surface-sunken);
+  color: var(--oi-text-secondary);
+  border: 1px solid var(--oi-border);
+}
+
+.oi-feature__icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 .oi-feature__title {
   font-weight: 600;
-  font-size: 1.05em;
-  margin-bottom: 0.4em;
+  font-size: 0.95em;
+  margin-bottom: 0.35em;
   color: var(--oi-text-primary);
-  letter-spacing: -0.01em;
 }
 
 .oi-feature__desc {
-  font-size: 0.88em;
+  font-size: 0.85em;
   color: var(--oi-text-secondary);
   line-height: 1.6;
   margin: 0;
@@ -582,22 +652,17 @@
 .oi-feature__link {
   display: inline-flex;
   align-items: center;
-  gap: 0.3em;
-  margin-top: 0.8em;
-  font-size: 0.85em;
+  gap: 0.25em;
+  margin-top: 0.7em;
+  font-size: 0.82em;
   font-weight: 500;
-  color: var(--oi-primary);
-  text-decoration: none;
-  border-bottom: none !important;
-}
-
-.oi-feature__link:hover {
-  gap: 0.5em;
+  color: var(--oi-text-primary) !important;
+  text-decoration: none !important;
 }
 
 .oi-feature__link::after {
   content: "\2192";
-  transition: transform 0.15s ease;
+  transition: transform 0.1s ease;
 }
 
 .oi-feature__link:hover::after {
@@ -605,178 +670,183 @@
 }
 
 
-/* ----------------------------------------------------------
-   13. Stats Bar (Homepage)
-   ---------------------------------------------------------- */
-
-.oi-stats {
-  display: flex;
-  justify-content: center;
-  gap: var(--oi-space-xl);
-  flex-wrap: wrap;
-  padding: var(--oi-space-lg) 0;
-  margin: var(--oi-space-lg) 0 var(--oi-space-xl);
-  border-top: 1px solid var(--oi-border-light);
-  border-bottom: 1px solid var(--oi-border-light);
-}
-
-.oi-stat {
-  text-align: center;
-}
-
-.oi-stat__number {
-  font-size: 2em;
-  font-weight: 800;
-  color: var(--oi-primary);
-  letter-spacing: -0.03em;
-  line-height: 1;
-}
-
-.oi-stat__label {
-  font-size: 0.82em;
-  color: var(--oi-text-tertiary);
-  font-weight: 500;
-  margin-top: 0.3em;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-
-/* ----------------------------------------------------------
-   14. Quick Start Section (Homepage)
-   ---------------------------------------------------------- */
+/* --- Quick Start --- */
 
 .oi-quickstart {
   background: var(--oi-surface-raised);
   border: 1px solid var(--oi-border);
   border-radius: var(--oi-radius-lg);
-  padding: var(--oi-space-xl);
-  margin: var(--oi-space-xl) 0;
+  padding: 1.8rem;
+  margin: 0 0 3rem;
 }
 
 .oi-quickstart__title {
-  font-size: 1.5em;
+  font-size: 1.2em;
   font-weight: 700;
   letter-spacing: -0.02em;
-  margin-bottom: 0.3em;
+  margin-bottom: 0.25em;
   text-align: center;
+  color: var(--oi-text-primary);
 }
 
 .oi-quickstart__subtitle {
-  font-size: 0.95em;
+  font-size: 0.88em;
   color: var(--oi-text-secondary);
   text-align: center;
-  margin-bottom: var(--oi-space-lg);
+  margin-bottom: 1.2rem;
 }
 
 
-/* ----------------------------------------------------------
-   15. Architecture Diagram Section
-   ---------------------------------------------------------- */
+/* --- Architecture --- */
 
 .oi-architecture {
-  margin: var(--oi-space-xl) 0;
-  text-align: center;
+  margin: 3rem 0;
 }
 
 .oi-architecture__title {
-  font-size: 1.5em;
+  font-size: 1.2em;
   font-weight: 700;
   letter-spacing: -0.02em;
-  margin-bottom: 0.3em;
+  margin-bottom: 0.25em;
+  text-align: center;
+  color: var(--oi-text-primary);
 }
 
 .oi-architecture__subtitle {
-  font-size: 0.95em;
+  font-size: 0.88em;
   color: var(--oi-text-secondary);
-  margin-bottom: var(--oi-space-lg);
-}
-
-
-/* ----------------------------------------------------------
-   16. Mermaid Diagram Styling
-   ---------------------------------------------------------- */
-
-.md-typeset .mermaid {
+  margin-bottom: 1.4rem;
   text-align: center;
-  margin: 1.6em 0;
+}
+
+.oi-arch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.oi-arch-card {
+  background: var(--oi-surface);
+  border: 1px solid var(--oi-border);
+  border-radius: var(--oi-radius-md);
+  padding: 1.1rem 1.3rem;
+}
+
+.oi-arch-card__label {
+  font-size: 0.68em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--oi-text-tertiary);
+  margin-bottom: 0.55rem;
+}
+
+.oi-arch-card__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.oi-arch-tag {
+  display: inline-block;
+  font-size: 0.76em;
+  font-weight: 500;
+  padding: 0.22em 0.65em;
+  border-radius: 4px;
+  background: var(--oi-surface-sunken);
+  color: var(--oi-text-primary);
+  border: 1px solid var(--oi-border);
 }
 
 
-/* ----------------------------------------------------------
-   17. Badge Pill
-   ---------------------------------------------------------- */
+/* --- Lifecycle Flow --- */
+
+.oi-lifecycle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  flex-wrap: wrap;
+  padding: 0.8rem 0;
+  margin: 0.5rem 0 1rem;
+}
+
+.oi-lifecycle__step {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.oi-lifecycle__node {
+  font-size: 0.74em;
+  font-weight: 600;
+  padding: 0.35em 0.8em;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.oi-lifecycle__node--primary {
+  background: #18181b;
+  color: #ffffff;
+}
+
+[data-md-color-scheme="slate"] .oi-lifecycle__node--primary {
+  background: #fafafa;
+  color: #18181b;
+}
+
+.oi-lifecycle__node--accent {
+  background: #52525b;
+  color: #ffffff;
+}
+
+[data-md-color-scheme="slate"] .oi-lifecycle__node--accent {
+  background: #71717a;
+  color: #18181b;
+}
+
+.oi-lifecycle__arrow {
+  color: var(--oi-text-tertiary);
+  font-size: 0.74em;
+  padding: 0 0.4em;
+}
+
+
+/* --- RFC Pills --- */
 
 .oi-pill {
   display: inline-block;
-  background: var(--oi-gradient-subtle);
-  color: var(--oi-primary);
-  padding: 0.2em 0.7em;
-  border-radius: 999px;
-  font-size: 0.78em;
+  font-size: 0.74em;
   font-weight: 600;
+  padding: 0.18em 0.55em;
+  border-radius: 4px;
   letter-spacing: 0.02em;
-  border: 1px solid rgba(99,91,255,0.15);
+}
+
+.oi-pill--accepted {
+  background: var(--oi-surface-sunken);
+  color: var(--oi-text-primary);
+  border: 1px solid var(--oi-border);
+}
+
+.oi-pill--proposed {
+  background: transparent;
+  color: var(--oi-text-secondary);
+  border: 1px solid var(--oi-border);
 }
 
 
-/* ----------------------------------------------------------
-   18. Announcement Bar
-   ---------------------------------------------------------- */
-
-.md-banner {
-  background: var(--oi-gradient-hero);
-  color: #fff;
-  font-size: 0.85em;
-  font-weight: 500;
-}
-
-.md-banner a {
-  color: #fff;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-
-/* ----------------------------------------------------------
-   19. Responsive Adjustments
-   ---------------------------------------------------------- */
-
-@media (max-width: 768px) {
-  .oi-hero {
-    padding: var(--oi-space-xl) var(--oi-space-md);
-  }
-
-  .oi-hero__title {
-    font-size: 2rem;
-  }
-
-  .oi-features {
-    grid-template-columns: 1fr;
-  }
-
-  .oi-stats {
-    gap: var(--oi-space-lg);
-  }
-
-  .oi-quickstart {
-    padding: var(--oi-space-lg);
-  }
-}
-
-
-/* ----------------------------------------------------------
-   20. Scrollbar Styling
-   ---------------------------------------------------------- */
+/* --- Scrollbar --- */
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--oi-border);
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-track {
@@ -784,29 +854,61 @@
 }
 
 
-/* ----------------------------------------------------------
-   21. Selection
-   ---------------------------------------------------------- */
+/* --- Selection --- */
 
 ::selection {
-  background: rgba(99,91,255,0.2);
+  background: rgba(24,24,27,0.12);
   color: inherit;
 }
 
+[data-md-color-scheme="slate"] ::selection {
+  background: rgba(250,250,250,0.18);
+}
 
-/* ----------------------------------------------------------
-   22. Smooth transitions for theme toggle
-   ---------------------------------------------------------- */
 
-body,
-.md-header,
-.md-footer,
-.md-sidebar,
-.md-typeset,
-.md-typeset code,
-.md-typeset pre,
-.md-typeset pre > code,
-.md-typeset table,
-.md-typeset .admonition {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+/* --- Responsive --- */
+
+@media (max-width: 768px) {
+  .oi-hero {
+    padding: 3rem 1.2rem 2.5rem;
+  }
+
+  .oi-hero__title {
+    font-size: 2.2rem;
+  }
+
+  .oi-features {
+    grid-template-columns: 1fr;
+  }
+
+  .oi-arch-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .oi-stats {
+    gap: 1.5rem;
+  }
+
+  .oi-quickstart {
+    padding: 1.2rem;
+  }
+
+  .oi-lifecycle {
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .oi-lifecycle__arrow {
+    transform: rotate(90deg);
+  }
+}
+
+@media (max-width: 480px) {
+  .oi-features {
+    gap: 0.75rem;
+  }
+
+  .oi-feature {
+    padding: 1.1rem;
+  }
 }
