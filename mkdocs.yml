@@ -1,42 +1,57 @@
-site_name: OpenIntent Python SDK
-site_description: Production-ready Python SDK for the OpenIntent Coordination Protocol
+site_name: OpenIntent SDK
+site_description: "The Python SDK for structured multi-agent coordination. 17 RFCs. Decorator-first agents. Built-in server."
 site_url: https://openintent-ai.github.io/openintent/
 repo_url: https://github.com/openintent-ai/openintent
 repo_name: openintent-ai/openintent
+edit_uri: edit/main/reference-implementation/docs/
 
 theme:
   name: material
+  custom_dir: docs/overrides
   palette:
-    - scheme: default
-      primary: indigo
-      accent: teal
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
-    - scheme: slate
-      primary: indigo
-      accent: teal
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
   font:
     text: Inter
     code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/vector-polygon
   features:
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
+    - navigation.indexes
     - navigation.expand
     - navigation.top
     - navigation.footer
+    - navigation.instant
+    - navigation.instant.progress
     - search.suggest
     - search.highlight
+    - search.share
     - content.code.copy
     - content.code.annotate
     - content.tabs.link
     - toc.follow
+    - header.autohide
+    - announce.dismiss
 
 plugins:
-  - search
+  - search:
+      separator: '[\s\-\.]+'
   - mkdocstrings:
       handlers:
         python:
@@ -54,16 +69,36 @@ plugins:
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
-  - pymdownx.superfences
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.snippets
+  - pymdownx.mark
+  - pymdownx.keys
+  - pymdownx.smartsymbols
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - admonition
   - pymdownx.details
   - attr_list
   - md_in_html
+  - def_list
+  - footnotes
   - tables
   - toc:
-      permalink: true
+      permalink: "#"
+      toc_depth: 3
 
 nav:
   - Home: index.md
@@ -107,3 +142,29 @@ extra:
       link: https://github.com/openintent-ai/openintent
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/openintent/
+  version:
+    provider: mike
+  announcement: "<strong>v0.8.0</strong> is here &mdash; decorator-first agents, built-in FastAPI server, and complete RFC 0012&ndash;0017 coverage. <a href='changelog/'>Read the changelog &rarr;</a>"
+  meta:
+    - name: description
+      content: "OpenIntent Python SDK — structured multi-agent coordination protocol with decorator-first agents, 17 RFCs, 7 LLM adapters, and built-in FastAPI server."
+    - name: og:title
+      content: "OpenIntent SDK — Multi-Agent Coordination Protocol"
+    - name: og:description
+      content: "Production-ready Python SDK for structured multi-agent coordination. Decorator-first agents, YAML workflows, 7 LLM adapters, built-in server."
+    - name: og:type
+      content: website
+    - name: og:url
+      content: https://openintent-ai.github.io/openintent/
+    - name: twitter:card
+      content: summary_large_image
+    - name: twitter:title
+      content: "OpenIntent SDK"
+    - name: twitter:description
+      content: "The Python SDK for structured multi-agent coordination. 17 RFCs. Decorator-first agents. Built-in server."
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - https://unpkg.com/mermaid@10/dist/mermaid.min.js

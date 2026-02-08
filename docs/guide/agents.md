@@ -1,18 +1,36 @@
+---
+title: Agent Abstractions
+---
+
 # Agent Abstractions
 
 The `openintent.agents` module provides high-level, decorator-first abstractions for building agents with minimal boilerplate. Decorators and class parameters express protocol semantics so the framework handles the heavy lifting.
 
 ## Three Levels of Abstraction
 
-| Level | Class | Use Case |
+| Level | Class | Best for |
 |-------|-------|----------|
-| Simple | `Worker` | Single-purpose agents with one handler |
-| Standard | `@Agent` | Full-featured agents with event routing, memory, tools |
-| Complex | `@Coordinator` | Multi-agent orchestration with governance |
+| **Simple** | `Worker` | Single-purpose agents with one handler |
+| **Standard** | `@Agent` | Full-featured agents with event routing, memory, tools |
+| **Complex** | `@Coordinator` | Multi-agent orchestration with governance |
+
+```mermaid
+graph TD
+    W[Worker] -->|"Single handler"| R[Run]
+    A["@Agent"] -->|"Lifecycle hooks<br>Memory, Tasks, Tools"| R
+    C["@Coordinator"] -->|"Delegation<br>Governance, Decisions"| R
+
+    style W fill:#f6f8fa,stroke:#e3e8ee,color:#0a2540
+    style A fill:#635bff,stroke:#4b44d1,color:#fff
+    style C fill:#00d4aa,stroke:#00b894,color:#0a2540
+    style R fill:#f6f8fa,stroke:#e3e8ee,color:#0a2540
+```
+
+---
 
 ## Worker (Simplest)
 
-For single-purpose agents:
+For single-purpose agents that do one thing well:
 
 ```python
 from openintent import Worker
@@ -23,6 +41,11 @@ async def process(intent):
 worker = Worker("processor", process)
 worker.run()
 ```
+
+!!! tip "When to use Worker"
+    Use `Worker` when your agent has a single responsibility and doesn't need lifecycle hooks, memory, or tools. It's the fastest path from zero to running agent.
+
+---
 
 ## @Agent Decorator (Recommended)
 
@@ -71,10 +94,12 @@ class AnalystAgent:
 
     @on_assignment
     async def research(self, intent):
+        # Recall past findings from episodic memory
         past = await self.memory.recall(tags=["research"])
 
         findings = await do_research(intent.description, context=past)
 
+        # Store findings for future recall
         await self.memory.store(
             key=f"research-{intent.id}",
             value=findings,
@@ -91,18 +116,32 @@ class AnalystAgent:
 
 ### Lifecycle Decorators
 
-| Decorator | Trigger |
-|-----------|---------|
-| `@on_assignment` | Agent assigned to intent |
-| `@on_complete` | Intent completed |
-| `@on_state_change(keys)` | State keys changed |
-| `@on_event(event_type)` | Specific event type |
-| `@on_lease_available(scope)` | Lease becomes available |
-| `@on_access_requested` | Access request received (RFC-0011) |
-| `@on_task(status)` | Task lifecycle event (RFC-0012) |
-| `@on_trigger(name)` | Trigger fires (RFC-0017) |
-| `@on_drain` | Graceful shutdown signal (RFC-0016) |
-| `@on_all_complete` | All portfolio intents complete |
+| Decorator | Trigger | RFC |
+|-----------|---------|-----|
+| `@on_assignment` | Agent assigned to intent | Core |
+| `@on_complete` | Intent completed | Core |
+| `@on_state_change(keys)` | State keys changed | Core |
+| `@on_event(event_type)` | Specific event type | Core |
+| `@on_lease_available(scope)` | Lease becomes available | 0003 |
+| `@on_access_requested` | Access request received | 0011 |
+| `@on_task(status)` | Task lifecycle event | 0012 |
+| `@on_trigger(name)` | Trigger fires | 0017 |
+| `@on_drain` | Graceful shutdown signal | 0016 |
+| `@on_all_complete` | All portfolio intents complete | 0007 |
+
+```mermaid
+stateDiagram-v2
+    [*] --> Assigned: on_assignment
+    Assigned --> Working: Process intent
+    Working --> StateChanged: on_state_change
+    StateChanged --> Working: Continue
+    Working --> TaskDone: on_task("completed")
+    TaskDone --> Working: More tasks
+    Working --> Draining: on_drain
+    Working --> Completed: on_complete
+    Draining --> Completed: Finish work
+    Completed --> [*]
+```
 
 ### Memory Access (RFC-0015)
 
@@ -114,12 +153,20 @@ class NoteTaker:
 
     @on_assignment
     async def work(self, intent):
+        # Store structured data with tags
         await self.memory.store("key", {"data": "value"}, tags=["notes"])
 
+        # Recall by tags
         results = await self.memory.recall(tags=["notes"])
 
-        await self.memory.pin("key")  # Prevent LRU eviction
+        # Pin important memories to prevent LRU eviction
+        await self.memory.pin("key")
 ```
+
+!!! info "Three memory tiers"
+    - **Working** — task-scoped, auto-archived on completion
+    - **Episodic** — agent-scoped, LRU eviction, supports pinning
+    - **Semantic** — shared across agents, namespace-level permissions
 
 ### Task Decomposition (RFC-0012)
 
@@ -159,74 +206,81 @@ class DataAgent:
         return {"search_results": results}
 ```
 
+!!! warning "Tool scoping"
+    Tool grants are scoped per-agent. An agent can only invoke tools it has been explicitly granted access to. Grants support expiry, rate limits, and cascading revocation.
+
+---
+
 ## Protocol Decorators
 
 First-class declarative configuration for protocol features. Import from `openintent.agents`:
 
-### @Plan (RFC-0012)
+=== "@Plan (RFC-0012)"
 
-Declare task decomposition strategy:
+    Declare task decomposition strategy:
 
-```python
-from openintent.agents import Agent, Plan, on_assignment
+    ```python
+    from openintent.agents import Agent, Plan, on_assignment
 
-@Plan(strategy="sequential", checkpoints=True)
-@Agent("pipeline-agent")
-class PipelineAgent:
+    @Plan(strategy="sequential", checkpoints=True)
+    @Agent("pipeline-agent")
+    class PipelineAgent:
 
-    @on_assignment
-    async def handle(self, intent):
-        return {"status": "processing"}
-```
+        @on_assignment
+        async def handle(self, intent):
+            return {"status": "processing"}
+    ```
 
-### @Vault (RFC-0014)
+=== "@Vault (RFC-0014)"
 
-Declare credential vault requirements:
+    Declare credential vault requirements:
 
-```python
-from openintent.agents import Agent, Vault, on_assignment
+    ```python
+    from openintent.agents import Agent, Vault, on_assignment
 
-@Vault(name="api-keys", rotation_policy="30d")
-@Agent("secure-agent")
-class SecureAgent:
+    @Vault(name="api-keys", rotation_policy="30d")
+    @Agent("secure-agent")
+    class SecureAgent:
 
-    @on_assignment
-    async def handle(self, intent):
-        return {"status": "authenticated"}
-```
+        @on_assignment
+        async def handle(self, intent):
+            return {"status": "authenticated"}
+    ```
 
-### @Memory (RFC-0015)
+=== "@Memory (RFC-0015)"
 
-Declare memory tier configuration:
+    Declare memory tier configuration:
 
-```python
-from openintent.agents import Agent, Memory, on_assignment
+    ```python
+    from openintent.agents import Agent, Memory, on_assignment
 
-@Memory(tier="episodic", capacity=1000, eviction="lru")
-@Agent("learning-agent")
-class LearningAgent:
+    @Memory(tier="episodic", capacity=1000, eviction="lru")
+    @Agent("learning-agent")
+    class LearningAgent:
 
-    @on_assignment
-    async def handle(self, intent):
-        past = await self.memory.recall(tags=["similar"])
-        return {"context_used": len(past)}
-```
+        @on_assignment
+        async def handle(self, intent):
+            past = await self.memory.recall(tags=["similar"])
+            return {"context_used": len(past)}
+    ```
 
-### @Trigger (RFC-0017)
+=== "@Trigger (RFC-0017)"
 
-Declare reactive scheduling:
+    Declare reactive scheduling:
 
-```python
-from openintent.agents import Agent, Trigger, on_trigger
+    ```python
+    from openintent.agents import Agent, Trigger, on_trigger
 
-@Trigger(type="schedule", cron="0 9 * * *")
-@Agent("morning-agent")
-class MorningAgent:
+    @Trigger(type="schedule", cron="0 9 * * *")
+    @Agent("morning-agent")
+    class MorningAgent:
 
-    @on_trigger(name="daily-check")
-    async def daily_report(self, intent):
-        return {"report": "generated"}
-```
+        @on_trigger(name="daily-check")
+        async def daily_report(self, intent):
+            return {"report": "generated"}
+    ```
+
+---
 
 ## @Coordinator Decorator
 
@@ -266,9 +320,6 @@ class TeamCoordinator:
             summary="Consensus reached",
             rationale=f"{len(votes)} votes in favor"
         )
-
-    # Access the full decision audit log
-    # audit = coordinator.decisions
 ```
 
 ### Coordinator Lifecycle Decorators
@@ -287,19 +338,39 @@ class TeamCoordinator:
 | `self.record_decision(...)` | Record governance decision |
 | `self.decisions` | Access decision audit log |
 
+---
+
 ## Running Agents
 
-```python
-# Run agent (blocks until stopped)
-ResearchAgent.run()
+=== "Blocking"
 
-# Run with asyncio
-import asyncio
-asyncio.run(agent.run_async())
-```
+    ```python
+    ResearchAgent.run()
+    ```
+
+=== "Async"
+
+    ```python
+    import asyncio
+    asyncio.run(agent.run_async())
+    ```
 
 ## Next Steps
 
-- [LLM Adapters](adapters.md) - Add LLM observability
-- [Built-in Server](server.md) - Run your own OpenIntent server
-- [Examples](../examples/multi-agent.md) - Full working examples
+<div class="oi-features" style="margin-top: 1em;">
+  <div class="oi-feature">
+    <div class="oi-feature__title">LLM Adapters</div>
+    <p class="oi-feature__desc">Add automatic observability to 7 LLM providers with streaming hooks.</p>
+    <a href="../adapters/" class="oi-feature__link">Add adapters</a>
+  </div>
+  <div class="oi-feature">
+    <div class="oi-feature__title">Built-in Server</div>
+    <p class="oi-feature__desc">Run your own OpenIntent server with one command.</p>
+    <a href="../server/" class="oi-feature__link">Start a server</a>
+  </div>
+  <div class="oi-feature">
+    <div class="oi-feature__title">API Reference</div>
+    <p class="oi-feature__desc">Complete reference for all agent classes, decorators, and methods.</p>
+    <a href="../../api/agents/" class="oi-feature__link">View API</a>
+  </div>
+</div>

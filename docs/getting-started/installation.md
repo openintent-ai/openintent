@@ -1,80 +1,98 @@
+---
+title: Installation
+---
+
 # Installation
 
 ## Requirements
 
-- Python 3.10 or higher
-- pip or poetry for package management
+- **Python 3.10** or higher
+- **pip** or **poetry** for package management
 
-## Basic Installation
+## Install the SDK
 
-Install the core client library:
+=== "Minimal"
 
-```bash
-pip install openintent
-```
+    ```bash
+    pip install openintent
+    ```
 
-## Installation Options
+=== "With Server"
 
-The SDK uses optional dependencies to keep the core package lightweight:
+    ```bash
+    pip install openintent[server]
+    ```
 
-### With Built-in Server
+    Includes the built-in FastAPI server implementing all 17 RFCs.
 
-```bash
-pip install openintent[server]
-```
+=== "Everything"
 
-Includes FastAPI server implementing all 17 RFCs. Run with `openintent-server`.
+    ```bash
+    pip install openintent[all]
+    ```
 
-### With LLM Adapters
+    Includes all LLM adapters and the server.
+
+!!! tip "Recommended for first-time users"
+    Start with `pip install openintent[server]` so you can run a local server and explore the SDK immediately.
+
+## LLM Adapters
 
 Install only the adapters you need:
 
+| Provider | Package | Models |
+|----------|---------|--------|
+| OpenAI | `openintent[openai]` | GPT-4o, GPT-4, GPT-3.5 |
+| Anthropic | `openintent[anthropic]` | Claude 3.5, Claude 3 |
+| Google Gemini | `openintent[gemini]` | Gemini Pro, Gemini Ultra |
+| xAI Grok | `openintent[grok]` | Grok-1 |
+| DeepSeek | `openintent[deepseek]` | DeepSeek Chat |
+| Azure OpenAI | `openintent[azure]` | Azure-hosted GPT models |
+| OpenRouter | `openintent[openrouter]` | 200+ models via unified API |
+
 ```bash
-# OpenAI GPT models
-pip install openintent[openai]
+# Install specific adapters
+pip install openintent[openai,anthropic]
 
-# Anthropic Claude models
-pip install openintent[anthropic]
-
-# Google Gemini models
-pip install openintent[gemini]
-
-# xAI Grok models
-pip install openintent[grok]
-
-# DeepSeek models
-pip install openintent[deepseek]
-
-# All adapters
+# Or all adapters
 pip install openintent[all-adapters]
-```
-
-### Full Installation
-
-Install everything:
-
-```bash
-pip install openintent[all]
 ```
 
 ## Verify Installation
 
 ```python
 import openintent
-print(openintent.__version__)
+print(openintent.__version__)  # 0.8.0
 ```
 
 ## Development Installation
 
-For contributing to the SDK:
+!!! note "For contributors"
+    Clone the repository and install in development mode with all extras:
 
-```bash
-git clone https://github.com/openintent-ai/openintent.git
-cd openintent
-pip install -e ".[dev,all]"
-```
+    ```bash
+    git clone https://github.com/openintent-ai/openintent.git
+    cd openintent
+    pip install -e ".[dev,all]"
+    ```
+
+    Run the test suite:
+
+    ```bash
+    pytest tests/ -v
+    ```
 
 ## Next Steps
 
-- [Quick Start](quickstart.md) - Create your first intent
-- [Configuration](configuration.md) - Configure the client
+<div class="oi-features" style="margin-top: 1em;">
+  <div class="oi-feature">
+    <div class="oi-feature__title">Quick Start</div>
+    <p class="oi-feature__desc">Create your first intent and coordinate agents in under a minute.</p>
+    <a href="../quickstart/" class="oi-feature__link">Get started</a>
+  </div>
+  <div class="oi-feature">
+    <div class="oi-feature__title">Configuration</div>
+    <p class="oi-feature__desc">Advanced client configuration options, authentication, and environment variables.</p>
+    <a href="../configuration/" class="oi-feature__link">Configure</a>
+  </div>
+</div>

@@ -1,0 +1,238 @@
+{% extends "main.html" %}
+
+{% block tabs %}
+  {{ super() }}
+{% endblock %}
+
+{% block content %}
+
+<style>
+  .md-content__inner { max-width: none; padding: 0; }
+  .oi-home .md-typeset h2 { border-bottom: none; }
+</style>
+
+<div class="oi-home">
+
+  <!-- Hero -->
+  <div class="oi-hero">
+    <div class="oi-hero__badge">v0.8.0 — Decorator-First Agents</div>
+    <h1 class="oi-hero__title">Multi-Agent Coordination,<br>Finally Solved</h1>
+    <p class="oi-hero__subtitle">
+      A neutral protocol for durable, interoperable, auditable coordination between humans and AI agents. Structured intents, append-only event logs, and optimistic concurrency&nbsp;&mdash;&nbsp;not chat.
+    </p>
+    <div class="oi-hero__actions">
+      <a href="getting-started/quickstart/" class="oi-btn oi-btn--primary">
+        Get Started
+      </a>
+      <a href="https://github.com/openintent-ai/openintent" class="oi-btn oi-btn--secondary">
+        GitHub
+      </a>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="oi-stats">
+    <div class="oi-stat">
+      <div class="oi-stat__number">17</div>
+      <div class="oi-stat__label">RFCs</div>
+    </div>
+    <div class="oi-stat">
+      <div class="oi-stat__number">7</div>
+      <div class="oi-stat__label">LLM Adapters</div>
+    </div>
+    <div class="oi-stat">
+      <div class="oi-stat__number">464</div>
+      <div class="oi-stat__label">Tests</div>
+    </div>
+    <div class="oi-stat">
+      <div class="oi-stat__number">v0.8</div>
+      <div class="oi-stat__label">Latest</div>
+    </div>
+  </div>
+
+  <!-- Features -->
+  <div class="oi-features">
+    <div class="oi-feature">
+      <div class="oi-feature__icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></div>
+      <div class="oi-feature__title">Structured Intents</div>
+      <p class="oi-feature__desc">
+        Replace fragile chat-based coordination with typed intent objects, versioned state, and optimistic concurrency control.
+      </p>
+      <a href="guide/intents/" class="oi-feature__link">Learn more</a>
+    </div>
+    <div class="oi-feature">
+      <div class="oi-feature__icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <div class="oi-feature__title">Decorator-First Agents</div>
+      <p class="oi-feature__desc">
+        Define agents with <code>@Agent</code>, coordinators with <code>@Coordinator</code>, and wire lifecycle hooks with zero boilerplate.
+      </p>
+      <a href="guide/agents/" class="oi-feature__link">Learn more</a>
+    </div>
+    <div class="oi-feature">
+      <div class="oi-feature__icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+      <div class="oi-feature__title">YAML Workflows</div>
+      <p class="oi-feature__desc">
+        Define multi-agent pipelines declaratively in YAML. Dependencies, parallel execution, retry, cost tracking, and governance built in.
+      </p>
+      <a href="guide/workflows/" class="oi-feature__link">Learn more</a>
+    </div>
+    <div class="oi-feature">
+      <div class="oi-feature__icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
+      <div class="oi-feature__title">7 LLM Adapters</div>
+      <p class="oi-feature__desc">
+        OpenAI, Anthropic, Gemini, Grok, DeepSeek, Azure, and OpenRouter. Automatic token tracking, cost logging, and streaming hooks.
+      </p>
+      <a href="guide/adapters/" class="oi-feature__link">Learn more</a>
+    </div>
+    <div class="oi-feature">
+      <div class="oi-feature__icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+      <div class="oi-feature__title">Access &amp; Governance</div>
+      <p class="oi-feature__desc">
+        Unified permissions, credential vaults, tool scoping, coordinator governance, and decision audit trails across 6 RFCs.
+      </p>
+      <a href="rfcs/0013-coordinator-governance/" class="oi-feature__link">Learn more</a>
+    </div>
+    <div class="oi-feature">
+      <div class="oi-feature__icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></div>
+      <div class="oi-feature__title">Built-in Server</div>
+      <p class="oi-feature__desc">
+        FastAPI server implementing all 17 RFCs. SQLite or PostgreSQL, API key auth, OpenAPI docs. One command to start.
+      </p>
+      <a href="guide/server/" class="oi-feature__link">Learn more</a>
+    </div>
+  </div>
+
+  <!-- Quick Start -->
+  <div class="oi-quickstart">
+    <h2 class="oi-quickstart__title">Get Started in 30 Seconds</h2>
+    <p class="oi-quickstart__subtitle">Install the SDK and create your first coordinated agent.</p>
+
+    <div class="md-typeset">
+
+      <div class="tabbed-set" data-tabs="1:3">
+        <input checked id="__tabbed_1_1" type="radio" name="__tabbed_1">
+        <input id="__tabbed_1_2" type="radio" name="__tabbed_1">
+        <input id="__tabbed_1_3" type="radio" name="__tabbed_1">
+        <div class="tabbed-labels">
+          <label for="__tabbed_1_1">Agent</label>
+          <label for="__tabbed_1_2">Client</label>
+          <label for="__tabbed_1_3">YAML Workflow</label>
+        </div>
+        <div class="tabbed-content">
+          <div class="tabbed-block">
+<pre><code class="language-python">from openintent.agents import Agent, on_assignment
+
+@Agent("researcher", memory="episodic", auto_heartbeat=True)
+class ResearchAgent:
+
+    @on_assignment
+    async def handle(self, intent):
+        results = await do_research(intent.title)
+        await self.memory.store("findings", results)
+        return {"results": results}  # auto-patched to state
+
+ResearchAgent.run()
+</code></pre>
+          </div>
+          <div class="tabbed-block">
+<pre><code class="language-python">from openintent import OpenIntentClient
+
+client = OpenIntentClient(
+    base_url="http://localhost:8000",
+    agent_id="my-agent"
+)
+
+intent = client.create_intent(
+    title="Research quantum computing",
+    description="Find recent papers on error correction"
+)
+
+client.patch_state(intent.id, {"status": "researching"})
+</code></pre>
+          </div>
+          <div class="tabbed-block">
+<pre><code class="language-yaml">openintent: "1.0"
+info:
+  name: "Research Pipeline"
+
+workflow:
+  research:
+    title: "Gather Research"
+    assign: researcher
+    constraints: ["Be thorough", "Use 3+ sources"]
+
+  summarize:
+    title: "Create Summary"
+    assign: summarizer
+    depends_on: [research]
+</code></pre>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Architecture -->
+  <div class="oi-architecture">
+    <h2 class="oi-architecture__title">Protocol Architecture</h2>
+    <p class="oi-architecture__subtitle">Intents flow through a well-defined lifecycle with full auditability.</p>
+    <div class="md-typeset">
+<pre class="mermaid">
+graph LR
+    A[Create Intent] --> B[Assign Agents]
+    B --> C[Acquire Leases]
+    C --> D[Execute & Log Events]
+    D --> E{State Update}
+    E -->|Optimistic Lock| F[Patch State]
+    E -->|Conflict| G[Resolve via Governance]
+    F --> H[Complete Intent]
+    G --> D
+
+    style A fill:#635bff,stroke:#4b44d1,color:#fff
+    style B fill:#635bff,stroke:#4b44d1,color:#fff
+    style C fill:#635bff,stroke:#4b44d1,color:#fff
+    style D fill:#00d4aa,stroke:#00b894,color:#0a2540
+    style E fill:#f6f8fa,stroke:#e3e8ee,color:#0a2540
+    style F fill:#00d4aa,stroke:#00b894,color:#0a2540
+    style G fill:#f5a623,stroke:#e09900,color:#0a2540
+    style H fill:#635bff,stroke:#4b44d1,color:#fff
+</pre>
+    </div>
+  </div>
+
+  <!-- RFC Coverage -->
+  <div class="oi-quickstart" style="margin-top: var(--oi-space-xl);">
+    <h2 class="oi-quickstart__title">Complete RFC Coverage</h2>
+    <p class="oi-quickstart__subtitle">17 RFCs implemented. From intents to triggers, every primitive you need.</p>
+    <div class="md-typeset">
+      <table>
+        <thead>
+          <tr><th>RFC</th><th>Feature</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>0001</td><td>Intent Objects &amp; Versioning</td><td><span class="oi-pill">Accepted</span></td></tr>
+          <tr><td>0002</td><td>Event Logs &amp; Audit Trails</td><td><span class="oi-pill">Accepted</span></td></tr>
+          <tr><td>0003</td><td>Agent Leasing &amp; Concurrency</td><td><span class="oi-pill">Accepted</span></td></tr>
+          <tr><td>0004</td><td>Governance &amp; Arbitration</td><td><span class="oi-pill">Accepted</span></td></tr>
+          <tr><td>0005</td><td>Attachments &amp; File Handling</td><td><span class="oi-pill">Accepted</span></td></tr>
+          <tr><td>0006</td><td>SSE Subscriptions</td><td><span class="oi-pill">Accepted</span></td></tr>
+          <tr><td>0007</td><td>Intent Portfolios</td><td><span class="oi-pill">Accepted</span></td></tr>
+          <tr><td>0008</td><td>LLM Integration &amp; Observability</td><td><span class="oi-pill">Accepted</span></td></tr>
+          <tr><td>0009</td><td>Cost Tracking</td><td><span class="oi-pill">Accepted</span></td></tr>
+          <tr><td>0010</td><td>Retry Policies</td><td><span class="oi-pill">Accepted</span></td></tr>
+          <tr><td>0011</td><td>Access-Aware Coordination v2.0</td><td><span class="oi-pill">Accepted</span></td></tr>
+          <tr><td>0012</td><td>Task Decomposition &amp; Planning</td><td><span class="oi-pill" style="border-color: rgba(0,212,170,0.3); color: var(--oi-accent);">Proposed</span></td></tr>
+          <tr><td>0013</td><td>Coordinator Governance</td><td><span class="oi-pill" style="border-color: rgba(0,212,170,0.3); color: var(--oi-accent);">Proposed</span></td></tr>
+          <tr><td>0014</td><td>Credential Vaults &amp; Tool Scoping</td><td><span class="oi-pill" style="border-color: rgba(0,212,170,0.3); color: var(--oi-accent);">Proposed</span></td></tr>
+          <tr><td>0015</td><td>Agent Memory &amp; Persistent State</td><td><span class="oi-pill" style="border-color: rgba(0,212,170,0.3); color: var(--oi-accent);">Proposed</span></td></tr>
+          <tr><td>0016</td><td>Agent Lifecycle &amp; Health</td><td><span class="oi-pill" style="border-color: rgba(0,212,170,0.3); color: var(--oi-accent);">Proposed</span></td></tr>
+          <tr><td>0017</td><td>Triggers &amp; Reactive Scheduling</td><td><span class="oi-pill" style="border-color: rgba(0,212,170,0.3); color: var(--oi-accent);">Proposed</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
