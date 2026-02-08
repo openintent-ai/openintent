@@ -262,6 +262,8 @@ class DeepSeekAdapter(BaseAdapter):
                     e, {"phase": "stream_started", "stream_id": stream_id}
                 )
 
+        self._invoke_stream_start(stream_id, model, "deepseek")
+
         stream = self._deepseek.chat.completions.create(**kwargs)
         return self._stream_wrapper(
             stream,
@@ -310,6 +312,7 @@ class DeepSeekAdapter(BaseAdapter):
                     delta = chunk.choices[0].delta
                     if hasattr(delta, "content") and delta.content:
                         content_parts.append(delta.content)
+                        self._invoke_on_token(delta.content, stream_id)
                     if hasattr(delta, "tool_calls") and delta.tool_calls:
                         for tc in delta.tool_calls:
                             tc_dict = {
@@ -346,6 +349,8 @@ class DeepSeekAdapter(BaseAdapter):
                     self._handle_error(
                         e, {"phase": "stream_completed", "stream_id": stream_id}
                     )
+
+            self._invoke_stream_end(stream_id, "".join(content_parts), chunk_count)
 
             if self._config.log_requests:
                 try:
@@ -385,6 +390,7 @@ class DeepSeekAdapter(BaseAdapter):
                     self._handle_error(
                         e, {"phase": "stream_cancelled", "stream_id": stream_id}
                     )
+            self._invoke_stream_error(Exception("Generator closed"), stream_id)
             raise
 
         except Exception as e:
@@ -403,6 +409,7 @@ class DeepSeekAdapter(BaseAdapter):
                     self._handle_error(
                         log_error, {"phase": "stream_cancelled", "stream_id": stream_id}
                     )
+            self._invoke_stream_error(e, stream_id)
             raise
 
     def _log_tool_calls(self, choice: Any, model: str) -> None:

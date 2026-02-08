@@ -16,8 +16,9 @@ Example:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 if TYPE_CHECKING:
     from .agents import PortfolioSpec
@@ -54,6 +55,111 @@ class WorkflowNotFoundError(WorkflowError):
     pass
 
 
+class PermissionLevel(str, Enum):
+    READ = "read"
+    WRITE = "write"
+    ADMIN = "admin"
+
+
+class AccessPolicy(str, Enum):
+    OPEN = "open"
+    RESTRICTED = "restricted"
+    PRIVATE = "private"
+
+
+@dataclass
+class AllowEntry:
+    """An explicit access grant for an agent."""
+
+    agent: str
+    level: PermissionLevel = PermissionLevel.READ
+    expires: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AllowEntry:
+        return cls(
+            agent=data["agent"],
+            level=PermissionLevel(data.get("level", "read")),
+            expires=data.get("expires"),
+        )
+
+
+@dataclass
+class DelegateConfig:
+    """Delegation configuration for a phase."""
+
+    to: list[str] = field(default_factory=list)
+    level: PermissionLevel = PermissionLevel.READ
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> DelegateConfig:
+        return cls(
+            to=data.get("to", []),
+            level=PermissionLevel(data.get("level", "read")),
+        )
+
+
+@dataclass
+class PermissionsConfig:
+    """Unified permissions configuration for a phase (RFC-0011).
+
+    Supports shorthand forms:
+        permissions: "open"              -> open access
+        permissions: "private"           -> assigned agent only
+        permissions: ["agent-a", "b"]    -> listed agents get write
+
+    And full form:
+        permissions:
+          policy: restricted
+          default: read
+          allow: [{ agent: "a", level: "write" }]
+          delegate: { to: ["b"], level: "read" }
+          context: [dependencies, peers]
+    """
+
+    policy: AccessPolicy = AccessPolicy.OPEN
+    default: PermissionLevel = PermissionLevel.READ
+    allow: list[AllowEntry] = field(default_factory=list)
+    delegate: Optional[DelegateConfig] = None
+    context: Union[str, list[str]] = "auto"
+
+    @classmethod
+    def from_yaml(cls, data: Any) -> PermissionsConfig:
+        if data is None:
+            return cls()
+
+        if isinstance(data, str):
+            if data == "open":
+                return cls(policy=AccessPolicy.OPEN)
+            elif data == "private":
+                return cls(policy=AccessPolicy.PRIVATE)
+            else:
+                return cls(policy=AccessPolicy(data))
+
+        if isinstance(data, list):
+            return cls(
+                policy=AccessPolicy.RESTRICTED,
+                allow=[AllowEntry(agent=a, level=PermissionLevel.WRITE) for a in data],
+            )
+
+        if isinstance(data, dict):
+            allow = [AllowEntry.from_dict(e) for e in data.get("allow", [])]
+            delegate = None
+            if "delegate" in data:
+                delegate = DelegateConfig.from_dict(data["delegate"])
+            context = data.get("context", "auto")
+
+            return cls(
+                policy=AccessPolicy(data.get("policy", "open")),
+                default=PermissionLevel(data.get("default", "read")),
+                allow=allow,
+                delegate=delegate,
+                context=context,
+            )
+
+        return cls()
+
+
 @dataclass
 class PhaseConfig:
     """Configuration for a workflow phase (intent)."""
@@ -71,6 +177,9 @@ class PhaseConfig:
     leasing: Optional[dict[str, Any]] = None
     cost_tracking: Optional[dict[str, Any]] = None
     attachments: Optional[list[dict[str, Any]]] = None
+
+    # RFC-0011: Unified permissions
+    permissions: Optional[PermissionsConfig] = None
 
     # Inputs/outputs for interpolation
     inputs: dict[str, str] = field(default_factory=dict)
@@ -129,6 +238,8 @@ class GovernanceConfig:
     max_cost_usd: Optional[float] = None
     timeout_hours: Optional[float] = None
     escalation: Optional[dict[str, str]] = None
+    access_review: Optional[dict[str, Any]] = None
+    audit_access_events: bool = True
 
 
 @dataclass
@@ -310,6 +421,32 @@ class WorkflowSpec:
                     suggestion="Add 'assign: agent-id' to specify which agent handles this phase",
                 )
 
+            permissions_data = phase_data.get("permissions")
+            if permissions_data is None:
+                legacy_access = phase_data.get("access")
+                legacy_delegation = phase_data.get("delegation")
+                legacy_context = phase_data.get("context")
+                if legacy_access or legacy_delegation or legacy_context:
+                    merged: dict[str, Any] = {}
+                    if legacy_access:
+                        merged["policy"] = legacy_access.get("policy", "open")
+                        merged["default"] = legacy_access.get("default_permission", "read")
+                        acl = legacy_access.get("acl", [])
+                        merged["allow"] = [
+                            {"agent": e.get("principal_id", e.get("agent", "")), "level": e.get("permission", e.get("level", "read"))}  # noqa: E501
+                            for e in acl
+                        ]
+                    if legacy_delegation:
+                        merged["delegate"] = {
+                            "to": legacy_delegation.get("targets", legacy_delegation.get("to", [])),  # noqa: E501
+                            "level": legacy_delegation.get("default_permission", legacy_delegation.get("level", "read")),  # noqa: E501
+                        }
+                    if legacy_context:
+                        merged["context"] = legacy_context.get("inject", legacy_context) if isinstance(legacy_context, dict) else legacy_context  # noqa: E501
+                    permissions_data = merged
+
+            permissions = PermissionsConfig.from_yaml(permissions_data) if permissions_data is not None else None  # noqa: E501
+
             phase = PhaseConfig(
                 name=phase_name,
                 title=title,
@@ -322,6 +459,7 @@ class WorkflowSpec:
                 leasing=phase_data.get("leasing"),
                 cost_tracking=phase_data.get("cost_tracking"),
                 attachments=phase_data.get("attachments"),
+                permissions=permissions,
                 inputs=phase_data.get("inputs", {}),
                 outputs=phase_data.get("outputs", []),
                 skip_when=phase_data.get("skip_when"),
@@ -337,6 +475,8 @@ class WorkflowSpec:
                 max_cost_usd=gov_data.get("max_cost_usd"),
                 timeout_hours=gov_data.get("timeout_hours"),
                 escalation=gov_data.get("escalation"),
+                access_review=gov_data.get("access_review"),
+                audit_access_events=gov_data.get("audit_access_events", True),
             )
 
         # LLM configuration
@@ -447,6 +587,17 @@ class WorkflowSpec:
             if phase.cost_tracking:
                 initial_state["cost_tracking"] = phase.cost_tracking
 
+            if phase.permissions:
+                perm = phase.permissions
+                perm_state: dict[str, Any] = {"policy": perm.policy.value, "default": perm.default.value}  # noqa: E501
+                if perm.allow:
+                    perm_state["allow"] = [{"agent": e.agent, "level": e.level.value} for e in perm.allow]  # noqa: E501
+                if perm.delegate:
+                    perm_state["delegate"] = {"to": perm.delegate.to, "level": perm.delegate.level.value}  # noqa: E501
+                if perm.context != "auto":
+                    perm_state["context"] = perm.context
+                initial_state["permissions"] = perm_state
+
             # Resolve depends_on to titles (PortfolioSpec uses titles)
             title_to_name = {p.name: p.title for p in self.phases}
             depends_on = []
@@ -478,6 +629,10 @@ class WorkflowSpec:
                 governance_policy["require_approval"] = self.governance.require_approval
             if self.governance.escalation:
                 governance_policy["escalation"] = self.governance.escalation
+            if self.governance.access_review:
+                governance_policy["access_review"] = self.governance.access_review
+            if self.governance.audit_access_events is not True:
+                governance_policy["audit_access_events"] = self.governance.audit_access_events
 
         return PortfolioSpec(
             name=self.name,

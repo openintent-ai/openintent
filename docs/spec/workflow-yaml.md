@@ -118,6 +118,7 @@ Each phase in the `workflow` section supports these fields:
 | `leasing` | object | RFC-0003 | Scope leasing configuration |
 | `cost_tracking` | object | RFC-0009 | Cost budget and tracking |
 | `attachments` | list[object] | RFC-0005 | File attachments |
+| `permissions` | string \| list \| object | RFC-0011 | Access control, delegation, and context (see [Permissions](#permissions-configuration)) |
 
 ### Phase Example
 
@@ -146,7 +147,7 @@ workflow:
 
 ## Agents Section
 
-Declare agents referenced in the workflow. While optional, it provides documentation and validation.
+Declare agents referenced in the workflow. While optional, it provides documentation, validation, and access control configuration.
 
 ```yaml
 agents:
@@ -162,12 +163,23 @@ agents:
     capabilities:
       - text-generation
       - formatting
+    default_permission: read
+      
+  auditor:
+    description: "Reviews outputs for compliance"
+    capabilities:
+      - compliance
+      - review
+    default_permission: read
+    approval_required: true
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `description` | string | What this agent does |
-| `capabilities` | list[string] | Agent capabilities for validation |
+| `capabilities` | list[string] | Agent capabilities for validation and access decisions |
+| `default_permission` | string | Default permission when joining intents: `read`, `write`, `admin` |
+| `approval_required` | boolean | Whether this agent must request access approval |
 
 ## Governance Section
 
@@ -312,6 +324,152 @@ attachments:
 | `filename` | string | Attachment filename |
 | `content_type` | string | MIME type |
 
+## Permissions Configuration
+
+Unified access control for phases (RFC-0011). The `permissions` field replaces the previous separate `access`, `delegation`, and `context` fields with a single block that supports both shorthand and full forms.
+
+### Shorthand Forms
+
+For the common cases, `permissions` accepts a string or a list:
+
+```yaml
+# Open access (default — any agent, no restrictions)
+permissions: open
+
+# Only the assigned agent can access
+permissions: private
+
+# Specific agents get write access
+permissions: [analyzer-agent, auditor]
+```
+
+| Shorthand | Equivalent |
+|-----------|------------|
+| `open` | Any agent can access at the default permission level |
+| `private` | Only the assigned agent has access |
+| `[agent-a, agent-b]` | Listed agents get `write`; others get `read` |
+
+### Full Form
+
+For fine-grained control, `permissions` accepts an object:
+
+```yaml
+permissions:
+  policy: restricted              # open, restricted, private
+  default: read                   # default permission for unlisted agents
+  allow:
+    - agent: "analyzer-agent"
+      level: write
+    - agent: "auditor"
+      level: read
+      expires: "2026-12-31T00:00:00Z"
+  delegate:
+    to: ["specialist-bot"]        # who can receive delegated work
+    level: read                   # permission granted to delegates
+  context: [dependencies, peers]  # what context to auto-inject
+```
+
+### Permissions Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `policy` | string | `open` | `open` (any agent), `restricted` (declared agents), `private` (assigned only) |
+| `default` | string | `read` | Default permission for unlisted agents: `read`, `write`, `admin` |
+| `allow` | list[object] | `[]` | Explicit access grants |
+| `delegate` | object | `null` | Delegation configuration |
+| `context` | list[string] | `auto` | Context fields to inject, or `auto` for permission-based defaults |
+
+### Allow Entry
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `agent` | string | Yes | Agent or role ID |
+| `level` | string | Yes | Permission level: `read`, `write`, `admin` |
+| `expires` | string | No | ISO 8601 expiration timestamp |
+
+### Delegate
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `to` | list[string] | `[]` | Allowed delegation targets (empty = no delegation) |
+| `level` | string | `read` | Permission granted to delegates |
+
+### Context Injection
+
+The `context` field controls what information is auto-populated in `intent.ctx`:
+
+| Value | Description |
+|-------|-------------|
+| `auto` | Server decides based on the agent's permission level (default) |
+| `[field, ...]` | Explicit list of fields to inject |
+| `none` | No context injection |
+
+Available context fields: `dependencies`, `peers`, `parent`, `events`, `acl`, `delegated_by`.
+
+### Governance Access Review
+
+Access request handling at the workflow level (in the `governance` section):
+
+```yaml
+governance:
+  access_review:
+    on_request: defer             # approve, deny, defer
+    approvers: ["admin-agent"]
+    timeout_hours: 4
+```
+
+### Permissions Examples
+
+**Simple — restrict to two agents:**
+
+```yaml
+workflow:
+  analysis:
+    title: "Analyze Document"
+    assign: analyzer-agent
+    permissions: [analyzer-agent, auditor]
+```
+
+**Moderate — add delegation and context:**
+
+```yaml
+workflow:
+  analysis:
+    title: "Analyze Document"
+    assign: analyzer-agent
+    permissions:
+      policy: restricted
+      allow:
+        - agent: "analyzer-agent"
+          level: write
+        - agent: "auditor"
+          level: read
+      delegate:
+        to: ["specialist-bot"]
+        level: read
+      context: [dependencies, peers, acl]
+```
+
+**In the agent implementation, access control is automatic:**
+
+```python
+@Agent("analyst-agent")
+class Analyst:
+    @on_assignment
+    async def work(self, intent):
+        if intent.ctx.delegated_by:
+            print(f"Delegated by: {intent.ctx.delegated_by}")
+        
+        if needs_help(intent):
+            await intent.delegate("specialist-bot")
+        
+        return {"analysis": result}
+    
+    @on_access_requested
+    async def policy(self, request):
+        return "approve" if request.level == "read" else "defer"
+```
+
 ## Types Section
 
 Define types for validation and documentation.
@@ -436,6 +594,9 @@ info:
 governance:
   max_cost_usd: 5.00
   timeout_hours: 2
+  access_review:
+    on_request: defer
+    approvers: ["lead-researcher"]
 
 agents:
   researcher:
@@ -445,6 +606,7 @@ agents:
   analyst:
     description: "Analyzes and synthesizes information"
     capabilities: [analysis, reasoning]
+    default_permission: read
     
   writer:
     description: "Creates polished written output"
@@ -468,6 +630,9 @@ workflow:
     retry:
       max_attempts: 3
       backoff: exponential
+    permissions:
+      delegate:
+        to: ["analyst"]
     outputs:
       - sources
       - findings
@@ -477,6 +642,14 @@ workflow:
     description: "Synthesize research into key insights"
     assign: analyst
     depends_on: [research]
+    permissions:
+      policy: restricted
+      allow:
+        - agent: "analyst"
+          level: write
+        - agent: "writer"
+          level: read
+      context: [dependencies, peers, acl]
     cost_tracking:
       enabled: true
       budget_usd: 2.00
@@ -489,6 +662,8 @@ workflow:
     description: "Create a comprehensive written report"
     assign: writer
     depends_on: [analysis]
+    permissions:
+      context: [dependencies, delegated_by]
     attachments:
       - filename: "report.md"
         content_type: "text/markdown"

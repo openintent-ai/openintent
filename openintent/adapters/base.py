@@ -25,6 +25,14 @@ class AdapterConfig:
             Default 10.
         on_error: Optional callback for adapter errors. Signature:
             (error: Exception, context: dict) -> None
+        on_stream_start: Optional callback invoked when a stream begins.
+            Signature: (stream_id: str, model: str, provider: str) -> None
+        on_token: Optional callback invoked for each content token during
+            streaming. Signature: (token: str, stream_id: str) -> None
+        on_stream_end: Optional callback invoked when a stream completes.
+            Signature: (stream_id: str, content: str, chunks: int) -> None
+        on_stream_error: Optional callback invoked when a stream fails.
+            Signature: (error: Exception, stream_id: str) -> None
     """
 
     log_requests: bool = True
@@ -33,6 +41,10 @@ class AdapterConfig:
     log_stream_chunks: bool = False
     chunk_log_interval: int = 10
     on_error: Optional[Callable[[Exception, dict[str, Any]], None]] = None
+    on_stream_start: Optional[Callable[[str, str, str], None]] = None
+    on_token: Optional[Callable[[str, str], None]] = None
+    on_stream_end: Optional[Callable[[str, str, int], None]] = None
+    on_stream_error: Optional[Callable[[Exception, str], None]] = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -84,6 +96,38 @@ class BaseAdapter:
         if self._config.on_error:
             try:
                 self._config.on_error(error, context)
+            except Exception:
+                pass
+
+    def _invoke_stream_start(self, stream_id: str, model: str, provider: str) -> None:
+        """Invoke the on_stream_start hook if configured."""
+        if self._config.on_stream_start:
+            try:
+                self._config.on_stream_start(stream_id, model, provider)
+            except Exception:
+                pass
+
+    def _invoke_on_token(self, token: str, stream_id: str) -> None:
+        """Invoke the on_token hook if configured."""
+        if self._config.on_token:
+            try:
+                self._config.on_token(token, stream_id)
+            except Exception:
+                pass
+
+    def _invoke_stream_end(self, stream_id: str, content: str, chunks: int) -> None:
+        """Invoke the on_stream_end hook if configured."""
+        if self._config.on_stream_end:
+            try:
+                self._config.on_stream_end(stream_id, content, chunks)
+            except Exception:
+                pass
+
+    def _invoke_stream_error(self, error: Exception, stream_id: str) -> None:
+        """Invoke the on_stream_error hook if configured."""
+        if self._config.on_stream_error:
+            try:
+                self._config.on_stream_error(error, stream_id)
             except Exception:
                 pass
 

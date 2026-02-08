@@ -21,12 +21,17 @@ from .exceptions import (
     ValidationError,
 )
 from .models import (
+    ACLEntry,
+    AccessPolicy,
+    AccessRequest,
+    AccessRequestStatus,  # noqa: F401
     AggregateStatus,
     ArbitrationRequest,
     CostSummary,
     Decision,
     EventType,
     Intent,
+    IntentACL,
     IntentAttachment,
     IntentCost,
     IntentEvent,
@@ -37,6 +42,7 @@ from .models import (
     IntentSubscription,
     LLMRequestPayload,
     MembershipRole,
+    Permission,
     PortfolioMembership,
     PortfolioStatus,
     RetryPolicy,
@@ -44,6 +50,37 @@ from .models import (
     StreamState,
     StreamStatus,
     ToolCallPayload,
+    Task,
+    TaskStatus,
+    Plan,
+    PlanState,  # noqa: F401
+    Checkpoint,  # noqa: F401
+    PlanCondition,  # noqa: F401
+    MemoryPolicy,  # noqa: F401
+    ToolRequirement,  # noqa: F401
+    CoordinatorLease,
+    CoordinatorType,  # noqa: F401
+    CoordinatorStatus,  # noqa: F401
+    Guardrails,  # noqa: F401
+    DecisionRecord,  # noqa: F401
+    DecisionType,
+    CredentialVault,  # noqa: F401
+    Credential,  # noqa: F401
+    ToolGrant,
+    ToolInvocation,  # noqa: F401
+    GrantConstraints,  # noqa: F401
+    MemoryEntry,
+    MemoryType,  # noqa: F401
+    MemoryScope,  # noqa: F401
+    AgentRecord,
+    AgentStatus,  # noqa: F401
+    Heartbeat,  # noqa: F401
+    AgentCapacity,  # noqa: F401
+    HeartbeatConfig,  # noqa: F401
+    Trigger,
+    TriggerType,  # noqa: F401
+    TriggerCondition,  # noqa: F401
+    IntentTemplate,  # noqa: F401
 )
 
 
@@ -1216,6 +1253,221 @@ class OpenIntentClient:
         if response.status_code != 204:
             self._handle_response(response)
 
+    # ==================== Access Control (RFC-0011) ====================
+
+    def get_acl(self, intent_id: str) -> IntentACL:
+        """
+        Get the access control list for an intent.
+
+        Args:
+            intent_id: The intent ID.
+
+        Returns:
+            The intent's ACL.
+        """
+        response = self._client.get(f"/api/v1/intents/{intent_id}/acl")
+        data = self._handle_response(response)
+        return IntentACL.from_dict(data)
+
+    def set_acl(
+        self,
+        intent_id: str,
+        default_policy: AccessPolicy = AccessPolicy.OPEN,
+        entries: Optional[list[dict[str, Any]]] = None,
+    ) -> IntentACL:
+        """
+        Set the access control list for an intent (replaces existing).
+
+        Args:
+            intent_id: The intent ID.
+            default_policy: Default policy for unlisted principals.
+            entries: ACL entries to set.
+
+        Returns:
+            The updated ACL.
+        """
+        response = self._client.put(
+            f"/api/v1/intents/{intent_id}/acl",
+            json={
+                "default_policy": default_policy.value,
+                "entries": entries or [],
+            },
+        )
+        data = self._handle_response(response)
+        return IntentACL.from_dict(data)
+
+    def grant_access(
+        self,
+        intent_id: str,
+        principal_id: str,
+        principal_type: str = "agent",
+        permission: Permission = Permission.READ,
+        reason: Optional[str] = None,
+        expires_at: Optional[datetime] = None,
+    ) -> ACLEntry:
+        """
+        Grant access to a principal on an intent.
+
+        Args:
+            intent_id: The intent ID.
+            principal_id: ID of the principal to grant access to.
+            principal_type: Type of principal ("user", "agent", or "group").
+            permission: Permission level to grant.
+            reason: Human-readable justification.
+            expires_at: Optional expiration time.
+
+        Returns:
+            The created ACL entry.
+        """
+        payload: dict[str, Any] = {
+            "principal_id": principal_id,
+            "principal_type": principal_type,
+            "permission": permission.value,
+        }
+        if reason:
+            payload["reason"] = reason
+        if expires_at:
+            payload["expires_at"] = expires_at.isoformat()
+
+        response = self._client.post(
+            f"/api/v1/intents/{intent_id}/acl/entries",
+            json=payload,
+        )
+        data = self._handle_response(response)
+        return ACLEntry.from_dict(data)
+
+    def revoke_access(self, intent_id: str, entry_id: str) -> None:
+        """
+        Revoke an access grant (removes ACL entry and cascades to leases).
+
+        Args:
+            intent_id: The intent ID.
+            entry_id: The ACL entry ID to revoke.
+        """
+        response = self._client.delete(
+            f"/api/v1/intents/{intent_id}/acl/entries/{entry_id}"
+        )
+        if response.status_code != 204:
+            self._handle_response(response)
+
+    def request_access(
+        self,
+        intent_id: str,
+        principal_id: str,
+        principal_type: str = "agent",
+        permission: Permission = Permission.WRITE,
+        reason: str = "",
+        capabilities: Optional[list[str]] = None,
+    ) -> AccessRequest:
+        """
+        Request access to an intent (works even without existing access).
+
+        Args:
+            intent_id: The intent ID.
+            principal_id: ID of the requesting principal.
+            principal_type: Type of principal.
+            permission: Permission level being requested.
+            reason: Why access is needed.
+            capabilities: What the requesting agent can do.
+
+        Returns:
+            The created access request.
+        """
+        payload: dict[str, Any] = {
+            "principal_id": principal_id,
+            "principal_type": principal_type,
+            "requested_permission": permission.value,
+            "reason": reason,
+        }
+        if capabilities:
+            payload["capabilities"] = capabilities
+
+        response = self._client.post(
+            f"/api/v1/intents/{intent_id}/access-requests",
+            json=payload,
+        )
+        data = self._handle_response(response)
+        return AccessRequest.from_dict(data)
+
+    def list_access_requests(self, intent_id: str) -> list[AccessRequest]:
+        """
+        List access requests for an intent.
+
+        Args:
+            intent_id: The intent ID.
+
+        Returns:
+            List of access requests.
+        """
+        response = self._client.get(f"/api/v1/intents/{intent_id}/access-requests")
+        data = self._handle_response(response)
+        items = data.get("access_requests", data) if isinstance(data, dict) else data
+        return [AccessRequest.from_dict(r) for r in items]
+
+    def approve_access_request(
+        self,
+        intent_id: str,
+        request_id: str,
+        permission: Optional[Permission] = None,
+        expires_at: Optional[datetime] = None,
+        reason: Optional[str] = None,
+    ) -> AccessRequest:
+        """
+        Approve an access request.
+
+        Args:
+            intent_id: The intent ID.
+            request_id: The access request ID.
+            permission: Permission to grant (may differ from requested).
+            expires_at: Optional expiration for the grant.
+            reason: Reason for approval.
+
+        Returns:
+            The updated access request.
+        """
+        payload: dict[str, Any] = {"decided_by": self.agent_id}
+        if permission:
+            payload["permission"] = permission.value
+        if expires_at:
+            payload["expires_at"] = expires_at.isoformat()
+        if reason:
+            payload["reason"] = reason
+
+        response = self._client.post(
+            f"/api/v1/intents/{intent_id}/access-requests/{request_id}/approve",
+            json=payload,
+        )
+        data = self._handle_response(response)
+        return AccessRequest.from_dict(data)
+
+    def deny_access_request(
+        self,
+        intent_id: str,
+        request_id: str,
+        reason: Optional[str] = None,
+    ) -> AccessRequest:
+        """
+        Deny an access request.
+
+        Args:
+            intent_id: The intent ID.
+            request_id: The access request ID.
+            reason: Reason for denial.
+
+        Returns:
+            The updated access request.
+        """
+        payload: dict[str, Any] = {"decided_by": self.agent_id}
+        if reason:
+            payload["reason"] = reason
+
+        response = self._client.post(
+            f"/api/v1/intents/{intent_id}/access-requests/{request_id}/deny",
+            json=payload,
+        )
+        data = self._handle_response(response)
+        return AccessRequest.from_dict(data)
+
     # ==================== Tool Call Logging ====================
 
     def log_tool_call_started(
@@ -1745,6 +1997,301 @@ class OpenIntentClient:
             "X-Agent-ID": self.agent_id,
         }
         return EventQueue(url, headers)
+
+    # ==================== Task Decomposition & Planning (RFC-0012) ====================
+
+    def create_task(self, intent_id: str, name: str, **kwargs) -> Task:
+        """Create a task for an intent (RFC-0012)."""
+        payload = {"intent_id": intent_id, "name": name, **kwargs}
+        response = self._client.post("/api/v1/tasks", json=payload)
+        data = self._handle_response(response)
+        return Task.from_dict(data)
+
+    def get_task(self, task_id: str) -> Task:
+        """Get a task by ID (RFC-0012)."""
+        response = self._client.get(f"/api/v1/tasks/{task_id}")
+        data = self._handle_response(response)
+        return Task.from_dict(data)
+
+    def list_tasks(self, intent_id: str, status: Optional[TaskStatus] = None, limit: int = 100, offset: int = 0) -> list[Task]:  # noqa: E501
+        """List tasks for an intent (RFC-0012)."""
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if status:
+            params["status"] = status.value
+        response = self._client.get(f"/api/v1/intents/{intent_id}/tasks", params=params)
+        data = self._handle_response(response)
+        return [Task.from_dict(t) for t in data]
+
+    def update_task(self, task_id: str, version: int, status: Optional[str] = None, **kwargs) -> Task:  # noqa: E501
+        """Update task status with optimistic concurrency (RFC-0012)."""
+        payload: dict[str, Any] = {}
+        if status:
+            payload["status"] = status
+        payload.update(kwargs)
+        response = self._client.patch(f"/api/v1/tasks/{task_id}", json=payload, headers={"If-Match": str(version)})  # noqa: E501
+        data = self._handle_response(response)
+        return Task.from_dict(data)
+
+    def create_plan(self, intent_id: str, tasks: Optional[list[str]] = None, **kwargs) -> Plan:
+        """Create a plan for an intent (RFC-0012)."""
+        payload: dict[str, Any] = {"intent_id": intent_id}
+        if tasks:
+            payload["tasks"] = tasks
+        payload.update(kwargs)
+        response = self._client.post("/api/v1/plans", json=payload)
+        data = self._handle_response(response)
+        return Plan.from_dict(data)
+
+    def get_plan(self, plan_id: str) -> Plan:
+        """Get a plan by ID (RFC-0012)."""
+        response = self._client.get(f"/api/v1/plans/{plan_id}")
+        data = self._handle_response(response)
+        return Plan.from_dict(data)
+
+    def list_plans(self, intent_id: str) -> list[Plan]:
+        """List plans for an intent (RFC-0012)."""
+        response = self._client.get(f"/api/v1/intents/{intent_id}/plans")
+        data = self._handle_response(response)
+        return [Plan.from_dict(p) for p in data]
+
+    def update_plan(self, plan_id: str, version: int, **kwargs) -> Plan:
+        """Update a plan with optimistic concurrency (RFC-0012)."""
+        response = self._client.patch(f"/api/v1/plans/{plan_id}", json=kwargs, headers={"If-Match": str(version)})  # noqa: E501
+        data = self._handle_response(response)
+        return Plan.from_dict(data)
+
+    # ==================== Coordinator Governance (RFC-0013) ====================
+
+    def create_coordinator_lease(self, agent_id: str, intent_id: Optional[str] = None, **kwargs) -> CoordinatorLease:  # noqa: E501
+        """Create a coordinator lease (RFC-0013)."""
+        payload: dict[str, Any] = {"agent_id": agent_id}
+        if intent_id:
+            payload["intent_id"] = intent_id
+        payload.update(kwargs)
+        response = self._client.post("/api/v1/coordinators", json=payload)
+        data = self._handle_response(response)
+        return CoordinatorLease.from_dict(data)
+
+    def get_coordinator_lease(self, lease_id: str) -> CoordinatorLease:
+        """Get a coordinator lease (RFC-0013)."""
+        response = self._client.get(f"/api/v1/coordinators/{lease_id}")
+        data = self._handle_response(response)
+        return CoordinatorLease.from_dict(data)
+
+    def list_coordinator_leases(self, intent_id: Optional[str] = None) -> list[CoordinatorLease]:
+        """List coordinator leases (RFC-0013)."""
+        if intent_id:
+            response = self._client.get(f"/api/v1/intents/{intent_id}/coordinators")
+            data = self._handle_response(response)
+            return [CoordinatorLease.from_dict(c) for c in data]
+        return []
+
+    def coordinator_heartbeat(self, lease_id: str) -> dict:
+        """Send coordinator heartbeat (RFC-0013)."""
+        response = self._client.post(f"/api/v1/coordinators/{lease_id}/heartbeat")
+        return self._handle_response(response)
+
+    def create_decision_record(self, coordinator_id: str, intent_id: str, decision_type: DecisionType, summary: str, rationale: str, **kwargs) -> dict:  # noqa: E501
+        """Record a coordination decision (RFC-0013)."""
+        payload: dict[str, Any] = {
+            "coordinator_id": coordinator_id,
+            "intent_id": intent_id,
+            "decision_type": decision_type.value,
+            "summary": summary,
+            "rationale": rationale,
+        }
+        payload.update(kwargs)
+        response = self._client.post("/api/v1/decisions", json=payload)
+        return self._handle_response(response)
+
+    def list_decision_records(self, intent_id: str, limit: int = 50) -> list[dict]:
+        """List decision records for an intent (RFC-0013)."""
+        response = self._client.get(f"/api/v1/intents/{intent_id}/coordinator-decisions", params={"limit": limit})  # noqa: E501
+        return self._handle_response(response)
+
+    # ==================== Credential Vaults & Tool Scoping (RFC-0014) ====================
+
+    def create_vault(self, owner_id: str, name: str) -> dict:
+        """Create a credential vault (RFC-0014)."""
+        response = self._client.post("/api/v1/vaults", json={"owner_id": owner_id, "name": name})
+        return self._handle_response(response)
+
+    def get_vault(self, vault_id: str) -> dict:
+        """Get a credential vault (RFC-0014)."""
+        response = self._client.get(f"/api/v1/vaults/{vault_id}")
+        return self._handle_response(response)
+
+    def create_credential(self, vault_id: str, service: str, label: str, auth_type: str = "api_key", **kwargs) -> dict:  # noqa: E501
+        """Create a credential in a vault (RFC-0014)."""
+        payload: dict[str, Any] = {"vault_id": vault_id, "service": service, "label": label, "auth_type": auth_type}  # noqa: E501
+        payload.update(kwargs)
+        response = self._client.post("/api/v1/credentials", json=payload)
+        return self._handle_response(response)
+
+    def get_credential(self, credential_id: str) -> dict:
+        """Get a credential (RFC-0014)."""
+        response = self._client.get(f"/api/v1/credentials/{credential_id}")
+        return self._handle_response(response)
+
+    def create_tool_grant(self, credential_id: str, agent_id: str, granted_by: str, scopes: Optional[list[str]] = None, **kwargs) -> ToolGrant:  # noqa: E501
+        """Create a tool grant (RFC-0014)."""
+        payload: dict[str, Any] = {"credential_id": credential_id, "agent_id": agent_id, "granted_by": granted_by, "scopes": scopes or []}  # noqa: E501
+        payload.update(kwargs)
+        response = self._client.post("/api/v1/grants", json=payload)
+        data = self._handle_response(response)
+        return ToolGrant.from_dict(data)
+
+    def get_tool_grant(self, grant_id: str) -> ToolGrant:
+        """Get a tool grant (RFC-0014)."""
+        response = self._client.get(f"/api/v1/grants/{grant_id}")
+        data = self._handle_response(response)
+        return ToolGrant.from_dict(data)
+
+    def list_agent_grants(self, agent_id: str) -> list[ToolGrant]:
+        """List grants for an agent (RFC-0014)."""
+        response = self._client.get(f"/api/v1/agents/{agent_id}/grants")
+        data = self._handle_response(response)
+        return [ToolGrant.from_dict(g) for g in data]
+
+    def revoke_grant(self, grant_id: str) -> dict:
+        """Revoke a tool grant (RFC-0014)."""
+        response = self._client.delete(f"/api/v1/grants/{grant_id}")
+        return self._handle_response(response)
+
+    def record_invocation(self, grant_id: str, service: str, tool: str, agent_id: str, **kwargs) -> dict:  # noqa: E501
+        """Record a tool invocation (RFC-0014)."""
+        payload: dict[str, Any] = {"grant_id": grant_id, "service": service, "tool": tool, "agent_id": agent_id}  # noqa: E501
+        payload.update(kwargs)
+        response = self._client.post("/api/v1/invocations", json=payload)
+        return self._handle_response(response)
+
+    def list_invocations(self, grant_id: str, limit: int = 50) -> list[dict]:
+        """List invocations for a grant (RFC-0014)."""
+        response = self._client.get(f"/api/v1/grants/{grant_id}/invocations", params={"limit": limit})  # noqa: E501
+        return self._handle_response(response)
+
+    # ==================== Agent Memory (RFC-0015) ====================
+
+    def create_memory(self, agent_id: str, namespace: str, key: str, value: dict, memory_type: str = "working", **kwargs) -> MemoryEntry:  # noqa: E501
+        """Create a memory entry (RFC-0015)."""
+        payload: dict[str, Any] = {"agent_id": agent_id, "namespace": namespace, "key": key, "value": value, "memory_type": memory_type}  # noqa: E501
+        payload.update(kwargs)
+        response = self._client.post("/api/v1/memory", json=payload)
+        data = self._handle_response(response)
+        return MemoryEntry.from_dict(data)
+
+    def get_memory(self, entry_id: str) -> MemoryEntry:
+        """Get a memory entry (RFC-0015)."""
+        response = self._client.get(f"/api/v1/memory/{entry_id}")
+        data = self._handle_response(response)
+        return MemoryEntry.from_dict(data)
+
+    def list_memory(self, agent_id: str, namespace: Optional[str] = None, memory_type: Optional[str] = None, tags: Optional[list[str]] = None, limit: int = 100, offset: int = 0) -> list[MemoryEntry]:  # noqa: E501
+        """List memory entries for an agent (RFC-0015)."""
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if namespace:
+            params["namespace"] = namespace
+        if memory_type:
+            params["memory_type"] = memory_type
+        if tags:
+            params["tags"] = ",".join(tags)
+        response = self._client.get(f"/api/v1/agents/{agent_id}/memory", params=params)
+        data = self._handle_response(response)
+        return [MemoryEntry.from_dict(m) for m in data]
+
+    def update_memory(self, entry_id: str, version: int, **kwargs) -> MemoryEntry:
+        """Update a memory entry with optimistic concurrency (RFC-0015)."""
+        response = self._client.patch(f"/api/v1/memory/{entry_id}", json=kwargs, headers={"If-Match": str(version)})  # noqa: E501
+        data = self._handle_response(response)
+        return MemoryEntry.from_dict(data)
+
+    def delete_memory(self, entry_id: str) -> None:
+        """Delete a memory entry (RFC-0015)."""
+        response = self._client.delete(f"/api/v1/memory/{entry_id}")
+        if response.status_code != 200:
+            self._handle_response(response)
+
+    # ==================== Agent Lifecycle & Health (RFC-0016) ====================
+
+    def register_agent(self, agent_id: str, capabilities: Optional[list[str]] = None, **kwargs) -> AgentRecord:  # noqa: E501
+        """Register an agent (RFC-0016)."""
+        payload: dict[str, Any] = {"agent_id": agent_id, "capabilities": capabilities or []}
+        payload.update(kwargs)
+        response = self._client.post("/api/v1/agents/register", json=payload)
+        data = self._handle_response(response)
+        return AgentRecord.from_dict(data)
+
+    def get_agent_record(self, agent_id: str) -> AgentRecord:
+        """Get agent record (RFC-0016)."""
+        response = self._client.get(f"/api/v1/agents/{agent_id}/record")
+        data = self._handle_response(response)
+        return AgentRecord.from_dict(data)
+
+    def list_agents(self, status: Optional[str] = None, role_id: Optional[str] = None) -> list[AgentRecord]:  # noqa: E501
+        """List registered agents (RFC-0016)."""
+        params: dict[str, Any] = {}
+        if status:
+            params["status"] = status
+        if role_id:
+            params["role_id"] = role_id
+        response = self._client.get("/api/v1/agents", params=params)
+        data = self._handle_response(response)
+        return [AgentRecord.from_dict(a) for a in data]
+
+    def agent_heartbeat(self, agent_id: str, current_load: int = 0, tasks_in_progress: Optional[list[str]] = None) -> dict:  # noqa: E501
+        """Send agent heartbeat (RFC-0016)."""
+        payload: dict[str, Any] = {"status": "active", "current_load": current_load, "tasks_in_progress": tasks_in_progress or []}  # noqa: E501
+        response = self._client.post(f"/api/v1/agents/{agent_id}/heartbeat", json=payload)
+        return self._handle_response(response)
+
+    def update_agent_status(self, agent_id: str, status: str) -> dict:
+        """Update agent status (RFC-0016)."""
+        response = self._client.patch(f"/api/v1/agents/{agent_id}/status", json={"status": status})
+        return self._handle_response(response)
+
+    # ==================== Triggers & Reactive Scheduling (RFC-0017) ====================
+
+    def create_trigger(self, name: str, trigger_type: str, **kwargs) -> Trigger:
+        """Create a trigger (RFC-0017)."""
+        payload: dict[str, Any] = {"name": name, "type": trigger_type}
+        payload.update(kwargs)
+        response = self._client.post("/api/v1/triggers", json=payload)
+        data = self._handle_response(response)
+        return Trigger.from_dict(data)
+
+    def get_trigger(self, trigger_id: str) -> Trigger:
+        """Get a trigger (RFC-0017)."""
+        response = self._client.get(f"/api/v1/triggers/{trigger_id}")
+        data = self._handle_response(response)
+        return Trigger.from_dict(data)
+
+    def list_triggers(self, namespace: Optional[str] = None, trigger_type: Optional[str] = None) -> list[Trigger]:  # noqa: E501
+        """List triggers (RFC-0017)."""
+        params: dict[str, Any] = {}
+        if namespace:
+            params["namespace"] = namespace
+        if trigger_type:
+            params["type"] = trigger_type
+        response = self._client.get("/api/v1/triggers", params=params)
+        data = self._handle_response(response)
+        return [Trigger.from_dict(t) for t in data]
+
+    def update_trigger(self, trigger_id: str, version: int, **kwargs) -> Trigger:
+        """Update a trigger with optimistic concurrency (RFC-0017)."""
+        response = self._client.patch(f"/api/v1/triggers/{trigger_id}", json=kwargs, headers={"If-Match": str(version)})  # noqa: E501
+        data = self._handle_response(response)
+        return Trigger.from_dict(data)
+
+    def fire_trigger(self, trigger_id: str) -> dict:
+        """Fire a trigger manually (RFC-0017)."""
+        response = self._client.post(f"/api/v1/triggers/{trigger_id}/fire")
+        return self._handle_response(response)
+
+    def delete_trigger(self, trigger_id: str) -> None:
+        """Delete a trigger (RFC-0017)."""
+        response = self._client.delete(f"/api/v1/triggers/{trigger_id}")
+        if response.status_code != 200:
+            self._handle_response(response)
 
     def close(self) -> None:
         """Close the HTTP client connection."""
@@ -2334,6 +2881,221 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return IntentLease.from_dict(data)
 
+    # ==================== Access Control (RFC-0011) ====================
+
+    async def get_acl(self, intent_id: str) -> IntentACL:
+        """
+        Get the access control list for an intent.
+
+        Args:
+            intent_id: The intent ID.
+
+        Returns:
+            The intent's ACL.
+        """
+        response = await self._client.get(f"/api/v1/intents/{intent_id}/acl")
+        data = self._handle_response(response)
+        return IntentACL.from_dict(data)
+
+    async def set_acl(
+        self,
+        intent_id: str,
+        default_policy: AccessPolicy = AccessPolicy.OPEN,
+        entries: Optional[list[dict[str, Any]]] = None,
+    ) -> IntentACL:
+        """
+        Set the access control list for an intent (replaces existing).
+
+        Args:
+            intent_id: The intent ID.
+            default_policy: Default policy for unlisted principals.
+            entries: ACL entries to set.
+
+        Returns:
+            The updated ACL.
+        """
+        response = await self._client.put(
+            f"/api/v1/intents/{intent_id}/acl",
+            json={
+                "default_policy": default_policy.value,
+                "entries": entries or [],
+            },
+        )
+        data = self._handle_response(response)
+        return IntentACL.from_dict(data)
+
+    async def grant_access(
+        self,
+        intent_id: str,
+        principal_id: str,
+        principal_type: str = "agent",
+        permission: Permission = Permission.READ,
+        reason: Optional[str] = None,
+        expires_at: Optional[datetime] = None,
+    ) -> ACLEntry:
+        """
+        Grant access to a principal on an intent.
+
+        Args:
+            intent_id: The intent ID.
+            principal_id: ID of the principal to grant access to.
+            principal_type: Type of principal ("user", "agent", or "group").
+            permission: Permission level to grant.
+            reason: Human-readable justification.
+            expires_at: Optional expiration time.
+
+        Returns:
+            The created ACL entry.
+        """
+        payload: dict[str, Any] = {
+            "principal_id": principal_id,
+            "principal_type": principal_type,
+            "permission": permission.value,
+        }
+        if reason:
+            payload["reason"] = reason
+        if expires_at:
+            payload["expires_at"] = expires_at.isoformat()
+
+        response = await self._client.post(
+            f"/api/v1/intents/{intent_id}/acl/entries",
+            json=payload,
+        )
+        data = self._handle_response(response)
+        return ACLEntry.from_dict(data)
+
+    async def revoke_access(self, intent_id: str, entry_id: str) -> None:
+        """
+        Revoke an access grant (removes ACL entry and cascades to leases).
+
+        Args:
+            intent_id: The intent ID.
+            entry_id: The ACL entry ID to revoke.
+        """
+        response = await self._client.delete(
+            f"/api/v1/intents/{intent_id}/acl/entries/{entry_id}"
+        )
+        if response.status_code != 204:
+            self._handle_response(response)
+
+    async def request_access(
+        self,
+        intent_id: str,
+        principal_id: str,
+        principal_type: str = "agent",
+        permission: Permission = Permission.WRITE,
+        reason: str = "",
+        capabilities: Optional[list[str]] = None,
+    ) -> AccessRequest:
+        """
+        Request access to an intent (works even without existing access).
+
+        Args:
+            intent_id: The intent ID.
+            principal_id: ID of the requesting principal.
+            principal_type: Type of principal.
+            permission: Permission level being requested.
+            reason: Why access is needed.
+            capabilities: What the requesting agent can do.
+
+        Returns:
+            The created access request.
+        """
+        payload: dict[str, Any] = {
+            "principal_id": principal_id,
+            "principal_type": principal_type,
+            "requested_permission": permission.value,
+            "reason": reason,
+        }
+        if capabilities:
+            payload["capabilities"] = capabilities
+
+        response = await self._client.post(
+            f"/api/v1/intents/{intent_id}/access-requests",
+            json=payload,
+        )
+        data = self._handle_response(response)
+        return AccessRequest.from_dict(data)
+
+    async def list_access_requests(self, intent_id: str) -> list[AccessRequest]:
+        """
+        List access requests for an intent.
+
+        Args:
+            intent_id: The intent ID.
+
+        Returns:
+            List of access requests.
+        """
+        response = await self._client.get(f"/api/v1/intents/{intent_id}/access-requests")
+        data = self._handle_response(response)
+        items = data.get("access_requests", data) if isinstance(data, dict) else data
+        return [AccessRequest.from_dict(r) for r in items]
+
+    async def approve_access_request(
+        self,
+        intent_id: str,
+        request_id: str,
+        permission: Optional[Permission] = None,
+        expires_at: Optional[datetime] = None,
+        reason: Optional[str] = None,
+    ) -> AccessRequest:
+        """
+        Approve an access request.
+
+        Args:
+            intent_id: The intent ID.
+            request_id: The access request ID.
+            permission: Permission to grant (may differ from requested).
+            expires_at: Optional expiration for the grant.
+            reason: Reason for approval.
+
+        Returns:
+            The updated access request.
+        """
+        payload: dict[str, Any] = {"decided_by": self.agent_id}
+        if permission:
+            payload["permission"] = permission.value
+        if expires_at:
+            payload["expires_at"] = expires_at.isoformat()
+        if reason:
+            payload["reason"] = reason
+
+        response = await self._client.post(
+            f"/api/v1/intents/{intent_id}/access-requests/{request_id}/approve",
+            json=payload,
+        )
+        data = self._handle_response(response)
+        return AccessRequest.from_dict(data)
+
+    async def deny_access_request(
+        self,
+        intent_id: str,
+        request_id: str,
+        reason: Optional[str] = None,
+    ) -> AccessRequest:
+        """
+        Deny an access request.
+
+        Args:
+            intent_id: The intent ID.
+            request_id: The access request ID.
+            reason: Reason for denial.
+
+        Returns:
+            The updated access request.
+        """
+        payload: dict[str, Any] = {"decided_by": self.agent_id}
+        if reason:
+            payload["reason"] = reason
+
+        response = await self._client.post(
+            f"/api/v1/intents/{intent_id}/access-requests/{request_id}/deny",
+            json=payload,
+        )
+        data = self._handle_response(response)
+        return AccessRequest.from_dict(data)
+
     # ==================== Tool Call Logging ====================
 
     async def log_tool_call_started(
@@ -2586,6 +3348,301 @@ class AsyncOpenIntentClient:
         return await self.log_event(
             intent_id, EventType.STREAM_CANCELLED, payload.to_dict()
         )
+
+    # ==================== Task Decomposition & Planning (RFC-0012) ====================
+
+    async def create_task(self, intent_id: str, name: str, **kwargs) -> Task:
+        """Create a task for an intent (RFC-0012)."""
+        payload = {"intent_id": intent_id, "name": name, **kwargs}
+        response = await self._client.post("/api/v1/tasks", json=payload)
+        data = self._handle_response(response)
+        return Task.from_dict(data)
+
+    async def get_task(self, task_id: str) -> Task:
+        """Get a task by ID (RFC-0012)."""
+        response = await self._client.get(f"/api/v1/tasks/{task_id}")
+        data = self._handle_response(response)
+        return Task.from_dict(data)
+
+    async def list_tasks(self, intent_id: str, status: Optional[TaskStatus] = None, limit: int = 100, offset: int = 0) -> list[Task]:  # noqa: E501
+        """List tasks for an intent (RFC-0012)."""
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if status:
+            params["status"] = status.value
+        response = await self._client.get(f"/api/v1/intents/{intent_id}/tasks", params=params)
+        data = self._handle_response(response)
+        return [Task.from_dict(t) for t in data]
+
+    async def update_task(self, task_id: str, version: int, status: Optional[str] = None, **kwargs) -> Task:  # noqa: E501
+        """Update task status with optimistic concurrency (RFC-0012)."""
+        payload: dict[str, Any] = {}
+        if status:
+            payload["status"] = status
+        payload.update(kwargs)
+        response = await self._client.patch(f"/api/v1/tasks/{task_id}", json=payload, headers={"If-Match": str(version)})  # noqa: E501
+        data = self._handle_response(response)
+        return Task.from_dict(data)
+
+    async def create_plan(self, intent_id: str, tasks: Optional[list[str]] = None, **kwargs) -> Plan:  # noqa: E501
+        """Create a plan for an intent (RFC-0012)."""
+        payload: dict[str, Any] = {"intent_id": intent_id}
+        if tasks:
+            payload["tasks"] = tasks
+        payload.update(kwargs)
+        response = await self._client.post("/api/v1/plans", json=payload)
+        data = self._handle_response(response)
+        return Plan.from_dict(data)
+
+    async def get_plan(self, plan_id: str) -> Plan:
+        """Get a plan by ID (RFC-0012)."""
+        response = await self._client.get(f"/api/v1/plans/{plan_id}")
+        data = self._handle_response(response)
+        return Plan.from_dict(data)
+
+    async def list_plans(self, intent_id: str) -> list[Plan]:
+        """List plans for an intent (RFC-0012)."""
+        response = await self._client.get(f"/api/v1/intents/{intent_id}/plans")
+        data = self._handle_response(response)
+        return [Plan.from_dict(p) for p in data]
+
+    async def update_plan(self, plan_id: str, version: int, **kwargs) -> Plan:
+        """Update a plan with optimistic concurrency (RFC-0012)."""
+        response = await self._client.patch(f"/api/v1/plans/{plan_id}", json=kwargs, headers={"If-Match": str(version)})  # noqa: E501
+        data = self._handle_response(response)
+        return Plan.from_dict(data)
+
+    # ==================== Coordinator Governance (RFC-0013) ====================
+
+    async def create_coordinator_lease(self, agent_id: str, intent_id: Optional[str] = None, **kwargs) -> CoordinatorLease:  # noqa: E501
+        """Create a coordinator lease (RFC-0013)."""
+        payload: dict[str, Any] = {"agent_id": agent_id}
+        if intent_id:
+            payload["intent_id"] = intent_id
+        payload.update(kwargs)
+        response = await self._client.post("/api/v1/coordinators", json=payload)
+        data = self._handle_response(response)
+        return CoordinatorLease.from_dict(data)
+
+    async def get_coordinator_lease(self, lease_id: str) -> CoordinatorLease:
+        """Get a coordinator lease (RFC-0013)."""
+        response = await self._client.get(f"/api/v1/coordinators/{lease_id}")
+        data = self._handle_response(response)
+        return CoordinatorLease.from_dict(data)
+
+    async def list_coordinator_leases(self, intent_id: Optional[str] = None) -> list[CoordinatorLease]:  # noqa: E501
+        """List coordinator leases (RFC-0013)."""
+        if intent_id:
+            response = await self._client.get(f"/api/v1/intents/{intent_id}/coordinators")
+            data = self._handle_response(response)
+            return [CoordinatorLease.from_dict(c) for c in data]
+        return []
+
+    async def coordinator_heartbeat(self, lease_id: str) -> dict:
+        """Send coordinator heartbeat (RFC-0013)."""
+        response = await self._client.post(f"/api/v1/coordinators/{lease_id}/heartbeat")
+        return self._handle_response(response)
+
+    async def create_decision_record(self, coordinator_id: str, intent_id: str, decision_type: DecisionType, summary: str, rationale: str, **kwargs) -> dict:  # noqa: E501
+        """Record a coordination decision (RFC-0013)."""
+        payload: dict[str, Any] = {
+            "coordinator_id": coordinator_id,
+            "intent_id": intent_id,
+            "decision_type": decision_type.value,
+            "summary": summary,
+            "rationale": rationale,
+        }
+        payload.update(kwargs)
+        response = await self._client.post("/api/v1/decisions", json=payload)
+        return self._handle_response(response)
+
+    async def list_decision_records(self, intent_id: str, limit: int = 50) -> list[dict]:
+        """List decision records for an intent (RFC-0013)."""
+        response = await self._client.get(f"/api/v1/intents/{intent_id}/coordinator-decisions", params={"limit": limit})  # noqa: E501
+        return self._handle_response(response)
+
+    # ==================== Credential Vaults & Tool Scoping (RFC-0014) ====================
+
+    async def create_vault(self, owner_id: str, name: str) -> dict:
+        """Create a credential vault (RFC-0014)."""
+        response = await self._client.post("/api/v1/vaults", json={"owner_id": owner_id, "name": name})  # noqa: E501
+        return self._handle_response(response)
+
+    async def get_vault(self, vault_id: str) -> dict:
+        """Get a credential vault (RFC-0014)."""
+        response = await self._client.get(f"/api/v1/vaults/{vault_id}")
+        return self._handle_response(response)
+
+    async def create_credential(self, vault_id: str, service: str, label: str, auth_type: str = "api_key", **kwargs) -> dict:  # noqa: E501
+        """Create a credential in a vault (RFC-0014)."""
+        payload: dict[str, Any] = {"vault_id": vault_id, "service": service, "label": label, "auth_type": auth_type}  # noqa: E501
+        payload.update(kwargs)
+        response = await self._client.post("/api/v1/credentials", json=payload)
+        return self._handle_response(response)
+
+    async def get_credential(self, credential_id: str) -> dict:
+        """Get a credential (RFC-0014)."""
+        response = await self._client.get(f"/api/v1/credentials/{credential_id}")
+        return self._handle_response(response)
+
+    async def create_tool_grant(self, credential_id: str, agent_id: str, granted_by: str, scopes: Optional[list[str]] = None, **kwargs) -> ToolGrant:  # noqa: E501
+        """Create a tool grant (RFC-0014)."""
+        payload: dict[str, Any] = {"credential_id": credential_id, "agent_id": agent_id, "granted_by": granted_by, "scopes": scopes or []}  # noqa: E501
+        payload.update(kwargs)
+        response = await self._client.post("/api/v1/grants", json=payload)
+        data = self._handle_response(response)
+        return ToolGrant.from_dict(data)
+
+    async def get_tool_grant(self, grant_id: str) -> ToolGrant:
+        """Get a tool grant (RFC-0014)."""
+        response = await self._client.get(f"/api/v1/grants/{grant_id}")
+        data = self._handle_response(response)
+        return ToolGrant.from_dict(data)
+
+    async def list_agent_grants(self, agent_id: str) -> list[ToolGrant]:
+        """List grants for an agent (RFC-0014)."""
+        response = await self._client.get(f"/api/v1/agents/{agent_id}/grants")
+        data = self._handle_response(response)
+        return [ToolGrant.from_dict(g) for g in data]
+
+    async def revoke_grant(self, grant_id: str) -> dict:
+        """Revoke a tool grant (RFC-0014)."""
+        response = await self._client.delete(f"/api/v1/grants/{grant_id}")
+        return self._handle_response(response)
+
+    async def record_invocation(self, grant_id: str, service: str, tool: str, agent_id: str, **kwargs) -> dict:  # noqa: E501
+        """Record a tool invocation (RFC-0014)."""
+        payload: dict[str, Any] = {"grant_id": grant_id, "service": service, "tool": tool, "agent_id": agent_id}  # noqa: E501
+        payload.update(kwargs)
+        response = await self._client.post("/api/v1/invocations", json=payload)
+        return self._handle_response(response)
+
+    async def list_invocations(self, grant_id: str, limit: int = 50) -> list[dict]:
+        """List invocations for a grant (RFC-0014)."""
+        response = await self._client.get(f"/api/v1/grants/{grant_id}/invocations", params={"limit": limit})  # noqa: E501
+        return self._handle_response(response)
+
+    # ==================== Agent Memory (RFC-0015) ====================
+
+    async def create_memory(self, agent_id: str, namespace: str, key: str, value: dict, memory_type: str = "working", **kwargs) -> MemoryEntry:  # noqa: E501
+        """Create a memory entry (RFC-0015)."""
+        payload: dict[str, Any] = {"agent_id": agent_id, "namespace": namespace, "key": key, "value": value, "memory_type": memory_type}  # noqa: E501
+        payload.update(kwargs)
+        response = await self._client.post("/api/v1/memory", json=payload)
+        data = self._handle_response(response)
+        return MemoryEntry.from_dict(data)
+
+    async def get_memory(self, entry_id: str) -> MemoryEntry:
+        """Get a memory entry (RFC-0015)."""
+        response = await self._client.get(f"/api/v1/memory/{entry_id}")
+        data = self._handle_response(response)
+        return MemoryEntry.from_dict(data)
+
+    async def list_memory(self, agent_id: str, namespace: Optional[str] = None, memory_type: Optional[str] = None, tags: Optional[list[str]] = None, limit: int = 100, offset: int = 0) -> list[MemoryEntry]:  # noqa: E501
+        """List memory entries for an agent (RFC-0015)."""
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if namespace:
+            params["namespace"] = namespace
+        if memory_type:
+            params["memory_type"] = memory_type
+        if tags:
+            params["tags"] = ",".join(tags)
+        response = await self._client.get(f"/api/v1/agents/{agent_id}/memory", params=params)
+        data = self._handle_response(response)
+        return [MemoryEntry.from_dict(m) for m in data]
+
+    async def update_memory(self, entry_id: str, version: int, **kwargs) -> MemoryEntry:
+        """Update a memory entry with optimistic concurrency (RFC-0015)."""
+        response = await self._client.patch(f"/api/v1/memory/{entry_id}", json=kwargs, headers={"If-Match": str(version)})  # noqa: E501
+        data = self._handle_response(response)
+        return MemoryEntry.from_dict(data)
+
+    async def delete_memory(self, entry_id: str) -> None:
+        """Delete a memory entry (RFC-0015)."""
+        response = await self._client.delete(f"/api/v1/memory/{entry_id}")
+        if response.status_code != 200:
+            self._handle_response(response)
+
+    # ==================== Agent Lifecycle & Health (RFC-0016) ====================
+
+    async def register_agent(self, agent_id: str, capabilities: Optional[list[str]] = None, **kwargs) -> AgentRecord:  # noqa: E501
+        """Register an agent (RFC-0016)."""
+        payload: dict[str, Any] = {"agent_id": agent_id, "capabilities": capabilities or []}
+        payload.update(kwargs)
+        response = await self._client.post("/api/v1/agents/register", json=payload)
+        data = self._handle_response(response)
+        return AgentRecord.from_dict(data)
+
+    async def get_agent_record(self, agent_id: str) -> AgentRecord:
+        """Get agent record (RFC-0016)."""
+        response = await self._client.get(f"/api/v1/agents/{agent_id}/record")
+        data = self._handle_response(response)
+        return AgentRecord.from_dict(data)
+
+    async def list_agents(self, status: Optional[str] = None, role_id: Optional[str] = None) -> list[AgentRecord]:  # noqa: E501
+        """List registered agents (RFC-0016)."""
+        params: dict[str, Any] = {}
+        if status:
+            params["status"] = status
+        if role_id:
+            params["role_id"] = role_id
+        response = await self._client.get("/api/v1/agents", params=params)
+        data = self._handle_response(response)
+        return [AgentRecord.from_dict(a) for a in data]
+
+    async def agent_heartbeat(self, agent_id: str, current_load: int = 0, tasks_in_progress: Optional[list[str]] = None) -> dict:  # noqa: E501
+        """Send agent heartbeat (RFC-0016)."""
+        payload: dict[str, Any] = {"status": "active", "current_load": current_load, "tasks_in_progress": tasks_in_progress or []}  # noqa: E501
+        response = await self._client.post(f"/api/v1/agents/{agent_id}/heartbeat", json=payload)
+        return self._handle_response(response)
+
+    async def update_agent_status(self, agent_id: str, status: str) -> dict:
+        """Update agent status (RFC-0016)."""
+        response = await self._client.patch(f"/api/v1/agents/{agent_id}/status", json={"status": status})  # noqa: E501
+        return self._handle_response(response)
+
+    # ==================== Triggers & Reactive Scheduling (RFC-0017) ====================
+
+    async def create_trigger(self, name: str, trigger_type: str, **kwargs) -> Trigger:
+        """Create a trigger (RFC-0017)."""
+        payload: dict[str, Any] = {"name": name, "type": trigger_type}
+        payload.update(kwargs)
+        response = await self._client.post("/api/v1/triggers", json=payload)
+        data = self._handle_response(response)
+        return Trigger.from_dict(data)
+
+    async def get_trigger(self, trigger_id: str) -> Trigger:
+        """Get a trigger (RFC-0017)."""
+        response = await self._client.get(f"/api/v1/triggers/{trigger_id}")
+        data = self._handle_response(response)
+        return Trigger.from_dict(data)
+
+    async def list_triggers(self, namespace: Optional[str] = None, trigger_type: Optional[str] = None) -> list[Trigger]:  # noqa: E501
+        """List triggers (RFC-0017)."""
+        params: dict[str, Any] = {}
+        if namespace:
+            params["namespace"] = namespace
+        if trigger_type:
+            params["type"] = trigger_type
+        response = await self._client.get("/api/v1/triggers", params=params)
+        data = self._handle_response(response)
+        return [Trigger.from_dict(t) for t in data]
+
+    async def update_trigger(self, trigger_id: str, version: int, **kwargs) -> Trigger:
+        """Update a trigger with optimistic concurrency (RFC-0017)."""
+        response = await self._client.patch(f"/api/v1/triggers/{trigger_id}", json=kwargs, headers={"If-Match": str(version)})  # noqa: E501
+        data = self._handle_response(response)
+        return Trigger.from_dict(data)
+
+    async def fire_trigger(self, trigger_id: str) -> dict:
+        """Fire a trigger manually (RFC-0017)."""
+        response = await self._client.post(f"/api/v1/triggers/{trigger_id}/fire")
+        return self._handle_response(response)
+
+    async def delete_trigger(self, trigger_id: str) -> None:
+        """Delete a trigger (RFC-0017)."""
+        response = await self._client.delete(f"/api/v1/triggers/{trigger_id}")
+        if response.status_code != 200:
+            self._handle_response(response)
 
     async def close(self) -> None:
         """Close the HTTP client connection."""

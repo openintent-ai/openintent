@@ -23,7 +23,7 @@ The SDK uses optional dependencies to keep the core package lightweight:
 pip install openintent[server]
 ```
 
-Includes FastAPI server implementing all 8 RFCs. Run with `openintent-server`.
+Includes FastAPI server implementing all 17 RFCs. Run with `openintent-server`.
 
 ### With LLM Adapters
 

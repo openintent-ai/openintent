@@ -9,6 +9,15 @@ Supported providers:
 - Google Gemini (Gemini 1.5, etc.)
 - xAI Grok (Grok-beta, etc.)
 - DeepSeek (DeepSeek-chat, DeepSeek-coder, etc.)
+- Azure OpenAI (GPT-4, GPT-3.5 via Azure endpoints)
+- OpenRouter (200+ models via unified API)
+
+Streaming hooks:
+All adapters support streaming hooks via AdapterConfig:
+- on_stream_start(stream_id, model, provider): Called when a stream begins
+- on_token(token, stream_id): Called for each content token during streaming
+- on_stream_end(stream_id, content, chunks): Called when a stream completes
+- on_stream_error(error, stream_id): Called when a stream fails
 
 Example usage with OpenAI:
 
@@ -28,6 +37,19 @@ Example usage with OpenAI:
         messages=[{"role": "user", "content": "Hello"}]
     )
 
+Example usage with streaming hooks:
+
+    from openintent.adapters import AdapterConfig, OpenAIAdapter
+
+    config = AdapterConfig(
+        on_stream_start=lambda sid, model, provider: print(f"Stream {sid} started"),
+        on_token=lambda token, sid: print(token, end=""),
+        on_stream_end=lambda sid, content, chunks: print(f"\\nDone: {chunks} chunks"),
+        on_stream_error=lambda err, sid: print(f"Error: {err}"),
+    )
+
+    adapter = OpenAIAdapter(openai_client, client, intent_id="...", config=config)
+
 Example usage with Google Gemini:
 
     import google.generativeai as genai
@@ -44,11 +66,13 @@ Example usage with Google Gemini:
 """
 
 from openintent.adapters.anthropic_adapter import AnthropicAdapter
+from openintent.adapters.azure_openai_adapter import AzureOpenAIAdapter
 from openintent.adapters.base import AdapterConfig, BaseAdapter
 from openintent.adapters.deepseek_adapter import DeepSeekAdapter
 from openintent.adapters.gemini_adapter import GeminiAdapter
 from openintent.adapters.grok_adapter import GrokAdapter
 from openintent.adapters.openai_adapter import OpenAIAdapter
+from openintent.adapters.openrouter_adapter import OpenRouterAdapter
 
 __all__ = [
     "BaseAdapter",
@@ -58,4 +82,6 @@ __all__ = [
     "GeminiAdapter",
     "GrokAdapter",
     "DeepSeekAdapter",
+    "AzureOpenAIAdapter",
+    "OpenRouterAdapter",
 ]

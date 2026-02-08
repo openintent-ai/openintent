@@ -28,15 +28,63 @@ from typing import Any, Callable, Optional, TypeVar, Union
 
 from .client import AsyncOpenIntentClient, OpenIntentClient
 from .models import (
+    AccessRequest,
+    ACLEntry,
     EventType,
     Intent,
+    IntentContext,
     IntentPortfolio,
     IntentStatus,
     MembershipRole,
+    PeerInfo,
+    Permission,
 )
 from .streaming import SSEEvent, SSEEventType, SSEStream, SSESubscription
 
 logger = logging.getLogger("openintent.agents")
+
+
+class _MemoryProxy:
+    """Proxy for agent memory operations."""
+    def __init__(self, agent):
+        self._agent = agent
+
+    async def store(self, key, value, **kwargs):
+        return await self._agent.async_client.memory.store(
+            agent_id=self._agent._agent_id, key=key, value=value, **kwargs
+        )
+
+    async def recall(self, **kwargs):
+        return await self._agent.async_client.memory.recall(
+            agent_id=self._agent._agent_id, **kwargs
+        )
+
+    async def pin(self, key):
+        return await self._agent.async_client.memory.pin(
+            agent_id=self._agent._agent_id, key=key
+        )
+
+
+class _TasksProxy:
+    """Proxy for agent task operations."""
+    def __init__(self, agent):
+        self._agent = agent
+
+    async def create(self, intent_id, **kwargs):
+        return await self._agent.async_client.tasks.create(
+            intent_id=intent_id, **kwargs
+        )
+
+
+class _ToolsProxy:
+    """Proxy for agent tool operations."""
+    def __init__(self, agent):
+        self._agent = agent
+
+    async def invoke(self, tool_name, **kwargs):
+        return await self._agent.async_client.tools.invoke(
+            agent_id=self._agent._agent_id, tool_name=tool_name, **kwargs
+        )
 
 
 # ==================== Event Handler Decorators ====================
@@ -167,6 +215,91 @@ def on_all_complete(func: Callable) -> Callable:
     return func
 
 
+def on_access_requested(func: Callable) -> Callable:
+    """
+    Decorator: Called when another principal requests access to an intent
+    this agent administers. Return "approve", "deny", or "defer".
+
+    Enables policy-as-code for automated access decisions.
+
+    Example:
+        ```python
+        @on_access_requested
+        async def policy(self, intent, request):
+            if "ocr" in request.capabilities:
+                return "approve"
+            return "defer"
+        ```
+    """
+    func._openintent_handler = "access_requested"
+    return func
+
+
+def on_task(status: Optional[str] = None) -> Callable:
+    """
+    Decorator: Called when a task lifecycle event occurs.
+
+    Args:
+        status: Optional task status filter (e.g., "completed", "failed").
+                If None, triggers on any task event.
+    """
+    def decorator(func: Callable) -> Callable:
+        func._openintent_handler = "task"
+        func._openintent_task_status = status
+        return func
+    return decorator
+
+
+def on_trigger(name: Optional[str] = None) -> Callable:
+    """
+    Decorator: Called when a trigger fires and creates an intent for this agent.
+
+    Args:
+        name: Optional trigger name filter. If None, handles any trigger.
+    """
+    def decorator(func: Callable) -> Callable:
+        func._openintent_handler = "trigger"
+        func._openintent_trigger_name = name
+        return func
+    return decorator
+
+
+def on_drain(func: Callable) -> Callable:
+    """
+    Decorator: Called when the agent receives a drain signal.
+
+    The handler should finish in-progress work and prepare for shutdown.
+    The agent will stop accepting new assignments after this is called.
+    """
+    func._openintent_handler = "drain"
+    return func
+
+
+def on_conflict(func: Callable) -> Callable:
+    """Decorator: Called when version conflicts occur between agents (RFC-0002).
+    Handler receives (self, intent, conflict) with conflict details."""
+    func._openintent_handler = "conflict"
+    return func
+
+
+def on_escalation(func: Callable) -> Callable:
+    """Decorator: Called when an agent requests coordinator intervention.
+    Handler receives (self, intent, agent_id, reason)."""
+    func._openintent_handler = "escalation"
+    return func
+
+
+def on_quorum(threshold: float = 0.5) -> Callable:
+    """Decorator: Called when multi-agent voting reaches a threshold.
+    Args: threshold - fraction of agents needed (0.0 to 1.0).
+    Handler receives (self, intent, votes)."""
+    def decorator(func: Callable) -> Callable:
+        func._openintent_handler = "quorum"
+        func._openintent_quorum_threshold = threshold
+        return func
+    return decorator
+
+
 # ==================== Portfolio DSL ====================
 
 
@@ -225,6 +358,17 @@ class AgentConfig:
     reconnect_delay: float = 5.0
     max_reconnects: int = 10
     log_level: int = logging.INFO
+    capabilities: list[str] = field(default_factory=list)
+    auto_request_access: bool = False
+    # v0.8.0: Lifecycle (RFC-0016)
+    auto_heartbeat: bool = True
+    heartbeat_interval: float = 30.0
+    drain_timeout: float = 60.0
+    # v0.8.0: Memory (RFC-0015)
+    memory: Optional[str] = None  # "working", "episodic", "semantic"
+    memory_namespace: Optional[str] = None
+    # v0.8.0: Tools (RFC-0014)
+    tools: list[str] = field(default_factory=list)
 
 
 # ==================== Base Agent Class ====================
@@ -265,6 +409,11 @@ class BaseAgent(ABC):
 
         self._discover_handlers()
 
+        # v0.8.0 proxies
+        self._memory_proxy: Optional[_MemoryProxy] = None
+        self._tasks_proxy: Optional[_TasksProxy] = None
+        self._tools_proxy: Optional[_ToolsProxy] = None
+
     def _discover_handlers(self) -> None:
         """Discover decorated handler methods."""
         self._handlers = {
@@ -274,6 +423,10 @@ class BaseAgent(ABC):
             "state_change": [],
             "event": [],
             "all_complete": [],
+            "access_requested": [],
+            "task": [],
+            "trigger": [],
+            "drain": [],
         }
 
         for name in dir(self):
@@ -311,6 +464,36 @@ class BaseAgent(ABC):
                 agent_id=self._agent_id,
             )
         return self._async_client
+
+    @property
+    def memory(self) -> _MemoryProxy:
+        """Access agent memory (RFC-0015). Configure via @Agent(memory="episodic")."""
+        if not self._memory_proxy:
+            self._memory_proxy = _MemoryProxy(
+                self.async_client,
+                self._agent_id,
+                memory_type=self._config.memory or "episodic",
+                namespace=self._config.memory_namespace,
+            )
+        return self._memory_proxy
+
+    @property
+    def tasks(self) -> _TasksProxy:
+        """Access task operations (RFC-0012)."""
+        if not self._tasks_proxy:
+            self._tasks_proxy = _TasksProxy(self.async_client, self._agent_id)
+        return self._tasks_proxy
+
+    @property
+    def tools(self) -> _ToolsProxy:
+        """Access tool invocation (RFC-0014). Configure via @Agent(tools=["web_search"])."""
+        if not self._tools_proxy:
+            self._tools_proxy = _ToolsProxy(
+                self.async_client,
+                self._agent_id,
+                tool_names=self._config.tools,
+            )
+        return self._tools_proxy
 
     def lease(self, intent_id: str, scope: str, duration_seconds: int = 300):
         """
@@ -351,6 +534,121 @@ class BaseAgent(ABC):
             intent_id, EventType.COMMENT, {"message": message, **data}
         )
 
+    # ==================== Access Control (RFC-0011) ====================
+
+    async def _build_context(self, intent: Intent) -> "IntentContext":
+        """
+        Build an IntentContext for an intent, auto-populating based on
+        this agent's permission level.
+        """
+        ctx = IntentContext()
+
+        try:
+            if intent.parent_intent_id:
+                ctx.parent = await self.async_client.get_intent(intent.parent_intent_id)
+        except Exception:
+            pass
+
+        if intent.depends_on:
+            for dep_id in intent.depends_on:
+                try:
+                    dep = await self.async_client.get_intent(dep_id)
+                    ctx.dependencies[dep.title] = dep.state.to_dict()
+                except Exception:
+                    pass
+
+        try:
+            events = await self.async_client.get_events(intent.id, limit=20)
+            ctx.events = events
+        except Exception:
+            pass
+
+        try:
+            acl = await self.async_client.get_acl(intent.id)
+            ctx.acl = acl
+            for entry in acl.entries:
+                if entry.principal_id == self._agent_id:
+                    ctx.my_permission = entry.permission
+                ctx.peers.append(PeerInfo(
+                    principal_id=entry.principal_id,
+                    principal_type=entry.principal_type,
+                    permission=entry.permission,
+                ))
+        except Exception:
+            pass
+
+        return ctx
+
+    async def grant_access(
+        self,
+        intent_id: str,
+        principal_id: str,
+        permission: str = "write",
+        reason: Optional[str] = None,
+    ) -> ACLEntry:
+        """Grant access to another principal on an intent."""
+        return await self.async_client.grant_access(
+            intent_id,
+            principal_id,
+            principal_type="agent",
+            permission=Permission(permission),
+            reason=reason,
+        )
+
+    async def revoke_access(self, intent_id: str, entry_id: str) -> None:
+        """Revoke access from a principal."""
+        await self.async_client.revoke_access(intent_id, entry_id)
+
+    def temp_access(
+        self,
+        intent_id: str,
+        principal_id: str,
+        permission: str = "write",
+        reason: Optional[str] = None,
+    ) -> "_TempAccessContext":
+        """
+        Context manager for temporary access grants with automatic revocation.
+
+        Example:
+            ```python
+            async with self.temp_access(intent.id, "helper-agent", "write"):
+                await self.client.assign_agent(intent.id, "helper-agent")
+            # Access automatically revoked
+            ```
+        """
+        return _TempAccessContext(self, intent_id, principal_id, permission, reason)
+
+    async def delegate(
+        self, intent_id: str, target_agent_id: str, payload: Optional[dict[str, Any]] = None
+    ) -> None:
+        """
+        Delegate work on an intent to another agent.
+
+        The target agent receives the assignment with intent.ctx.delegated_by set.
+        """
+        await self.async_client.log_event(
+            intent_id,
+            EventType.AGENT_ASSIGNED,
+            {
+                "agent_id": target_agent_id,
+                "delegated_by": self._agent_id,
+                "payload": payload or {},
+            },
+        )
+        await self.async_client.assign_agent(intent_id, target_agent_id)
+
+    async def escalate(self, intent_id: str, reason: str, data: Optional[dict[str, Any]] = None) -> None:  # noqa: E501
+        """
+        Escalate an intent to administrators for review.
+
+        Creates an arbitration request through the governance pipeline.
+        """
+        await self.async_client.request_arbitration(
+            intent_id,
+            reason=reason,
+            context=data or {},
+        )
+
     # ==================== Event Routing ====================
 
     async def _handle_event(self, event: SSEEvent) -> None:
@@ -381,18 +679,29 @@ class BaseAgent(ABC):
                 or event.type == "INTENT_COMPLETED"
             ):
                 await self._on_intent_complete(event)
+            elif (
+                event.type == SSEEventType.ACCESS_REQUESTED
+                or event.type == "ACCESS_REQUESTED"
+                or event.type == "access_requested"
+            ):
+                await self._on_access_requested(event)
             else:
                 await self._on_generic_event(event)
         except Exception as e:
             logger.exception(f"Error handling event {event.type}: {e}")
 
     async def _on_assignment(self, event: SSEEvent) -> None:
-        """Handle assignment events."""
+        """Handle assignment events with auto-populated context."""
         intent_id = event.data.get("intent_id")
         if not intent_id:
             return
 
         intent = await self.async_client.get_intent(intent_id)
+
+        ctx = await self._build_context(intent)
+        if event.data.get("delegated_by"):
+            ctx.delegated_by = event.data["delegated_by"]
+        intent.ctx = ctx
 
         for handler in self._handlers["assignment"]:
             try:
@@ -473,6 +782,32 @@ class BaseAgent(ABC):
                 except Exception as e:
                     logger.exception(f"Event handler error: {e}")
 
+    async def _on_access_requested(self, event: SSEEvent) -> None:
+        """Handle access request events via @on_access_requested decorator."""
+        intent_id = event.data.get("intent_id")
+        if not intent_id:
+            return
+
+        intent = await self.async_client.get_intent(intent_id)
+        request = AccessRequest.from_dict(event.data.get("request", event.data))
+
+        for handler in self._handlers["access_requested"]:
+            try:
+                result = await self._call_handler(handler, intent, request)
+                if result == "approve":
+                    await self.async_client.approve_access_request(
+                        intent_id, request.id,
+                        permission=request.requested_permission,
+                        reason="Auto-approved by agent policy",
+                    )
+                elif result == "deny":
+                    await self.async_client.deny_access_request(
+                        intent_id, request.id,
+                        reason="Denied by agent policy",
+                    )
+            except Exception as e:
+                logger.exception(f"Access request handler error: {e}")
+
     async def _call_handler(self, handler: Callable, *args: Any) -> Any:
         """Call a handler, handling both sync and async methods."""
         if asyncio.iscoroutinefunction(handler):
@@ -533,8 +868,129 @@ class BaseAgent(ABC):
             self._subscription.stop()
 
 
+class _MemoryProxy:
+    """Proxy for natural memory access from agent methods."""
+
+    def __init__(self, client_ref, agent_id: str, memory_type: str = "episodic", namespace: Optional[str] = None):  # noqa: E501
+        self._client_ref = client_ref
+        self._agent_id = agent_id
+        self._memory_type = memory_type
+        self._namespace = namespace
+
+    async def store(self, key: str, value: Any, tags: Optional[list[str]] = None) -> Any:
+        """Store a memory entry."""
+        return await self._client_ref.memory.store(
+            agent_id=self._agent_id, key=key, value=value,
+            memory_type=self._memory_type, tags=tags or [],
+            namespace=self._namespace,
+        )
+
+    async def recall(self, key: Optional[str] = None, tags: Optional[list[str]] = None) -> Any:
+        """Recall memories by key or tags."""
+        return await self._client_ref.memory.query(
+            agent_id=self._agent_id, namespace=self._namespace,
+            key=key, tags=tags,
+        )
+
+    async def forget(self, key: str) -> None:
+        """Remove a memory entry."""
+        await self._client_ref.memory.delete(agent_id=self._agent_id, key=key)
+
+    async def pin(self, key: str) -> None:
+        """Pin a memory to prevent eviction."""
+        await self._client_ref.memory.pin(agent_id=self._agent_id, key=key)
+
+
+class _TasksProxy:
+    """Proxy for task operations from agent methods."""
+
+    def __init__(self, client_ref, agent_id: str):
+        self._client_ref = client_ref
+        self._agent_id = agent_id
+
+    async def create(self, intent_id: str, title: str, **kwargs) -> Any:
+        """Create a subtask within an intent."""
+        return await self._client_ref.tasks.create(
+            intent_id=intent_id, title=title,
+            assigned_to=kwargs.get("assigned_to", self._agent_id),
+            **{k: v for k, v in kwargs.items() if k != "assigned_to"},
+        )
+
+    async def complete(self, task_id: str, result: Optional[dict] = None) -> Any:
+        """Mark a task as completed."""
+        return await self._client_ref.tasks.update_status(task_id, status="completed", result=result)  # noqa: E501
+
+    async def fail(self, task_id: str, error: Optional[str] = None) -> Any:
+        """Mark a task as failed."""
+        return await self._client_ref.tasks.update_status(task_id, status="failed", error=error)
+
+    async def list(self, intent_id: str, status: Optional[str] = None) -> list:
+        """List tasks for an intent, optionally filtered by status."""
+        return await self._client_ref.tasks.list(intent_id=intent_id, status=status)
+
+
+class _ToolsProxy:
+    """Proxy for tool invocation from agent methods."""
+
+    def __init__(self, client_ref, agent_id: str, tool_names: list[str]):
+        self._client_ref = client_ref
+        self._agent_id = agent_id
+        self._tool_names = tool_names
+
+    async def invoke(self, tool_name: str, **kwargs) -> Any:
+        """Invoke a tool by name with automatic grant resolution."""
+        return await self._client_ref.tools.invoke(
+            tool_name=tool_name, agent_id=self._agent_id, **kwargs
+        )
+
+    async def list_grants(self) -> list:
+        """List active tool grants for this agent."""
+        return await self._client_ref.tools.list_grants(agent_id=self._agent_id)
+
+
+class _TempAccessContext:
+    """Async context manager for temporary access grants."""
+
+    def __init__(
+        self,
+        agent: BaseAgent,
+        intent_id: str,
+        principal_id: str,
+        permission: str,
+        reason: Optional[str],
+    ):
+        self._agent = agent
+        self._intent_id = intent_id
+        self._principal_id = principal_id
+        self._permission = permission
+        self._reason = reason
+        self._entry: Optional[ACLEntry] = None
+
+    async def __aenter__(self) -> ACLEntry:
+        self._entry = await self._agent.grant_access(
+            self._intent_id,
+            self._principal_id,
+            self._permission,
+            self._reason,
+        )
+        return self._entry
+
+    async def __aexit__(self, *args: Any) -> None:
+        if self._entry:
+            try:
+                await self._agent.revoke_access(self._intent_id, self._entry.id)
+            except Exception:
+                pass
+
+
 def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
-    agent_id: str, config: Optional[AgentConfig] = None
+    agent_id: str,
+    config: Optional[AgentConfig] = None,
+    capabilities: Optional[list[str]] = None,
+    memory: Optional[str] = None,
+    tools: Optional[list[str]] = None,
+    auto_heartbeat: bool = True,
+    **kwargs: Any,
 ) -> Callable[[type], type]:
     """
     Class decorator to create an Agent from a class.
@@ -559,6 +1015,13 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
         ):
             BaseAgent.__init__(self, base_url, api_key, config)
             self._agent_id = agent_id
+            if capabilities:
+                self._config.capabilities = capabilities
+            if memory:
+                self._config.memory = memory
+            if tools:
+                self._config.tools = tools
+            self._config.auto_heartbeat = auto_heartbeat
             if original_init and original_init is not object.__init__:
                 original_init(self)
 
@@ -569,7 +1032,7 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
                 if not hasattr(cls, name):
                     setattr(cls, name, method)
 
-        for prop_name in ["agent_id", "client", "async_client"]:
+        for prop_name in ["agent_id", "client", "async_client", "memory", "tasks", "tools"]:
             if not hasattr(cls, prop_name):
                 setattr(cls, prop_name, getattr(BaseAgent, prop_name))
 
@@ -587,176 +1050,362 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
     return decorator
 
 
-# ==================== Coordinator Class ====================
+# ==================== Coordinator Decorator ====================
 
 
-class Coordinator(BaseAgent):
+def Coordinator(  # noqa: N802
+    coordinator_id: str,
+    agents: Optional[list[str]] = None,
+    strategy: str = "sequential",
+    guardrails: Optional[list[str]] = None,
+    config: Optional[AgentConfig] = None,
+    capabilities: Optional[list[str]] = None,
+    memory: Optional[str] = None,
+    tools: Optional[list[str]] = None,
+    auto_heartbeat: bool = True,
+    **kwargs: Any,
+) -> Callable[[type], type]:
     """
-    A specialized agent for coordinating portfolios of intents.
+    Class decorator to create a Coordinator from a class.
 
-    Extends BaseAgent with portfolio management, dependency tracking,
-    and multi-intent orchestration.
+    A Coordinator manages portfolios of intents, handles dependency
+    tracking, multi-intent orchestration, and governance.
 
     Example:
         ```python
-        class MyCoordinator(Coordinator):
-            async def plan(self, goal: str) -> PortfolioSpec:
-                return PortfolioSpec(
-                    name=goal,
+        @Coordinator("orchestrator", agents=["researcher", "writer"])
+        class MyCoordinator:
+            @on_assignment
+            async def plan(self, intent):
+                spec = PortfolioSpec(
+                    name=intent.title,
                     intents=[
                         IntentSpec("Research", assign="researcher"),
                         IntentSpec("Write", assign="writer", depends_on=["Research"]),
                     ]
                 )
+                return await self.execute(spec)
 
             @on_all_complete
             async def finalize(self, portfolio):
                 return merge_results(portfolio.intents)
+
+        MyCoordinator.run()
         ```
     """
 
-    _portfolios: dict[str, IntentPortfolio] = {}
-    _intent_to_portfolio: dict[str, str] = {}
+    def decorator(cls: type) -> type:
+        original_init = cls.__init__ if hasattr(cls, "__init__") else None
 
-    def __init__(
-        self,
-        agent_id: str,
-        base_url: Optional[str] = None,
-        api_key: Optional[str] = None,
-        config: Optional[AgentConfig] = None,
-    ):
-        super().__init__(base_url, api_key, config)
-        self._agent_id = agent_id
-        self._portfolios = {}
-        self._intent_to_portfolio = {}
+        def new_init(
+            self, base_url: Optional[str] = None, api_key: Optional[str] = None
+        ):
+            BaseAgent.__init__(self, base_url, api_key, config)
+            self._agent_id = coordinator_id
+            if capabilities:
+                self._config.capabilities = capabilities
+            if memory:
+                self._config.memory = memory
+            if tools:
+                self._config.tools = tools
+            self._config.auto_heartbeat = auto_heartbeat
+            self._agents_list = agents or []
+            self._strategy = strategy
+            self._guardrails = guardrails or []
+            self._decision_log = []
+            self._portfolios = {}
+            self._intent_to_portfolio = {}
+            self._handlers.update({"conflict": [], "escalation": [], "quorum": []})
+            registered_funcs = set()
+            for handler_type, handler_list in self._handlers.items():
+                for h in handler_list:
+                    registered_funcs.add(getattr(h, "__func__", h))
+            for attr_name in dir(self):
+                if attr_name.startswith("_"):
+                    continue
+                method = getattr(self, attr_name, None)
+                if method and callable(method) and hasattr(method, "_openintent_handler"):
+                    handler_type = method._openintent_handler
+                    func = getattr(method, "__func__", method)
+                    if handler_type in self._handlers and func not in registered_funcs:
+                        self._handlers[handler_type].append(method)
+                        registered_funcs.add(func)
+            if original_init and original_init is not object.__init__:
+                original_init(self)
 
-    async def create_portfolio(self, spec: PortfolioSpec) -> IntentPortfolio:
-        """
-        Create a portfolio from a specification.
+        cls.__init__ = new_init
 
-        Handles dependency ordering and intent creation.
-        """
-        portfolio = await self.async_client.create_portfolio(
-            name=spec.name,
-            description=spec.description,
-            governance_policy=spec.governance_policy,
-            metadata=spec.metadata,
-        )
+        for name, method in BaseAgent.__dict__.items():
+            if not name.startswith("__") and callable(method):
+                if not hasattr(cls, name):
+                    setattr(cls, name, method)
 
-        intent_id_map: dict[str, str] = {}
+        for prop_name in ["agent_id", "client", "async_client", "memory", "tasks", "tools"]:
+            if not hasattr(cls, prop_name):
+                setattr(cls, prop_name, getattr(BaseAgent, prop_name))
 
-        ordered = self._topological_sort(spec.intents)
-
-        for intent_spec in ordered:
-            wait_for = [intent_id_map[dep] for dep in (intent_spec.depends_on or [])]
-
-            initial_state = dict(intent_spec.initial_state)
-
-            intent = await self.async_client.create_intent(
-                title=intent_spec.title,
-                description=intent_spec.description,
-                constraints=intent_spec.constraints,
-                initial_state=initial_state,
-                depends_on=wait_for,
+        async def create_portfolio(self, spec: PortfolioSpec) -> IntentPortfolio:
+            """Create a portfolio from a specification."""
+            portfolio = await self.async_client.create_portfolio(
+                name=spec.name,
+                description=spec.description,
+                governance_policy=spec.governance_policy,
+                metadata=spec.metadata,
             )
 
-            intent_id_map[intent_spec.title] = intent.id
+            intent_id_map: dict[str, str] = {}
+            ordered = self._topological_sort(spec.intents)
 
-            await self.async_client.add_intent_to_portfolio(
-                portfolio.id,
-                intent.id,
-                role=MembershipRole.MEMBER,
+            for intent_spec in ordered:
+                wait_for = [intent_id_map[dep] for dep in (intent_spec.depends_on or [])]
+                initial_state = dict(intent_spec.initial_state)
+
+                intent = await self.async_client.create_intent(
+                    title=intent_spec.title,
+                    description=intent_spec.description,
+                    constraints=intent_spec.constraints,
+                    initial_state=initial_state,
+                    depends_on=wait_for,
+                )
+
+                intent_id_map[intent_spec.title] = intent.id
+
+                await self.async_client.add_intent_to_portfolio(
+                    portfolio.id,
+                    intent.id,
+                    role=MembershipRole.MEMBER,
+                )
+
+                if intent_spec.assign:
+                    await self.async_client.assign_agent(intent.id, intent_spec.assign)
+
+                self._intent_to_portfolio[intent.id] = portfolio.id
+
+            self._portfolios[portfolio.id] = portfolio
+            return portfolio
+
+        cls.create_portfolio = create_portfolio
+
+        def _topological_sort(self, intents: list[IntentSpec]) -> list[IntentSpec]:
+            """Sort intents by dependencies."""
+            by_title = {i.title: i for i in intents}
+            visited: set[str] = set()
+            result: list[IntentSpec] = []
+
+            def visit(spec: IntentSpec):
+                if spec.title in visited:
+                    return
+                visited.add(spec.title)
+                for dep in spec.depends_on or []:
+                    if dep in by_title:
+                        visit(by_title[dep])
+                result.append(spec)
+
+            for spec in intents:
+                visit(spec)
+
+            return result
+
+        cls._topological_sort = _topological_sort
+
+        async def execute(self, spec: PortfolioSpec) -> dict[str, Any]:
+            """Execute a portfolio and wait for completion."""
+            portfolio = await self.create_portfolio(spec)
+            await self._subscribe_portfolio(portfolio.id)
+
+            while True:
+                portfolio_with_intents = await self.async_client.get_portfolio(portfolio.id)
+                intents_list, aggregate = await self.async_client.get_portfolio_intents(
+                    portfolio.id
+                )
+                portfolio_with_intents.intents = intents_list
+                portfolio_with_intents.aggregate_status = aggregate
+
+                all_complete = all(i.status == IntentStatus.COMPLETED for i in intents_list)
+
+                if all_complete:
+                    for handler in self._handlers["all_complete"]:
+                        result = await self._call_handler(handler, portfolio_with_intents)
+                        if result:
+                            return result
+                    return self._merge_results(portfolio_with_intents)
+
+                await asyncio.sleep(0.5)
+
+        cls.execute = execute
+
+        async def _subscribe_portfolio(self, portfolio_id: str) -> None:
+            """Subscribe to portfolio events."""
+            url = f"{self._config.base_url}/api/v1/portfolios/{portfolio_id}/subscribe"
+            headers = {
+                "X-API-Key": self._config.api_key,
+                "X-Agent-ID": self._agent_id,
+            }
+
+            async def event_loop():
+                stream = SSEStream(
+                    url,
+                    headers,
+                    reconnect_delay=self._config.reconnect_delay,
+                    max_reconnects=self._config.max_reconnects,
+                )
+                for event in stream:
+                    if not self._running:
+                        break
+                    await self._handle_event(event)
+
+            asyncio.create_task(event_loop())
+
+        cls._subscribe_portfolio = _subscribe_portfolio
+
+        def _merge_results(self, portfolio: IntentPortfolio) -> dict[str, Any]:
+            """Merge results from all intents in a portfolio."""
+            return {
+                "portfolio_id": portfolio.id,
+                "name": portfolio.name,
+                "intents": {i.title: i.state.to_dict() for i in portfolio.intents},
+            }
+
+        cls._merge_results = _merge_results
+
+        async def coord_delegate(self, intent_id: str, agent_id: str, **kw):
+            """Delegate work on an intent to another agent."""
+            await self.record_decision("delegation", f"Delegating to {agent_id}", agent_id=agent_id)  # noqa: E501
+            return await self.async_client.assign_agent(intent_id, agent_id)
+
+        cls.delegate = coord_delegate
+
+        async def coord_escalate(self, intent_id: str, reason: str, **kw):
+            """Escalate an intent to the coordinator for review."""
+            await self.record_decision("escalation", reason)
+            return await self.async_client.request_arbitration(
+                intent_id, reason=reason, context=kw,
             )
 
-            if intent_spec.assign:
-                await self.async_client.assign_agent(intent.id, intent_spec.assign)
+        cls.escalate = coord_escalate
 
-            self._intent_to_portfolio[intent.id] = portfolio.id
+        async def record_decision(self, decision_type: str, summary: str, rationale: str = "", **data: Any) -> dict[str, Any]:  # noqa: E501
+            """Record an auditable coordinator decision (RFC-0013)."""
+            record = {
+                "type": decision_type,
+                "summary": summary,
+                "rationale": rationale,
+                "coordinator_id": self._agent_id,
+                **data,
+            }
+            self._decision_log.append(record)
+            return record
 
-        self._portfolios[portfolio.id] = portfolio
+        cls.record_decision = record_decision
 
-        return portfolio
+        decisions_prop = property(lambda self: list(self._decision_log))
+        decisions_prop.__doc__ = "Access the coordinator's decision log."
+        cls.decisions = decisions_prop
 
-    def _topological_sort(self, intents: list[IntentSpec]) -> list[IntentSpec]:
-        """Sort intents by dependencies."""
-        by_title = {i.title: i for i in intents}
-        visited = set()
-        result = []
+        agents_prop = property(lambda self: list(self._agents_list))
+        agents_prop.__doc__ = "List of managed agent IDs."
+        cls.agents = agents_prop
 
-        def visit(spec: IntentSpec):
-            if spec.title in visited:
-                return
-            visited.add(spec.title)
-            for dep in spec.depends_on or []:
-                if dep in by_title:
-                    visit(by_title[dep])
-            result.append(spec)
+        @classmethod
+        def run_agent(
+            cls_self, base_url: Optional[str] = None, api_key: Optional[str] = None
+        ):
+            instance = cls_self(base_url, api_key)
+            instance.run()
 
-        for spec in intents:
-            visit(spec)
+        cls.run = run_agent
 
-        return result
+        return cls
 
-    async def execute(self, spec: PortfolioSpec) -> dict[str, Any]:
-        """
-        Execute a portfolio and wait for completion.
+    return decorator
 
-        Creates the portfolio, subscribes to events, and returns
-        merged results when all intents complete.
-        """
-        portfolio = await self.create_portfolio(spec)
 
-        await self._subscribe_portfolio(portfolio.id)
+# ==================== First-class Protocol Decorators ====================
 
-        while True:
-            portfolio_with_intents = await self.async_client.get_portfolio(portfolio.id)
-            intents, aggregate = await self.async_client.get_portfolio_intents(
-                portfolio.id
-            )
-            portfolio_with_intents.intents = intents
-            portfolio_with_intents.aggregate_status = aggregate
 
-            all_complete = all(i.status == IntentStatus.COMPLETED for i in intents)
+def Plan(  # noqa: N802
+    name: str,
+    strategy: str = "sequential",
+    max_concurrent: int = 5,
+    failure_policy: str = "fail_fast",
+) -> Callable[[type], type]:
+    """Declarative plan definition (RFC-0012). Defines task decomposition strategy."""
+    def decorator(cls: type) -> type:
+        cls._plan_name = name
+        cls._plan_strategy = strategy
+        cls._plan_max_concurrent = max_concurrent
+        cls._plan_failure_policy = failure_policy
 
-            if all_complete:
-                for handler in self._handlers["all_complete"]:
-                    result = await self._call_handler(handler, portfolio_with_intents)
-                    if result:
-                        return result
+        def to_spec(self) -> PortfolioSpec:
+            """Convert plan to PortfolioSpec for execution."""
+            plan_tasks = []
+            for attr_name in dir(self):
+                attr = getattr(self, attr_name, None)
+                if isinstance(attr, IntentSpec):
+                    plan_tasks.append(attr)
+            return PortfolioSpec(name=name, intents=plan_tasks)
 
-                return self._merge_results(portfolio_with_intents)
+        cls.to_spec = to_spec
+        return cls
+    return decorator
 
-            await asyncio.sleep(0.5)
 
-    async def _subscribe_portfolio(self, portfolio_id: str) -> None:
-        """Subscribe to portfolio events."""
-        url = f"{self._config.base_url}/api/v1/portfolios/{portfolio_id}/subscribe"
-        headers = {
-            "X-API-Key": self._config.api_key,
-            "X-Agent-ID": self._agent_id,
-        }
+def Vault(  # noqa: N802
+    name: str,
+    rotate_keys: bool = False,
+) -> Callable[[type], type]:
+    """Declarative credential vault (RFC-0014). Defines tool access and credential policies."""
+    def decorator(cls: type) -> type:
+        cls._vault_name = name
+        cls._vault_rotate_keys = rotate_keys
 
-        async def event_loop():
-            stream = SSEStream(
-                url,
-                headers,
-                reconnect_delay=self._config.reconnect_delay,
-                max_reconnects=self._config.max_reconnects,
-            )
-            for event in stream:
-                if not self._running:
-                    break
-                await self._handle_event(event)
+        def get_tools(self) -> list[str]:
+            """List all tools declared in this vault."""
+            found_tools = []
+            for attr_name in dir(self):
+                if not attr_name.startswith("_"):
+                    attr = getattr(self, attr_name, None)
+                    if isinstance(attr, dict) and "scopes" in attr:
+                        found_tools.append(attr_name)
+            return found_tools
 
-        asyncio.create_task(event_loop())
+        cls.get_tools = get_tools
+        return cls
+    return decorator
 
-    def _merge_results(self, portfolio: IntentPortfolio) -> dict[str, Any]:
-        """Merge results from all intents in a portfolio."""
-        return {
-            "portfolio_id": portfolio.id,
-            "name": portfolio.name,
-            "intents": {i.title: i.state.to_dict() for i in portfolio.intents},
-        }
+
+def Memory(  # noqa: N802
+    namespace: str,
+    tier: str = "episodic",
+    ttl: Optional[int] = None,
+    max_entries: int = 1000,
+) -> Callable[[type], type]:
+    """Declarative memory configuration (RFC-0015). Defines memory tier and policies."""
+    def decorator(cls: type) -> type:
+        cls._memory_namespace = namespace
+        cls._memory_tier = tier
+        cls._memory_ttl = ttl
+        cls._memory_max_entries = max_entries
+        return cls
+    return decorator
+
+
+def Trigger(  # noqa: N802
+    name: str,
+    type: str = "schedule",
+    condition: Optional[str] = None,
+    cron: Optional[str] = None,
+    dedup: str = "skip",
+) -> Callable[[type], type]:
+    """Declarative trigger definition (RFC-0017). Creates intents when conditions are met."""
+    def decorator(cls: type) -> type:
+        cls._trigger_name = name
+        cls._trigger_type = type
+        cls._trigger_condition = condition
+        cls._trigger_cron = cron
+        cls._trigger_dedup = dedup
+        return cls
+    return decorator
 
 
 # ==================== Simple Worker ====================

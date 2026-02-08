@@ -1,6 +1,6 @@
 # Compliance Document Review
 
-> **A complete showcase of all 8 OpenIntent RFCs working together.**
+> **A complete showcase of all 17 OpenIntent RFCs working together.**
 
 This example demonstrates a real-world compliance document review workflow where multiple distributed agents coordinate through a central OpenIntent server to extract, analyze, assess, and report on legal documents.
 
@@ -19,9 +19,9 @@ flowchart TB
     end
 
     subgraph Agents["Distributed Agents"]
-        OCR["OCR Agent<br/>RFC-0008: Retry"]
+        OCR["OCR Agent<br/>RFC-0010: Retry"]
         ANA["Analyzer Agent<br/>RFC-0003: Leasing"]
-        RISK["Risk Agent<br/>RFC-0007: Costs"]
+        RISK["Risk Agent<br/>RFC-0009: Costs"]
         REP["Report Agent<br/>RFC-0005: Attachments"]
     end
 
@@ -83,8 +83,11 @@ sequenceDiagram
 | 0004 | Governance | Coordinator | Human approval for high-risk docs |
 | 0005 | Attachments | Report | JSON and Markdown report files |
 | 0006 | Subscriptions | All | Real-time SSE event streaming |
-| 0007 | Costs | Risk | Compute and API cost tracking |
-| 0008 | Retry | OCR | Exponential backoff on failures |
+| 0007 | Portfolios | Coordinator | Multi-intent coordination |
+| 0008 | LLM Integration | All | Provider adapters and observability |
+| 0009 | Cost Tracking | Risk | Compute and API cost tracking |
+| 0010 | Retry Policies | OCR | Exponential backoff on failures |
+| 0011 | Access Control | All | Unified permissions model |
 
 ## Quick Start
 
@@ -152,9 +155,9 @@ Note: The dashboard uses REST API polling for updates (every 3 seconds). For tru
 ```
 compliance_review/
   agents/
-    ocr_agent.py        # RFC-0008: Retry policies
+    ocr_agent.py        # RFC-0010: Retry policies
     analyzer_agent.py   # RFC-0003: Leasing
-    risk_agent.py       # RFC-0007: Cost tracking
+    risk_agent.py       # RFC-0009: Cost tracking
     report_agent.py     # RFC-0005: Attachments
   dashboard/
     app.py              # FastAPI dashboard server
@@ -243,7 +246,7 @@ The dashboard provides visibility into all OpenIntent data via REST API polling:
 - **Intents Panel**: Shows all intents with status badges
 - **Events Panel**: Live stream of all events (RFC-0002)
 - **Leases Panel**: Active leases and their holders (RFC-0003)
-- **Costs Panel**: Total spend with breakdown by type (RFC-0007)
+- **Costs Panel**: Total spend with breakdown by type (RFC-0009)
 - **Attachments Panel**: Generated reports and files (RFC-0005)
 - **Governance Panel**: Approve/reject high-risk documents (RFC-0004)
 - **State Panel**: Full JSON view of intent state

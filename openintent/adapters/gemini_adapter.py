@@ -268,6 +268,8 @@ class GeminiAdapter(BaseAdapter):
                     e, {"phase": "stream_started", "stream_id": stream_id}
                 )
 
+        self._invoke_stream_start(stream_id, model, "google")
+
         stream = self._model.generate_content(contents, stream=True, **kwargs)
         return self._stream_wrapper(
             stream,
@@ -318,6 +320,7 @@ class GeminiAdapter(BaseAdapter):
                         for part in candidate.content.parts:
                             if hasattr(part, "text") and part.text:
                                 content_parts.append(part.text)
+                                self._invoke_on_token(part.text, stream_id)
                             if hasattr(part, "function_call"):
                                 fc = part.function_call
                                 function_calls.append(
@@ -347,6 +350,8 @@ class GeminiAdapter(BaseAdapter):
                     self._handle_error(
                         e, {"phase": "stream_completed", "stream_id": stream_id}
                     )
+
+            self._invoke_stream_end(stream_id, "".join(content_parts), chunk_count)
 
             if self._config.log_requests:
                 try:
@@ -397,6 +402,7 @@ class GeminiAdapter(BaseAdapter):
                     self._handle_error(
                         e, {"phase": "stream_cancelled", "stream_id": stream_id}
                     )
+            self._invoke_stream_error(Exception("Generator closed"), stream_id)
             raise
 
         except Exception as e:
@@ -415,6 +421,7 @@ class GeminiAdapter(BaseAdapter):
                     self._handle_error(
                         log_error, {"phase": "stream_cancelled", "stream_id": stream_id}
                     )
+            self._invoke_stream_error(e, stream_id)
             raise
 
     def _log_function_calls(self, response: Any, model: str) -> None:

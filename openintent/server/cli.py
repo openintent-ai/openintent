@@ -32,7 +32,7 @@ def main():
     parser.add_argument(
         "--api-keys",
         default=None,
-        help="Comma-separated list of API keys (default: dev-user-key,agent-research-key,agent-synth-key)",
+        help="Comma-separated list of API keys (default: dev-user-key,agent-research-key,agent-synth-key)",  # noqa: E501
     )
     parser.add_argument(
         "--debug",

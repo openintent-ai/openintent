@@ -12,6 +12,7 @@ openintent: "1.0"
 #   - Dependencies between phases
 #   - State passing between agents
 #   - Basic retry configuration
+#   - Permissions (RFC-0011)
 #
 # Run with:
 #   openintent run examples/workflows/research_assistant.yaml
@@ -37,6 +38,7 @@ workflow:
     title: "Gather Research"
     description: "Search for and collect relevant information"
     assign: research-agent
+    permissions: [research-agent, synthesis-agent]
     constraints:
       - "max_sources: 5"
       - "min_relevance: 0.7"
@@ -52,6 +54,7 @@ workflow:
     title: "Synthesize Findings"
     description: "Combine research into a structured summary"
     assign: synthesis-agent
+    permissions: open
     depends_on:
       - research
     constraints:

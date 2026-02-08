@@ -1,36 +1,37 @@
-"""xAI Grok provider adapter for automatic OpenIntent coordination.
+"""Azure OpenAI provider adapter for automatic OpenIntent coordination.
 
-This adapter wraps the xAI Grok client (OpenAI-compatible) to automatically log
-intent events for chat completions, tool calls, and streaming responses.
+This adapter wraps the Azure OpenAI client to automatically log intent events
+for chat completions, tool calls, and streaming responses.
 
-Note: Grok uses an OpenAI-compatible API, so this adapter is similar to OpenAIAdapter
-but configured for xAI's endpoints.
+Note: Azure OpenAI uses the same openai Python package but configured with
+Azure-specific endpoints, API versions, and authentication.
 
 Installation:
-    pip install openintent[grok]
+    pip install openintent[azure]
 
 Example:
-    from openai import OpenAI
+    from openai import AzureOpenAI
     from openintent import OpenIntentClient
-    from openintent.adapters import GrokAdapter
+    from openintent.adapters import AzureOpenAIAdapter
 
     openintent = OpenIntentClient(base_url="...", api_key="...")
-    grok_client = OpenAI(
-        api_key="xai-...",
-        base_url="https://api.x.ai/v1"
+    azure_client = AzureOpenAI(
+        azure_endpoint="https://your-resource.openai.azure.com/",
+        api_version="2024-02-01",
+        api_key="your-azure-key"
     )
 
-    adapter = GrokAdapter(grok_client, openintent, intent_id="...")
+    adapter = AzureOpenAIAdapter(azure_client, openintent, intent_id="...")
 
     # Regular completion - automatically logs request events
     response = adapter.chat.completions.create(
-        model="grok-beta",
+        model="gpt-4",  # deployment name
         messages=[{"role": "user", "content": "Hello"}]
     )
 
     # Streaming - automatically logs stream events
     stream = adapter.chat.completions.create(
-        model="grok-beta",
+        model="gpt-4",
         messages=[{"role": "user", "content": "Hello"}],
         stream=True
     )
@@ -47,21 +48,21 @@ if TYPE_CHECKING:
     from openintent import OpenIntentClient
 
 
-def _check_grok_installed() -> None:
-    """Check if the openai package is installed (Grok uses OpenAI-compatible API)."""
+def _check_azure_openai_installed() -> None:
+    """Check if the openai package is installed."""
     try:
         import openai  # noqa: F401
     except ImportError:
         raise ImportError(
-            "GrokAdapter requires the 'openai' package (Grok uses OpenAI-compatible API). "
-            "Install it with: pip install openintent[grok]"
+            "AzureOpenAIAdapter requires the 'openai' package. "
+            "Install it with: pip install openintent[azure]"
         ) from None
 
 
-class GrokChatCompletions:
+class AzureOpenAIChatCompletions:
     """Wrapped chat.completions interface."""
 
-    def __init__(self, adapter: "GrokAdapter"):
+    def __init__(self, adapter: "AzureOpenAIAdapter"):
         self._adapter = adapter
 
     def create(self, **kwargs: Any) -> Any:
@@ -69,22 +70,23 @@ class GrokChatCompletions:
         return self._adapter._create_completion(**kwargs)
 
 
-class GrokChat:
+class AzureOpenAIChat:
     """Wrapped chat interface."""
 
-    def __init__(self, adapter: "GrokAdapter"):
-        self.completions = GrokChatCompletions(adapter)
+    def __init__(self, adapter: "AzureOpenAIAdapter"):
+        self.completions = AzureOpenAIChatCompletions(adapter)
 
 
-class GrokAdapter(BaseAdapter):
-    """Adapter for the xAI Grok API (OpenAI-compatible client).
+class AzureOpenAIAdapter(BaseAdapter):
+    """Adapter for the Azure OpenAI Python client.
 
-    Wraps an OpenAI client configured for xAI's API to automatically log
-    OpenIntent events for all chat completions, tool calls, and streaming.
+    Wraps an AzureOpenAI client instance to automatically log OpenIntent events
+    for all chat completions, tool calls, and streaming responses.
 
-    The adapter exposes the same interface as the OpenAI client:
+    The adapter exposes the same interface as the OpenAI client, so you can
+    use it as a drop-in replacement:
 
-        adapter = GrokAdapter(grok_client, openintent, intent_id)
+        adapter = AzureOpenAIAdapter(azure_client, openintent, intent_id)
         response = adapter.chat.completions.create(...)
 
     Events logged:
@@ -96,19 +98,22 @@ class GrokAdapter(BaseAdapter):
     - STREAM_CHUNK: Periodically during streaming (if configured)
     - STREAM_COMPLETED: When streaming finishes
     - STREAM_CANCELLED: If streaming is interrupted
+
+    Streaming hooks (on_stream_start, on_token, on_stream_end, on_stream_error)
+    are fully supported via AdapterConfig.
     """
 
     def __init__(
         self,
-        grok_client: Any,
+        azure_client: Any,
         openintent_client: "OpenIntentClient",
         intent_id: str,
         config: Optional[AdapterConfig] = None,
     ):
-        """Initialize the Grok adapter.
+        """Initialize the Azure OpenAI adapter.
 
         Args:
-            grok_client: The OpenAI client configured for xAI's API.
+            azure_client: The AzureOpenAI client instance to wrap.
             openintent_client: The OpenIntent client for logging events.
             intent_id: The intent ID to associate events with.
             config: Optional adapter configuration.
@@ -116,20 +121,20 @@ class GrokAdapter(BaseAdapter):
         Raises:
             ImportError: If the openai package is not installed.
         """
-        _check_grok_installed()
+        _check_azure_openai_installed()
         super().__init__(openintent_client, intent_id, config)
-        self._grok = grok_client
-        self.chat = GrokChat(self)
+        self._azure = azure_client
+        self.chat = AzureOpenAIChat(self)
 
     @property
-    def grok(self) -> Any:
-        """The wrapped Grok client."""
-        return self._grok
+    def azure(self) -> Any:
+        """The wrapped Azure OpenAI client."""
+        return self._azure
 
     def _create_completion(self, **kwargs: Any) -> Any:
         """Create a completion with automatic event logging."""
         stream = kwargs.get("stream", False)
-        model = kwargs.get("model", "grok-beta")
+        model = kwargs.get("model", "unknown")
         messages = kwargs.get("messages", [])
         tools = kwargs.get("tools", [])
         temperature = kwargs.get("temperature")
@@ -141,7 +146,7 @@ class GrokAdapter(BaseAdapter):
                 self._client.log_llm_request_started(
                     self._intent_id,
                     request_id=request_id,
-                    provider="xai",
+                    provider="azure_openai",
                     model=model,
                     messages_count=len(messages),
                     tools_available=(
@@ -175,7 +180,7 @@ class GrokAdapter(BaseAdapter):
                     self._client.log_llm_request_failed(
                         self._intent_id,
                         request_id=request_id,
-                        provider="xai",
+                        provider="azure_openai",
                         model=model,
                         messages_count=len(messages),
                         error=f"{type(e).__name__}: {str(e)}",
@@ -196,7 +201,7 @@ class GrokAdapter(BaseAdapter):
         start_time: float,
     ) -> Any:
         """Handle a non-streaming completion."""
-        response = self._grok.chat.completions.create(**kwargs)
+        response = self._azure.chat.completions.create(**kwargs)
         duration_ms = int((time.time() - start_time) * 1000)
 
         if self._config.log_requests:
@@ -208,7 +213,7 @@ class GrokAdapter(BaseAdapter):
                 self._client.log_llm_request_completed(
                     self._intent_id,
                     request_id=request_id,
-                    provider="xai",
+                    provider="azure_openai",
                     model=model,
                     messages_count=messages_count,
                     response_content=(
@@ -254,7 +259,7 @@ class GrokAdapter(BaseAdapter):
                 self._client.start_stream(
                     self._intent_id,
                     stream_id=stream_id,
-                    provider="xai",
+                    provider="azure_openai",
                     model=model,
                 )
             except Exception as e:
@@ -262,9 +267,9 @@ class GrokAdapter(BaseAdapter):
                     e, {"phase": "stream_started", "stream_id": stream_id}
                 )
 
-        self._invoke_stream_start(stream_id, model, "xai")
+        self._invoke_stream_start(stream_id, model, "azure_openai")
 
-        stream = self._grok.chat.completions.create(**kwargs)
+        stream = self._azure.chat.completions.create(**kwargs)
         return self._stream_wrapper(
             stream,
             stream_id,
@@ -340,7 +345,7 @@ class GrokAdapter(BaseAdapter):
                     self._client.complete_stream(
                         self._intent_id,
                         stream_id=stream_id,
-                        provider="xai",
+                        provider="azure_openai",
                         model=model,
                         chunks_received=chunk_count,
                         tokens_streamed=len("".join(content_parts)),
@@ -357,7 +362,7 @@ class GrokAdapter(BaseAdapter):
                     self._client.log_llm_request_completed(
                         self._intent_id,
                         request_id=request_id,
-                        provider="xai",
+                        provider="azure_openai",
                         model=model,
                         messages_count=messages_count,
                         response_content=(
@@ -381,7 +386,7 @@ class GrokAdapter(BaseAdapter):
                     self._client.cancel_stream(
                         self._intent_id,
                         stream_id=stream_id,
-                        provider="xai",
+                        provider="azure_openai",
                         model=model,
                         reason="Generator closed",
                         chunks_received=chunk_count,
@@ -400,7 +405,7 @@ class GrokAdapter(BaseAdapter):
                     self._client.cancel_stream(
                         self._intent_id,
                         stream_id=stream_id,
-                        provider="xai",
+                        provider="azure_openai",
                         model=model,
                         reason=str(e),
                         chunks_received=chunk_count,
@@ -444,7 +449,7 @@ class GrokAdapter(BaseAdapter):
                     tool_name=name,
                     tool_id=tool_id,
                     arguments=arguments,
-                    provider="xai",
+                    provider="azure_openai",
                     model=model,
                 )
             except Exception as e:
@@ -497,7 +502,7 @@ class GrokAdapter(BaseAdapter):
                     tool_name=name,
                     tool_id=tc_id,
                     arguments=arguments,
-                    provider="xai",
+                    provider="azure_openai",
                     model=model,
                 )
             except Exception as e:

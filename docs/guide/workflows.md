@@ -322,6 +322,107 @@ governance:
     after_hours: 4
 ```
 
+## Permissions (RFC-0011)
+
+Control who can see and modify each phase's data using the unified `permissions` field.
+
+### Quick Start
+
+The simplest forms — a single string or a list of agents:
+
+```yaml
+workflow:
+  public_step:
+    assign: researcher
+    permissions: open           # Anyone can access
+
+  private_step:
+    assign: analyst
+    permissions: private        # Only the assigned agent
+
+  team_step:
+    assign: lead
+    permissions: [analyst, auditor]  # Only these agents
+```
+
+### Full Permissions Object
+
+For fine-grained control, use the full object form with `policy`, `allow`, `delegate`, and `context`:
+
+```yaml
+workflow:
+  sensitive_analysis:
+    assign: analyst
+    permissions:
+      policy: restricted
+      default: read
+      allow:
+        - agent: "analyst"
+          level: write
+        - agent: "auditor"
+          level: read
+      delegate:
+        to: ["specialist-bot", "backup-bot"]
+        level: write
+      context: [dependencies, peers, acl, delegated_by]
+```
+
+### Delegation
+
+When `delegate` is specified, agents can hand off work:
+
+```python
+@Agent("triage-bot")
+class TriageAgent:
+    @on_assignment
+    async def handle(self, intent):
+        if needs_specialist(intent):
+            await self.delegate(intent.id, "specialist-bot")
+            return {"status": "delegated"}
+        return {"result": process(intent)}
+    
+    @on_access_requested
+    async def policy(self, intent, request):
+        if "compliance" in (request.capabilities or []):
+            return "approve"
+        return "defer"
+```
+
+### Context Injection
+
+The `context` field inside `permissions` controls what context the agent automatically receives. In your agent, context is available via `intent.ctx`:
+
+```python
+@Agent("analyst")
+class AnalystAgent:
+    @on_assignment
+    async def handle(self, intent):
+        ctx = intent.ctx
+        if ctx.delegated_by:
+            print(f"Delegated by: {ctx.delegated_by}")
+        
+        for dep_id, dep_state in ctx.dependencies.items():
+            print(f"Dependency {dep_id}: {dep_state}")
+        
+        return {"analysis": "complete"}
+```
+
+### Governance Access Review
+
+Set a workflow-level policy for access requests:
+
+```yaml
+governance:
+  access_review:
+    on_request: defer
+    approvers: ["admin-agent", "compliance-officer"]
+    timeout_hours: 4
+```
+
+### Backward Compatibility
+
+Legacy `access`, `delegation`, and `context` fields at the phase level are still parsed and auto-converted to the unified `permissions` format. New workflows should always use `permissions`.
+
 ## Retry Policies
 
 Handle transient failures:
@@ -521,15 +622,16 @@ workflow:
     assign: agent
 ```
 
-### 3. Document Agents
+### 3. Document Agents with Capabilities
 
-Declare agents even though optional:
+Declare agents with capabilities for access decisions:
 
 ```yaml
 agents:
   researcher:
     description: "Searches and analyzes web sources"
     capabilities: [search, summarization]
+    default_permission: read
 ```
 
 ### 4. Set Reasonable Budgets

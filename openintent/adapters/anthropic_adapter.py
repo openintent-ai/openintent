@@ -308,6 +308,8 @@ class AnthropicStreamContext:
                     e, {"phase": "stream_started", "stream_id": self._stream_id}
                 )
 
+        self._adapter._invoke_stream_start(self._stream_id, model, "anthropic")
+
         self._stream = self._adapter._anthropic.messages.stream(**self._kwargs)
         inner_stream = self._stream.__enter__()
 
@@ -342,6 +344,7 @@ class AnthropicStreamContext:
                     self._adapter._handle_error(
                         e, {"phase": "stream_cancelled", "stream_id": stream_id}
                     )
+            self._adapter._invoke_stream_error(exc_val if exc_val else Exception("Stream cancelled"), self._stream_id or "")  # noqa: E501
             return
 
         if self._adapter._config.log_streams and stream_id:
@@ -358,6 +361,8 @@ class AnthropicStreamContext:
                 self._adapter._handle_error(
                     e, {"phase": "stream_completed", "stream_id": stream_id}
                 )
+
+        self._adapter._invoke_stream_end(self._stream_id or "", "".join(self._content_parts), self._chunk_count)  # noqa: E501
 
         if self._adapter._config.log_requests and request_id:
             try:
@@ -421,6 +426,7 @@ class AnthropicStreamWrapper:
         for text in self._stream.text_stream:
             self._context._chunk_count += 1
             self._context._content_parts.append(text)
+            self._context._adapter._invoke_on_token(text, self._context._stream_id or "")
 
             stream_id = self._context._stream_id
             if (

@@ -1,36 +1,37 @@
-"""xAI Grok provider adapter for automatic OpenIntent coordination.
+"""OpenRouter provider adapter for automatic OpenIntent coordination.
 
-This adapter wraps the xAI Grok client (OpenAI-compatible) to automatically log
-intent events for chat completions, tool calls, and streaming responses.
+This adapter wraps an OpenAI-compatible client configured for OpenRouter to
+automatically log intent events for chat completions, tool calls, and streaming
+responses.
 
-Note: Grok uses an OpenAI-compatible API, so this adapter is similar to OpenAIAdapter
-but configured for xAI's endpoints.
+OpenRouter provides unified access to hundreds of LLM models (OpenAI, Anthropic,
+Google, Meta, Mistral, and more) through a single OpenAI-compatible API.
 
 Installation:
-    pip install openintent[grok]
+    pip install openintent[openrouter]
 
 Example:
     from openai import OpenAI
     from openintent import OpenIntentClient
-    from openintent.adapters import GrokAdapter
+    from openintent.adapters import OpenRouterAdapter
 
     openintent = OpenIntentClient(base_url="...", api_key="...")
-    grok_client = OpenAI(
-        api_key="xai-...",
-        base_url="https://api.x.ai/v1"
+    openrouter_client = OpenAI(
+        api_key="sk-or-v1-...",
+        base_url="https://openrouter.ai/api/v1"
     )
 
-    adapter = GrokAdapter(grok_client, openintent, intent_id="...")
+    adapter = OpenRouterAdapter(openrouter_client, openintent, intent_id="...")
 
     # Regular completion - automatically logs request events
     response = adapter.chat.completions.create(
-        model="grok-beta",
+        model="anthropic/claude-3.5-sonnet",
         messages=[{"role": "user", "content": "Hello"}]
     )
 
     # Streaming - automatically logs stream events
     stream = adapter.chat.completions.create(
-        model="grok-beta",
+        model="openai/gpt-4o",
         messages=[{"role": "user", "content": "Hello"}],
         stream=True
     )
@@ -47,21 +48,21 @@ if TYPE_CHECKING:
     from openintent import OpenIntentClient
 
 
-def _check_grok_installed() -> None:
-    """Check if the openai package is installed (Grok uses OpenAI-compatible API)."""
+def _check_openrouter_installed() -> None:
+    """Check if the openai package is installed (OpenRouter uses OpenAI-compatible API)."""
     try:
         import openai  # noqa: F401
     except ImportError:
         raise ImportError(
-            "GrokAdapter requires the 'openai' package (Grok uses OpenAI-compatible API). "
-            "Install it with: pip install openintent[grok]"
+            "OpenRouterAdapter requires the 'openai' package (OpenRouter uses OpenAI-compatible API). "  # noqa: E501
+            "Install it with: pip install openintent[openrouter]"
         ) from None
 
 
-class GrokChatCompletions:
+class OpenRouterChatCompletions:
     """Wrapped chat.completions interface."""
 
-    def __init__(self, adapter: "GrokAdapter"):
+    def __init__(self, adapter: "OpenRouterAdapter"):
         self._adapter = adapter
 
     def create(self, **kwargs: Any) -> Any:
@@ -69,22 +70,25 @@ class GrokChatCompletions:
         return self._adapter._create_completion(**kwargs)
 
 
-class GrokChat:
+class OpenRouterChat:
     """Wrapped chat interface."""
 
-    def __init__(self, adapter: "GrokAdapter"):
-        self.completions = GrokChatCompletions(adapter)
+    def __init__(self, adapter: "OpenRouterAdapter"):
+        self.completions = OpenRouterChatCompletions(adapter)
 
 
-class GrokAdapter(BaseAdapter):
-    """Adapter for the xAI Grok API (OpenAI-compatible client).
+class OpenRouterAdapter(BaseAdapter):
+    """Adapter for the OpenRouter API (OpenAI-compatible client).
 
-    Wraps an OpenAI client configured for xAI's API to automatically log
+    Wraps an OpenAI client configured for OpenRouter's API to automatically log
     OpenIntent events for all chat completions, tool calls, and streaming.
+
+    OpenRouter provides access to 200+ models from multiple providers through
+    a single unified API. The adapter tracks which underlying model is used.
 
     The adapter exposes the same interface as the OpenAI client:
 
-        adapter = GrokAdapter(grok_client, openintent, intent_id)
+        adapter = OpenRouterAdapter(openrouter_client, openintent, intent_id)
         response = adapter.chat.completions.create(...)
 
     Events logged:
@@ -96,19 +100,22 @@ class GrokAdapter(BaseAdapter):
     - STREAM_CHUNK: Periodically during streaming (if configured)
     - STREAM_COMPLETED: When streaming finishes
     - STREAM_CANCELLED: If streaming is interrupted
+
+    Streaming hooks (on_stream_start, on_token, on_stream_end, on_stream_error)
+    are fully supported via AdapterConfig.
     """
 
     def __init__(
         self,
-        grok_client: Any,
+        openrouter_client: Any,
         openintent_client: "OpenIntentClient",
         intent_id: str,
         config: Optional[AdapterConfig] = None,
     ):
-        """Initialize the Grok adapter.
+        """Initialize the OpenRouter adapter.
 
         Args:
-            grok_client: The OpenAI client configured for xAI's API.
+            openrouter_client: The OpenAI client configured for OpenRouter's API.
             openintent_client: The OpenIntent client for logging events.
             intent_id: The intent ID to associate events with.
             config: Optional adapter configuration.
@@ -116,20 +123,20 @@ class GrokAdapter(BaseAdapter):
         Raises:
             ImportError: If the openai package is not installed.
         """
-        _check_grok_installed()
+        _check_openrouter_installed()
         super().__init__(openintent_client, intent_id, config)
-        self._grok = grok_client
-        self.chat = GrokChat(self)
+        self._openrouter = openrouter_client
+        self.chat = OpenRouterChat(self)
 
     @property
-    def grok(self) -> Any:
-        """The wrapped Grok client."""
-        return self._grok
+    def openrouter(self) -> Any:
+        """The wrapped OpenRouter client."""
+        return self._openrouter
 
     def _create_completion(self, **kwargs: Any) -> Any:
         """Create a completion with automatic event logging."""
         stream = kwargs.get("stream", False)
-        model = kwargs.get("model", "grok-beta")
+        model = kwargs.get("model", "auto")
         messages = kwargs.get("messages", [])
         tools = kwargs.get("tools", [])
         temperature = kwargs.get("temperature")
@@ -141,7 +148,7 @@ class GrokAdapter(BaseAdapter):
                 self._client.log_llm_request_started(
                     self._intent_id,
                     request_id=request_id,
-                    provider="xai",
+                    provider="openrouter",
                     model=model,
                     messages_count=len(messages),
                     tools_available=(
@@ -175,7 +182,7 @@ class GrokAdapter(BaseAdapter):
                     self._client.log_llm_request_failed(
                         self._intent_id,
                         request_id=request_id,
-                        provider="xai",
+                        provider="openrouter",
                         model=model,
                         messages_count=len(messages),
                         error=f"{type(e).__name__}: {str(e)}",
@@ -196,7 +203,7 @@ class GrokAdapter(BaseAdapter):
         start_time: float,
     ) -> Any:
         """Handle a non-streaming completion."""
-        response = self._grok.chat.completions.create(**kwargs)
+        response = self._openrouter.chat.completions.create(**kwargs)
         duration_ms = int((time.time() - start_time) * 1000)
 
         if self._config.log_requests:
@@ -208,7 +215,7 @@ class GrokAdapter(BaseAdapter):
                 self._client.log_llm_request_completed(
                     self._intent_id,
                     request_id=request_id,
-                    provider="xai",
+                    provider="openrouter",
                     model=model,
                     messages_count=messages_count,
                     response_content=(
@@ -254,7 +261,7 @@ class GrokAdapter(BaseAdapter):
                 self._client.start_stream(
                     self._intent_id,
                     stream_id=stream_id,
-                    provider="xai",
+                    provider="openrouter",
                     model=model,
                 )
             except Exception as e:
@@ -262,9 +269,9 @@ class GrokAdapter(BaseAdapter):
                     e, {"phase": "stream_started", "stream_id": stream_id}
                 )
 
-        self._invoke_stream_start(stream_id, model, "xai")
+        self._invoke_stream_start(stream_id, model, "openrouter")
 
-        stream = self._grok.chat.completions.create(**kwargs)
+        stream = self._openrouter.chat.completions.create(**kwargs)
         return self._stream_wrapper(
             stream,
             stream_id,
@@ -340,7 +347,7 @@ class GrokAdapter(BaseAdapter):
                     self._client.complete_stream(
                         self._intent_id,
                         stream_id=stream_id,
-                        provider="xai",
+                        provider="openrouter",
                         model=model,
                         chunks_received=chunk_count,
                         tokens_streamed=len("".join(content_parts)),
@@ -357,7 +364,7 @@ class GrokAdapter(BaseAdapter):
                     self._client.log_llm_request_completed(
                         self._intent_id,
                         request_id=request_id,
-                        provider="xai",
+                        provider="openrouter",
                         model=model,
                         messages_count=messages_count,
                         response_content=(
@@ -381,7 +388,7 @@ class GrokAdapter(BaseAdapter):
                     self._client.cancel_stream(
                         self._intent_id,
                         stream_id=stream_id,
-                        provider="xai",
+                        provider="openrouter",
                         model=model,
                         reason="Generator closed",
                         chunks_received=chunk_count,
@@ -400,7 +407,7 @@ class GrokAdapter(BaseAdapter):
                     self._client.cancel_stream(
                         self._intent_id,
                         stream_id=stream_id,
-                        provider="xai",
+                        provider="openrouter",
                         model=model,
                         reason=str(e),
                         chunks_received=chunk_count,
@@ -444,7 +451,7 @@ class GrokAdapter(BaseAdapter):
                     tool_name=name,
                     tool_id=tool_id,
                     arguments=arguments,
-                    provider="xai",
+                    provider="openrouter",
                     model=model,
                 )
             except Exception as e:
@@ -497,7 +504,7 @@ class GrokAdapter(BaseAdapter):
                     tool_name=name,
                     tool_id=tc_id,
                     arguments=arguments,
-                    provider="xai",
+                    provider="openrouter",
                     model=model,
                 )
             except Exception as e:

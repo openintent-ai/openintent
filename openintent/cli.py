@@ -308,7 +308,11 @@ def llm_call_with_adapter(prompt: str, oi_client, intent_id: str) -> str:
     \"\"\"Make LLM call using adapter for observability (token counts, cost).\"\"\"
     if not LLM_CLIENT:
         h = hashlib.md5(prompt.encode()).hexdigest()[:8]
-        return f"[Mock #{h}] Multi-agent coordination enables scalable workflows through separation of concerns, parallel execution, and fault isolation."
+        return (  # noqa: E501
+            f"[Mock #{h}] Multi-agent coordination enables scalable workflows"
+            " through separation of concerns, parallel execution,"
+            " and fault isolation."
+        )
     try:
         if PROVIDER == "anthropic":
             from openintent.adapters import AnthropicAdapter

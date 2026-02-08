@@ -13,6 +13,7 @@ openintent: "1.0"
 #   - Parallel phase execution
 #   - Multiple dependencies
 #   - Cost tracking
+#   - Permissions (RFC-0011)
 #
 # Run with:
 #   openintent run examples/workflows/content_pipeline.yaml
@@ -51,6 +52,7 @@ workflow:
     title: "Research Topic"
     description: "Gather information and create content outline"
     assign: research-agent
+    permissions: open
     initial_state:
       topic: "Benefits of AI agents in software development"
       
@@ -59,6 +61,7 @@ workflow:
     title: "Write Content"
     description: "Draft the article based on research"
     assign: writer-agent
+    permissions: [writer-agent, publisher-agent]
     depends_on:
       - research
     cost_tracking:
@@ -73,6 +76,7 @@ workflow:
     title: "Generate Images"
     description: "Create illustrations for the content"
     assign: image-agent
+    permissions: [image-agent, publisher-agent]
     depends_on:
       - research
     cost_tracking:
@@ -87,6 +91,7 @@ workflow:
     title: "Publish Content"
     description: "Format and publish the final article"
     assign: publisher-agent
+    permissions: private
     depends_on:
       - write
       - images

@@ -5,6 +5,251 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-02-08
+
+### Added
+
+- **Decorator-First Agent Abstractions**
+  - `@Agent("id", memory="episodic", tools=["web_search"], auto_heartbeat=True)` — zero-boilerplate agent decorator with proxy access to `self.memory`, `self.tasks`, `self.tools`
+  - `@Coordinator("id", agents=[...], strategy="parallel", guardrails=[...])` — mirrors `@Agent` with portfolio orchestration, `self.delegate()`, `self.record_decision()`, `self.decisions`
+  - `Worker` for ultra-minimal single-handler agents
+
+- **Agent Lifecycle Decorators**
+  - `@on_assignment` — agent assigned to intent
+  - `@on_complete` — intent completed
+  - `@on_state_change(keys)` — specific state keys changed
+  - `@on_event(event_type)` — specific event type received
+  - `@on_task(status)` — task lifecycle event (RFC-0012)
+  - `@on_trigger(name)` — named trigger fires (RFC-0017)
+  - `@on_drain` — graceful shutdown signal (RFC-0016)
+  - `@on_access_requested` — access request received (RFC-0011)
+  - `@on_all_complete` — all portfolio intents complete
+
+- **Coordinator Lifecycle Decorators**
+  - `@on_conflict` — version conflict detected
+  - `@on_escalation` — agent escalation received
+  - `@on_quorum(threshold)` — voting threshold met
+
+- **First-Class Protocol Decorators** (import from `openintent.agents`)
+  - `@Plan(strategy, checkpoints)` — declarative task decomposition config (RFC-0012)
+  - `@Vault(name, rotation_policy)` — credential vault declaration (RFC-0014)
+  - `@Memory(tier, capacity, eviction)` — memory configuration (RFC-0015)
+  - `@Trigger(type, cron)` — reactive scheduling declaration (RFC-0017)
+
+- **Proxy Classes for Agent Self-Access**
+  - `_MemoryProxy` — `self.memory.store()`, `self.memory.recall()`, `self.memory.pin()`
+  - `_TasksProxy` — `self.tasks.create()`
+  - `_ToolsProxy` — `self.tools.invoke()`
+
+- **Server SDK Documentation**
+  - `OpenIntentServer`, `ServerConfig`, `create_app()` programmatic usage
+  - CLI entry point `openintent-server` with all options
+  - `ServerConfig` reference with all configuration fields
+  - Environment variable mapping
+
+- **Built-in FastAPI Server** (`openintent.server`)
+  - Implements all 17 RFCs
+  - SQLAlchemy + SQLite/PostgreSQL persistence
+  - API key authentication, CORS, OpenAPI docs
+
+### Changed
+
+- Handler discovery uses `__func__` deduplication to prevent double-invocation of bound methods
+- Coordinator extends BaseAgent handler discovery with conflict/escalation/quorum types via `update()`
+- Protocol decorators (`@Plan`, `@Vault`, `@Memory`, `@Trigger`) exported only from `openintent.agents` to avoid name collision with model classes in `openintent`
+- All documentation updated to reflect 17 RFC coverage
+- README rewritten for v0.8.0 with decorator-first examples
+
+### Fixed
+
+- Handler double-invocation bug in `BaseAgent._discover_handlers()` when using decorator on bound methods
+- All ruff lint errors resolved (F821 undefined names, F401 unused imports, E501 line length)
+
+## [0.7.0] - 2026-02-07
+
+### Added
+
+- **RFC-0011: Access-Aware Coordination v2.0** (unified permissions model)
+  - Unified `permissions` field replaces separate access/delegation/context fields
+  - Shorthand forms: `permissions: open`, `permissions: private`, `permissions: [agent-a, agent-b]`
+  - Full object form: `policy`, `default`, `allow` (agent grants), `delegate` (delegation rules), `context` (injection config)
+  - `PermissionsConfig`, `PermissionLevel`, `AllowEntry`, `DelegateConfig` typed SDK classes
+  - `WorkflowAccessPolicy` export alias to avoid collision with `models.AccessPolicy`
+  - Legacy field auto-conversion: old `access`/`delegation`/`context` fields parsed and converted
+  - Governance-level `access_review` with approvers, timeout, on_request policy
+  - Agent-level `default_permission` and `approval_required`
+
+- **Access Control Server Endpoints**
+  - ACL management: GET/PUT `/v1/intents/{id}/acl`, POST/DELETE ACL entries
+  - Access requests: POST/GET `/v1/intents/{id}/access-requests`, approve/deny endpoints
+  - IntentContext automatic population with permission-filtered fields
+  - Capability declaration and matching for delegation
+
+- **SDK Access Control Primitives**
+  - `@on_access_requested` decorator for policy-as-code
+  - `intent.ctx` automatic context injection (parent, dependencies, peers, delegated_by)
+  - `intent.delegate()` for agent delegation with payload
+  - `intent.temp_access()` context manager for scoped temporary access
+  - `auto_request_access=True` client option for automatic 403 handling
+
+- **Streaming Hooks Infrastructure**
+  - `on_stream_start(stream_id, model, provider)` callback in `AdapterConfig`
+  - `on_token(token, stream_id)` callback for real-time token processing
+  - `on_stream_end(stream_id, content, chunks)` callback on completion
+  - `on_stream_error(error, stream_id)` callback on failure
+  - All hooks use fail-safe pattern (exceptions caught, never break main flow)
+  - Helper methods on `BaseAdapter`: `_invoke_stream_start`, `_invoke_on_token`, `_invoke_stream_end`, `_invoke_stream_error`
+
+- **Azure OpenAI Adapter** (`AzureOpenAIAdapter`)
+  - Full support for Azure OpenAI deployments via `openai` package
+  - Azure-specific endpoint, API version, and authentication configuration
+  - Complete streaming, tool calling, and hooks support
+  - Install: `pip install openintent[azure]`
+
+- **OpenRouter Adapter** (`OpenRouterAdapter`)
+  - Access 200+ models from multiple providers through unified API
+  - OpenAI-compatible interface via OpenRouter's endpoint
+  - Complete streaming, tool calling, and hooks support
+  - Install: `pip install openintent[openrouter]`
+
+- **RFC-0012: Task Decomposition & Planning** (Proposed)
+  - Task as first-class protocol primitive with 9-state lifecycle
+  - Plan as evolution of Intent Graph with checkpoints, conditions, and ordering
+  - Portfolio clarified as organizational boundary (no execution semantics)
+  - Task state machine: pending → ready → claimed → running → completed/failed/blocked
+  - `@task` decorator, `.t()` task signatures, `.depends_on()` chaining
+  - `TaskContext` with progress reporting, delegation, escalation
+  - YAML workflow integration with `plan:` block
+
+- **RFC-0013: Coordinator Governance & Meta-Coordination** (Proposed)
+  - Coordinator formalized as governed agent with coordinator lease
+  - Supervisor hierarchies terminating at human authority
+  - Declarative guardrails: budget, scope, temporal, review constraints
+  - Decision records with rationale and alternatives considered
+  - Heartbeat-based failover and coordinator handoff
+  - Composite coordination modes: propose-approve, act-notify, act-audit
+  - `@coordinator` decorator, `CoordinatorContext` API
+  - New permission grants: `coordinate`, `approve`, `supervise`
+
+- **RFC-0014: Credential Vaults & Tool Scoping** (Proposed)
+  - Credential Vaults for encrypted storage of external service credentials
+  - Tool Grants with scoped permissions, constraints, and expiry
+  - Server-side Tool Proxy — agents never see raw credentials
+  - Grant delegation with depth limits and cascading revocation
+  - Tool requirements on tasks with lease-time grant validation
+  - Tool Registry for service/tool discovery and parameter validation
+  - Full audit trail: every tool invocation and grant lifecycle event logged
+  - Integration with RFC-0009 (cost tracking), RFC-0011 (access control), RFC-0013 (guardrails)
+  - Standalone agent direct grants (no coordinator required)
+  - YAML workflow `tools:` block for declaring grants and requirements
+  - MCP compatibility: grants provide governance layer over MCP tool transport
+
+- **RFC-0015: Agent Memory & Persistent State** (Proposed)
+  - Three-tier memory model: working (task-scoped), episodic (agent-scoped), semantic (shared)
+  - Structured key-value entries with namespace, tags, versioning, and TTL
+  - Optimistic concurrency via version numbers and `If-Match` headers
+  - Tag-based filter queries (AND/OR logic) with semantic search as extension point
+  - Working memory auto-archival on task completion with event log snapshot
+  - Episodic memory with configurable capacity, LRU eviction, and pinning
+  - Semantic memory with namespace-level permissions following RFC-0011 model
+  - Agent resumability: replacement agents read previous agent's working memory
+  - Batch operations for atomic multi-entry updates
+  - Memory lifecycle events: created, updated, deleted, archived, evicted, expired
+  - Integration with RFC-0005 (attachments for large payloads), RFC-0008 (context packing), RFC-0012 (task memory policy), RFC-0013 (guardrails)
+  - SDK `client.memory` namespace with automatic version tracking
+  - YAML workflow `memory:` block for declaring namespaces, capacity, and eviction
+
+- **RFC-0016: Agent Lifecycle & Health** (Proposed)
+  - Formal agent registration with capabilities, capacity, and heartbeat configuration
+  - Agent record as protocol-level primitive with role_id and agent_id distinction
+  - Status lifecycle state machine: registering → active → draining → deregistered, active → unhealthy → dead
+  - Pull-based heartbeat protocol with jitter-tolerant thresholds and drift detection
+  - Two-threshold health detection: unhealthy (warning) then dead (action)
+  - Network partition behavior: heartbeats detect problems, leases (RFC-0003) prevent split-brain
+  - Graceful drain with configurable timeout and server-initiated drain via pending_commands
+  - Agent registry with capability-based discovery and capacity-aware querying
+  - Agent pools defined via shared role_id; assignment logic explicitly out of scope
+  - Instance identity (agent_id) vs. role identity (role_id) with memory continuity (RFC-0015)
+  - Lifecycle death explicitly triggers lease expiry (RFC-0003 integration)
+  - Uniform registration: @Agent decorator and imperative path produce identical protocol effects
+  - Registration optional for standalone agents with direct grants (RFC-0014)
+  - Capacity advisory, not enforced; guardrails (RFC-0013) can add hard limits
+  - YAML workflow `agents:` block for declaring lifecycle configuration and pool hints
+  - API: POST/GET/DELETE /agents, PATCH /agents/{id}/status, POST /agents/{id}/heartbeat
+
+- **RFC-0017: Triggers & Reactive Scheduling** (Proposed)
+  - Trigger as intent factory: standing declarations that create intents when conditions are met
+  - Three trigger types: schedule (cron-based), event (protocol-reactive), webhook (external HTTP)
+  - Trigger record as first-class protocol object with version, fire_count, and lineage tracking
+  - Schedule triggers with cron expressions, timezone support, time windows, and one-time schedules
+  - Event triggers with 11 standard event types and glob-pattern filtering
+  - Webhook triggers with signature verification, payload transformation, and secure secret handling
+  - Intent templates with {{ }} expression syntax for dynamic value injection
+  - Trigger-to-intent lineage: created_by, trigger_id, trigger_depth, trigger_chain
+  - Deduplication semantics: allow, skip, queue — preventing the "fires faster than resolves" footgun
+  - Cascading namespace governance: global triggers cascade down, namespaces retain local authority
+  - Namespace trigger policies: allow/block global triggers, type whitelists, context injection
+  - Cascade depth limit (default: 10) prevents infinite trigger chains
+  - Trigger lifecycle: enabled, disabled, deleted (fire history retained for audit)
+  - Manual fire endpoint for testing and debugging
+  - YAML workflow `triggers:` block with creates shorthand
+  - SDK `client.triggers` namespace with create, list, fire, update, history, delete
+  - API: POST/GET/PATCH/DELETE /triggers, POST /triggers/{id}/fire, GET /triggers/{id}/history
+
+### Changed
+
+- Updated all YAML workflow examples to use unified `permissions` field
+- Updated all documentation to RFC-0011 v2.0 format
+- Version bump to 0.7.0
+
+## [0.6.0] - 2026-02-05
+
+### Added
+
+- **Distributed Tracing & Full Observability**
+  - Workflow tree structure showing orchestrator → intent flow
+  - LLM operations summary with tokens, duration, and cost per call
+  - Cost rollup totaling tokens and estimated cost across all operations
+  - Event timeline for complete audit trail
+
+- **LiteLLM Adapter**
+  - Universal adapter supporting 100+ LLM providers via LiteLLM
+  - Automatic event logging for all supported providers
+
+### Changed
+
+- Adapter events now include `prompt_tokens`, `completion_tokens`, `total_tokens`, `duration_ms`
+- Version bump to 0.6.0
+
+## [0.5.0] - 2026-02-03
+
+### Added
+
+- **YAML Workflow Specification**
+  - Declarative multi-agent workflow definitions in YAML
+  - `WorkflowSpec` class with `from_yaml()`, `from_string()`, `to_portfolio_spec()` methods
+  - CLI commands: `openintent run`, `openintent validate`, `openintent list`, `openintent new`
+  - Full feature support: dependencies, parallel execution, retry policies, cost tracking, governance
+  - LLM configuration block for provider/model settings
+  - Leasing and attachment declarations per phase
+
+- **Workflow Validation**
+  - `validate_workflow()` function with `WorkflowValidationError`
+  - DAG cycle detection
+  - Agent and dependency reference validation
+  - Warning system for best practices
+
+- **Example Workflows**
+  - `hello_world.yaml` - Minimal single-phase workflow
+  - `research_assistant.yaml` - Two-phase research pipeline
+  - `data_pipeline.yaml` - Four-phase ETL processing
+  - `content_pipeline.yaml` - Parallel content creation
+  - `compliance_review.yaml` - Full RFC showcase with governance
+
+### Changed
+
+- Version bump to 0.5.0
+
 ## [0.4.5] - 2026-02-02
 
 ### Fixed
@@ -43,7 +288,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Built-in OpenIntent Server** (`server/` module)
-  - FastAPI-based server implementing all 8 RFCs
+  - FastAPI-based server implementing all 17 RFCs
   - SQLite by default (zero-config), PostgreSQL support
   - CLI entry point: `openintent-server`
   - Module entry point: `python -m openintent.server`

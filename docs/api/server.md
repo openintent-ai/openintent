@@ -1,6 +1,6 @@
 # Server API Reference
 
-Built-in FastAPI server implementing all 8 OpenIntent RFCs.
+Built-in FastAPI server implementing all 17 OpenIntent RFCs.
 
 ## OpenIntentServer
 

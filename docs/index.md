@@ -6,8 +6,8 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-!!! tip "What's New in v0.6.0"
-    **Full Observability & Distributed Tracing** - Complete workflow execution path visualization with LLM token/cost tracking and cost rollup across all operations.
+!!! tip "What's New in v0.8.0"
+    **Decorator-First Agents** - `@Agent`, `@Coordinator`, and `Worker` with lifecycle decorators, first-class protocol objects (`@Plan`, `@Vault`, `@Memory`, `@Trigger`), and built-in FastAPI server. Full 17 RFC coverage.
 
 ## What is OpenIntent?
 
@@ -55,7 +55,7 @@ client.log_event(intent.id, EventType.STATE_PATCHED, {"progress": 0.5})
 
 ### Complete RFC Implementation
 
-The SDK implements all 8 OpenIntent RFCs:
+The SDK implements all 17 OpenIntent RFCs:
 
 | RFC | Feature | Description |
 |-----|---------|-------------|
@@ -65,8 +65,17 @@ The SDK implements all 8 OpenIntent RFCs:
 | 0004 | Governance | Human oversight and arbitration |
 | 0005 | Attachments | File handling and metadata |
 | 0006 | Subscriptions | Real-time SSE event streaming |
+| 0007 | Portfolios | Multi-intent coordination and grouping |
+| 0008 | LLM Integration | Provider adapters and observability |
 | 0009 | Cost Tracking | Compute and API cost management |
 | 0010 | Retry Policies | Transient failure handling |
+| 0011 | Access Control | Unified permissions, delegation, context injection |
+| 0012 | Task Decomposition | Plans, tasks, checkpoints, dependency ordering |
+| 0013 | Coordinator Governance | Coordinator leases, guardrails, decision records |
+| 0014 | Credential Vaults | Encrypted vaults, scoped tool grants, audit trail |
+| 0015 | Agent Memory | Three-tier memory: working, episodic, semantic |
+| 0016 | Agent Lifecycle | Registration, heartbeats, drain, agent pools |
+| 0017 | Triggers | Schedule, event, and webhook reactive scheduling |
 
 ### YAML Workflows
 
@@ -138,14 +147,15 @@ response = adapter.chat.completions.create(
 # Events include: prompt_tokens, completion_tokens, total_tokens
 ```
 
-### Distributed Tracing (v0.6.0)
+### Access-Aware Coordination (v0.7.0+)
 
-Complete end-to-end workflow visualization:
+Unified permissions model for multi-agent workflows:
 
-- **Workflow tree structure** showing orchestrator → intent flow
-- **LLM operations summary** with tokens, duration, and cost per call
-- **Cost rollup** totaling tokens and estimated cost across all operations
-- **Event timeline** for complete audit trail
+- **Shorthand forms** for common cases: `open`, `private`, or agent list
+- **Full permissions object** for fine-grained control with `policy`, `allow`, `delegate`, `context`
+- **Policy-as-code** with `@on_access_requested` decorator
+- **Automatic context injection** via `intent.ctx`
+- **Delegation primitives** for agent-to-agent work handoff
 
 ### Built-in Server
 

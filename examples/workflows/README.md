@@ -32,7 +32,7 @@ openintent run examples/workflows/hello_world.yaml
 | Workflow | Description | Phases | Features |
 |----------|-------------|--------|----------|
 | [content_pipeline.yaml](content_pipeline.yaml) | Content creation with parallel phases | 4 | Parallel execution, costs, attachments |
-| [compliance_review.yaml](compliance_review.yaml) | Document compliance review | 4 | All 8 RFCs |
+| [compliance_review.yaml](compliance_review.yaml) | Document compliance review | 4 | All 17 RFCs, unified permissions, delegation, context injection |
 
 ## Workflow Structure
 
@@ -56,6 +56,7 @@ agents:  # Optional but recommended
   my-agent:
     description: "What this agent does"
     capabilities: ["list", "of", "capabilities"]
+    default_permission: read  # RFC-0011
 
 workflow:  # Required
   phase_name:
@@ -65,6 +66,7 @@ workflow:  # Required
     depends_on: []    # Optional list of phase names
     constraints: []   # Optional constraints
     initial_state: {} # Optional initial state
+    permissions: open # RFC-0011: Unified access control (string | list | object)
 ```
 
 ## Running Workflows
@@ -108,17 +110,28 @@ openintent new "My New Workflow"
 
 ## Implementing Agents
 
-For each agent in your workflow, you need a corresponding agent implementation. Here's a minimal example:
+For each agent in your workflow, you need a corresponding agent implementation:
 
 ```python
-from openintent import Agent, on_assignment
+from openintent import Agent, on_assignment, on_access_requested
 
 @Agent("my-agent")
 class MyAgent:
     @on_assignment
     async def process(self, intent):
-        # Do work here
+        # Context auto-populated based on your permission
+        if intent.ctx.delegated_by:
+            print(f"Delegated by: {intent.ctx.delegated_by}")
+        
+        if needs_help(intent):
+            await self.delegate(intent.id, "helper-agent")
+        
         return {"result": "done"}
+    
+    @on_access_requested
+    async def policy(self, intent, request):
+        # Approve, deny, or defer access requests
+        return "approve" if request.permission == "read" else "defer"
 
 if __name__ == "__main__":
     MyAgent.run()

@@ -2,7 +2,7 @@
 """
 Risk Agent - Risk assessment with cost tracking.
 
-Demonstrates RFC-0007 (Costs):
+Demonstrates RFC-0009 (Cost Tracking):
 - Recording costs per intent
 - Cost types (compute, API, storage)
 - Budget tracking and summaries
@@ -186,7 +186,7 @@ if __name__ == "__main__":
 
     print("=" * 60)
     print("OpenIntent Risk Agent")
-    print("Demonstrates: RFC-0007 (Costs)")
+    print("Demonstrates: RFC-0009 (Cost Tracking)")
     print("=" * 60)
     print(f"Server: {OPENINTENT_URL}")
     print("Agent ID: risk-agent")

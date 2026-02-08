@@ -1,7 +1,7 @@
 """
 Configuration for Compliance Document Review example.
 
-This example demonstrates all 8 OpenIntent RFCs working together.
+This example demonstrates all 17 OpenIntent RFCs working together.
 """
 
 import os
@@ -18,7 +18,7 @@ AGENTS = {
     "ocr": {
         "id": "ocr-agent",
         "description": "Document extraction with retry policy",
-        "rfc_showcase": "RFC-0008 (Retry Policies)",
+        "rfc_showcase": "RFC-0010 (Retry Policies)",
     },
     "analyzer": {
         "id": "analyzer-agent",
@@ -28,7 +28,7 @@ AGENTS = {
     "risk": {
         "id": "risk-agent",
         "description": "Risk assessment with cost tracking",
-        "rfc_showcase": "RFC-0007 (Costs)",
+        "rfc_showcase": "RFC-0009 (Cost Tracking)",
     },
     "report": {
         "id": "report-agent",

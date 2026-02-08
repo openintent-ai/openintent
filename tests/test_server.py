@@ -535,3 +535,280 @@ class TestPatchApplication:
             {"a": {"b": 1, "c": 2}}, [{"op": "remove", "path": "/a/b"}]
         )
         assert result == {"a": {"c": 2}}
+
+
+class TestAccessControl:
+    """Tests for ACL and Access Request API endpoints (RFC-0011)."""
+
+    API_KEY = "dev-user-key"
+    HEADERS = {"X-API-Key": "dev-user-key"}
+
+    @pytest.fixture
+    def client(self):
+        from fastapi.testclient import TestClient
+        from openintent.server.app import create_app
+        from openintent.server import database as db_module
+
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            db_path = f.name
+
+        db_module._database = None
+        config = ServerConfig(database_url=f"sqlite:///{db_path}")
+        app = create_app(config)
+        with TestClient(app) as c:
+            yield c
+
+        db_module._database = None
+        os.unlink(db_path)
+
+    def _create_intent(self, client):
+        resp = client.post(
+            "/api/v1/intents",
+            json={"title": "ACL Test Intent", "description": "For ACL testing"},
+            headers=self.HEADERS,
+        )
+        assert resp.status_code == 200
+        return resp.json()["id"]
+
+    def test_get_acl_empty(self, client):
+        intent_id = self._create_intent(client)
+        resp = client.get(
+            f"/api/v1/intents/{intent_id}/acl",
+            headers=self.HEADERS,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["intent_id"] == intent_id
+        assert data["default_policy"] == "open"
+        assert data["entries"] == []
+
+    def test_set_acl(self, client):
+        intent_id = self._create_intent(client)
+        resp = client.put(
+            f"/api/v1/intents/{intent_id}/acl",
+            json={"default_policy": "closed", "entries": []},
+            headers=self.HEADERS,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["intent_id"] == intent_id
+        assert data["default_policy"] == "closed"
+
+    def test_grant_access(self, client):
+        intent_id = self._create_intent(client)
+        resp = client.post(
+            f"/api/v1/intents/{intent_id}/acl/entries",
+            json={
+                "principal_id": "agent-1",
+                "principal_type": "agent",
+                "permission": "read",
+                "reason": "Needs read access",
+            },
+            headers=self.HEADERS,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["intent_id"] == intent_id
+        assert data["principal_id"] == "agent-1"
+        assert data["principal_type"] == "agent"
+        assert data["permission"] == "read"
+        assert data["granted_by"] == self.API_KEY
+        assert "id" in data
+
+    def test_grant_access_and_get_acl(self, client):
+        intent_id = self._create_intent(client)
+        grant_resp = client.post(
+            f"/api/v1/intents/{intent_id}/acl/entries",
+            json={
+                "principal_id": "agent-2",
+                "principal_type": "agent",
+                "permission": "write",
+            },
+            headers=self.HEADERS,
+        )
+        assert grant_resp.status_code == 200
+
+        acl_resp = client.get(
+            f"/api/v1/intents/{intent_id}/acl",
+            headers=self.HEADERS,
+        )
+        assert acl_resp.status_code == 200
+        data = acl_resp.json()
+        assert len(data["entries"]) == 1
+        assert data["entries"][0]["principal_id"] == "agent-2"
+        assert data["entries"][0]["permission"] == "write"
+
+    def test_revoke_access(self, client):
+        intent_id = self._create_intent(client)
+        grant_resp = client.post(
+            f"/api/v1/intents/{intent_id}/acl/entries",
+            json={
+                "principal_id": "agent-revoke",
+                "principal_type": "agent",
+                "permission": "read",
+            },
+            headers=self.HEADERS,
+        )
+        assert grant_resp.status_code == 200
+        entry_id = grant_resp.json()["id"]
+
+        revoke_resp = client.delete(
+            f"/api/v1/intents/{intent_id}/acl/entries/{entry_id}",
+            headers=self.HEADERS,
+        )
+        assert revoke_resp.status_code == 204
+
+    def test_revoke_nonexistent(self, client):
+        intent_id = self._create_intent(client)
+        resp = client.delete(
+            f"/api/v1/intents/{intent_id}/acl/entries/nonexistent-entry-id",
+            headers=self.HEADERS,
+        )
+        assert resp.status_code == 404
+
+    def test_create_access_request(self, client):
+        intent_id = self._create_intent(client)
+        resp = client.post(
+            f"/api/v1/intents/{intent_id}/access-requests",
+            json={
+                "principal_id": "agent-requester",
+                "principal_type": "agent",
+                "requested_permission": "write",
+                "reason": "Need write access for updates",
+                "capabilities": ["nlp"],
+            },
+            headers=self.HEADERS,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["intent_id"] == intent_id
+        assert data["principal_id"] == "agent-requester"
+        assert data["requested_permission"] == "write"
+        assert data["status"] == "pending"
+        assert data["reason"] == "Need write access for updates"
+        assert "id" in data
+
+    def test_list_access_requests(self, client):
+        intent_id = self._create_intent(client)
+        client.post(
+            f"/api/v1/intents/{intent_id}/access-requests",
+            json={
+                "principal_id": "agent-a",
+                "principal_type": "agent",
+                "requested_permission": "read",
+                "reason": "reason a",
+            },
+            headers=self.HEADERS,
+        )
+        client.post(
+            f"/api/v1/intents/{intent_id}/access-requests",
+            json={
+                "principal_id": "agent-b",
+                "principal_type": "agent",
+                "requested_permission": "write",
+                "reason": "reason b",
+            },
+            headers=self.HEADERS,
+        )
+
+        resp = client.get(
+            f"/api/v1/intents/{intent_id}/access-requests",
+            headers=self.HEADERS,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "access_requests" in data
+        assert len(data["access_requests"]) >= 2
+
+    def test_approve_access_request(self, client):
+        intent_id = self._create_intent(client)
+        req_resp = client.post(
+            f"/api/v1/intents/{intent_id}/access-requests",
+            json={
+                "principal_id": "agent-approve",
+                "principal_type": "agent",
+                "requested_permission": "write",
+                "reason": "Approve me",
+            },
+            headers=self.HEADERS,
+        )
+        assert req_resp.status_code == 200
+        request_id = req_resp.json()["id"]
+
+        approve_resp = client.post(
+            f"/api/v1/intents/{intent_id}/access-requests/{request_id}/approve",
+            json={"decided_by": "admin-user", "reason": "Approved"},
+            headers=self.HEADERS,
+        )
+        assert approve_resp.status_code == 200
+        data = approve_resp.json()
+        assert data["status"] == "approved"
+        assert data["decided_by"] == "admin-user"
+
+        acl_resp = client.get(
+            f"/api/v1/intents/{intent_id}/acl",
+            headers=self.HEADERS,
+        )
+        assert acl_resp.status_code == 200
+        principals = [e["principal_id"] for e in acl_resp.json()["entries"]]
+        assert "agent-approve" in principals
+
+    def test_deny_access_request(self, client):
+        intent_id = self._create_intent(client)
+        req_resp = client.post(
+            f"/api/v1/intents/{intent_id}/access-requests",
+            json={
+                "principal_id": "agent-deny",
+                "principal_type": "agent",
+                "requested_permission": "admin",
+                "reason": "Deny me",
+            },
+            headers=self.HEADERS,
+        )
+        assert req_resp.status_code == 200
+        request_id = req_resp.json()["id"]
+
+        deny_resp = client.post(
+            f"/api/v1/intents/{intent_id}/access-requests/{request_id}/deny",
+            json={"decided_by": "admin-user", "reason": "Not allowed"},
+            headers=self.HEADERS,
+        )
+        assert deny_resp.status_code == 200
+        data = deny_resp.json()
+        assert data["status"] == "denied"
+        assert data["decided_by"] == "admin-user"
+
+    def test_approve_already_decided(self, client):
+        intent_id = self._create_intent(client)
+        req_resp = client.post(
+            f"/api/v1/intents/{intent_id}/access-requests",
+            json={
+                "principal_id": "agent-double",
+                "principal_type": "agent",
+                "requested_permission": "read",
+                "reason": "Double approve",
+            },
+            headers=self.HEADERS,
+        )
+        assert req_resp.status_code == 200
+        request_id = req_resp.json()["id"]
+
+        client.post(
+            f"/api/v1/intents/{intent_id}/access-requests/{request_id}/approve",
+            json={"decided_by": "admin-user"},
+            headers=self.HEADERS,
+        )
+
+        second_resp = client.post(
+            f"/api/v1/intents/{intent_id}/access-requests/{request_id}/approve",
+            json={"decided_by": "admin-user"},
+            headers=self.HEADERS,
+        )
+        assert second_resp.status_code == 404
+
+    def test_acl_on_nonexistent_intent(self, client):
+        resp = client.get(
+            "/api/v1/intents/bad-id-does-not-exist/acl",
+            headers=self.HEADERS,
+        )
+        assert resp.status_code == 404

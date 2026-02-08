@@ -41,7 +41,7 @@ class ComplianceCoordinator(Coordinator):
     4. Report Generation (with attachments)
     5. Governance Gate (human approval for high-risk)
 
-    Demonstrates all 8 RFCs working together.
+    Demonstrates all 17 RFCs working together.
     """
 
     async def plan(
@@ -74,10 +74,13 @@ class ComplianceCoordinator(Coordinator):
                     "0006",
                     "0007",
                     "0008",
+                    "0009",
+                    "0010",
+                    "0011",
                 ],
             },
             intents=[
-                # Phase 1: OCR Extraction (RFC-0008: Retry Policies)
+                # Phase 1: OCR Extraction (RFC-0010: Retry Policies)
                 IntentSpec(
                     title="Document Extraction",
                     description=f"Extract text and structure from: {document_name}",
@@ -98,13 +101,13 @@ class ComplianceCoordinator(Coordinator):
                     description="Analyze document clauses for compliance issues",
                     assign="analyzer-agent",
                     depends_on=["Document Extraction"],
-                    constraints=["lease_per_section:true", "exclusive_access:true"],
+                    constraints=["lease_per_section:true"],
                     initial_state={
                         "phase": "analysis",
                         "leasing_enabled": True,
                     },
                 ),
-                # Phase 3: Risk Assessment (RFC-0007: Costs)
+                # Phase 3: Risk Assessment (RFC-0009: Cost Tracking)
                 IntentSpec(
                     title="Risk Assessment",
                     description="Assess overall document risk and compliance score",

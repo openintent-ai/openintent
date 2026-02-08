@@ -2,7 +2,7 @@
 """
 OCR Agent - Document extraction with retry policies.
 
-Demonstrates RFC-0008 (Retry Policies):
+Demonstrates RFC-0010 (Retry Policies):
 - Setting retry policies on intents
 - Recording failures to event stream
 - Configurable retry strategies (exponential backoff)
@@ -41,7 +41,7 @@ class OCRAgent:
     """
     OCR extraction agent with retry policy handling.
 
-    Demonstrates RFC-0008:
+    Demonstrates RFC-0010:
     - Sets retry policy on intent
     - Records failures to event stream
     - Retries with exponential backoff
@@ -75,7 +75,7 @@ class OCRAgent:
 
         print(f"   Attempt: {attempt}/{MAX_ATTEMPTS}")
 
-        # Set retry policy on first attempt (RFC-0008)
+        # Set retry policy on first attempt (RFC-0010)
         if attempt == 1:
             try:
                 await self.client.set_retry_policy(
@@ -103,7 +103,7 @@ class OCRAgent:
             error_msg = f"Transient OCR failure on attempt {attempt}"
             print(f"   [FAIL] {error_msg}")
 
-            # Record the failure (RFC-0008)
+            # Record the failure (RFC-0010)
             try:
                 await self.client.record_failure(
                     intent_id=intent.id,
@@ -194,7 +194,7 @@ if __name__ == "__main__":
 
     print("=" * 60)
     print("OpenIntent OCR Agent")
-    print("Demonstrates: RFC-0008 (Retry Policies)")
+    print("Demonstrates: RFC-0010 (Retry Policies)")
     print("=" * 60)
     print(f"Server: {OPENINTENT_URL}")
     print("Agent ID: ocr-agent")

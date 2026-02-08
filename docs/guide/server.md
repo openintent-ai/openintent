@@ -1,6 +1,6 @@
 # Built-in Server
 
-The OpenIntent SDK includes a full-featured FastAPI server implementing all 8 RFCs.
+The OpenIntent SDK includes a full-featured FastAPI server implementing all 17 RFCs.
 
 ## Quick Start
 

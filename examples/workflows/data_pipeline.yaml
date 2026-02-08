@@ -14,6 +14,7 @@ openintent: "1.0"
 #   - Sequential dependencies
 #   - Error handling with retries
 #   - Cost tracking for API calls
+#   - Permissions (RFC-0011)
 #
 # Run with:
 #   openintent run examples/workflows/data_pipeline.yaml
@@ -51,6 +52,7 @@ workflow:
     title: "Extract Data"
     description: "Pull data from source systems"
     assign: extractor-agent
+    permissions: [extractor-agent]
     retry:
       max_attempts: 5
       backoff: exponential
@@ -66,6 +68,7 @@ workflow:
     title: "Transform Data"
     description: "Clean, validate, and transform extracted data"
     assign: transformer-agent
+    permissions: [transformer-agent]
     depends_on:
       - extract
     initial_state:
@@ -81,6 +84,7 @@ workflow:
     title: "Load Data"
     description: "Insert transformed data into destination"
     assign: loader-agent
+    permissions: [loader-agent]
     depends_on:
       - transform
     retry:
@@ -96,6 +100,7 @@ workflow:
     title: "Verify Load"
     description: "Check data integrity and generate summary"
     assign: validator-agent
+    permissions: open
     depends_on:
       - load
     attachments:
