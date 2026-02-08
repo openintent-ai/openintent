@@ -602,7 +602,7 @@ New event types added to the intent event log:
 ## References
 
 - [RFC-0001: Intent Objects](./0001-intent-objects.md)
-- [RFC-0003: Agent Leasing](./0003-agent-leasing.md)  
+- [RFC-0003: Agent Leasing](./0003-agent-leasing.md)
 - [RFC-0004: Governance & Arbitration](./0004-governance-arbitration.md)
 - [RFC-0007: Intent Portfolios](./0007-intent-portfolios.md)
 - [RFC-0010: Retry Policies](./0010-retry-policies.md)

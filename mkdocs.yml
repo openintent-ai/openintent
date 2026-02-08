@@ -124,6 +124,17 @@ nav:
   - Specification:
     - Workflow YAML: spec/workflow-yaml.md
   - RFCs:
+    - "0001 \u2014 Intent Objects": rfcs/0001-intent-objects.md
+    - "0002 \u2014 Intent Graphs": rfcs/0002-intent-graphs.md
+    - "0003 \u2014 Agent Leasing": rfcs/0003-agent-leasing.md
+    - "0004 \u2014 Governance & Arbitration": rfcs/0004-governance-arbitration.md
+    - "0005 \u2014 Attachments": rfcs/0005-attachments.md
+    - "0006 \u2014 Subscriptions": rfcs/0006-subscriptions.md
+    - "0007 \u2014 Intent Portfolios": rfcs/0007-intent-portfolios.md
+    - "0008 \u2014 LLM Integration": rfcs/0008-llm-integration.md
+    - "0009 \u2014 Cost Tracking": rfcs/0009-cost-tracking.md
+    - "0010 \u2014 Retry Policies": rfcs/0010-retry-policies.md
+    - "0011 \u2014 Access Control": rfcs/0011-access-control.md
     - "0012 \u2014 Task Decomposition": rfcs/0012-task-decomposition-planning.md
     - "0013 \u2014 Coordinator Governance": rfcs/0013-coordinator-governance.md
     - "0014 \u2014 Credential Vaults": rfcs/0014-credential-vaults-tool-scoping.md

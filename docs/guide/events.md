@@ -134,7 +134,7 @@ for event in client.subscribe(intent.id):
     print(f"Payload: {event.payload}")
 ```
 
-See [Subscriptions](../api/client.md#subscriptions) for more details.
+See the client API documentation for more details on subscriptions.
 
 ## Next Steps
 
