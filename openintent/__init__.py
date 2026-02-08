@@ -37,16 +37,34 @@ from .exceptions import (
     ValidationError,
 )
 from .models import (
-    ACLEntry,
     AccessPolicy,
     AccessRequest,
     AccessRequestStatus,
+    ACLEntry,
+    AgentCapacity,
+    # RFC-0016: Agent Lifecycle & Health
+    AgentRecord,
+    AgentStatus,
     AggregateStatus,
     ArbitrationRequest,
+    Checkpoint,
+    # RFC-0013: Coordinator Governance
+    CoordinatorLease,
+    CoordinatorStatus,
+    CoordinatorType,
     CostSummary,
     CostType,
+    Credential,
+    # RFC-0014: Credential Vaults & Tool Scoping
+    CredentialVault,
     Decision,
+    DecisionRecord,
+    DecisionType,
     EventType,
+    GrantConstraints,
+    Guardrails,
+    Heartbeat,
+    HeartbeatConfig,
     Intent,
     IntentACL,
     IntentAttachment,
@@ -59,56 +77,38 @@ from .models import (
     IntentState,
     IntentStatus,
     IntentSubscription,
+    IntentTemplate,
     LeaseStatus,
     LLMRequestPayload,
     MembershipRole,
+    # RFC-0015: Agent Memory
+    MemoryEntry,
+    MemoryPolicy,
+    MemoryScope,
+    MemoryType,
     PeerInfo,
     Permission,
+    Plan,
+    PlanCondition,
+    PlanState,
     PortfolioMembership,
     PortfolioStatus,
     RetryPolicy,
     RetryStrategy,
     StreamState,
     StreamStatus,
-    ToolCallPayload,
     # RFC-0012: Task Decomposition & Planning
     Task,
     TaskStatus,
-    Plan,
-    PlanState,
-    Checkpoint,
-    PlanCondition,
-    MemoryPolicy,
-    ToolRequirement,
-    # RFC-0013: Coordinator Governance
-    CoordinatorLease,
-    CoordinatorType,
-    CoordinatorStatus,
-    Guardrails,
-    DecisionRecord,
-    DecisionType,
-    # RFC-0014: Credential Vaults & Tool Scoping
-    CredentialVault,
-    Credential,
+    ToolCallPayload,
     ToolGrant,
     ToolInvocation,
-    GrantConstraints,
-    # RFC-0015: Agent Memory
-    MemoryEntry,
-    MemoryType,
-    MemoryScope,
-    # RFC-0016: Agent Lifecycle & Health
-    AgentRecord,
-    AgentStatus,
-    Heartbeat,
-    AgentCapacity,
-    HeartbeatConfig,
+    ToolRequirement,
     # RFC-0017: Triggers & Reactive Scheduling
     Trigger,
-    TriggerType,
     TriggerCondition,
-    IntentTemplate,
     TriggerLineage,
+    TriggerType,
 )
 from .streaming import (
     EventQueue,
@@ -132,6 +132,7 @@ from .validation import (
     validate_url,
     validate_uuid,
 )
+from .workflow import AccessPolicy as WorkflowAccessPolicy  # noqa: F401
 from .workflow import (
     AllowEntry,  # noqa: F401
     DelegateConfig,  # noqa: F401
@@ -145,7 +146,6 @@ from .workflow import (
     WorkflowValidationError,
     validate_workflow,
 )
-from .workflow import AccessPolicy as WorkflowAccessPolicy  # noqa: F401
 
 
 def get_server() -> tuple[Any, Any, Any]:

@@ -7,7 +7,6 @@ import tempfile
 
 import pytest
 
-from openintent.server.config import ServerConfig
 from openintent.server.database import Database
 
 

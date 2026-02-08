@@ -546,8 +546,9 @@ class TestAccessControl:
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
-        from openintent.server.app import create_app
+
         from openintent.server import database as db_module
+        from openintent.server.app import create_app
 
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
