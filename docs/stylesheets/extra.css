@@ -370,7 +370,13 @@
    HOMEPAGE — Full-width, no sidebar
    ============================================================ */
 
-.oi-home .md-sidebar {
+@media (min-width: 76.25em) {
+  .oi-home .md-sidebar--primary {
+    display: none !important;
+  }
+}
+
+.oi-home .md-sidebar--secondary {
   display: none !important;
 }
 

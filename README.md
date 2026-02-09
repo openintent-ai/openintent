@@ -22,6 +22,228 @@ curl -X POST http://localhost:8000/api/v1/intents \
 
 Server runs at http://localhost:8000 with API docs at http://localhost:8000/docs
 
+## Architecture
+
+### Protocol Stack
+
+```mermaid
+graph TB
+    subgraph Agents["Agent Abstractions"]
+        A1["@Agent"] --- A2["@Coordinator"] --- A3["Worker"]
+    end
+
+    subgraph Intent["Intent Layer"]
+        I1["Structured Intents · Versioned State · Event Logs · Concurrency Control"]
+    end
+
+    subgraph Coord["Coordination Layer"]
+        C1["Leasing<br/>RFC-0003"] --- C2["Governance<br/>RFC-0004 · 0013"] --- C3["Access Control<br/>RFC-0011"] --- C4["Planning<br/>RFC-0012"]
+    end
+
+    subgraph Infra["Infrastructure Layer"]
+        F1["Memory<br/>RFC-0015"] --- F2["Vaults & Tools<br/>RFC-0014"] --- F3["Lifecycle<br/>RFC-0016"] --- F4["Triggers<br/>RFC-0017"]
+    end
+
+    subgraph Transport["Transport & Observability"]
+        T1["7 LLM Adapters"] --- T2["Tracing · Costs"] --- T3["REST · SSE · Webhooks"]
+    end
+
+    Agents --> Intent --> Coord --> Infra --> Transport
+
+    style Agents fill:#1a1a2e,color:#c4b5fd,stroke:#7c3aed,stroke-width:2px
+    style Intent fill:#16213e,color:#93c5fd,stroke:#3b82f6,stroke-width:2px
+    style Coord fill:#0f3460,color:#a5f3fc,stroke:#06b6d4,stroke-width:2px
+    style Infra fill:#1a1a2e,color:#c4b5fd,stroke:#8b5cf6,stroke-width:2px
+    style Transport fill:#162447,color:#a5b4fc,stroke:#6366f1,stroke-width:2px
+
+    style A1 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
+    style A2 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
+    style A3 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
+    style I1 fill:#1e3a5f,color:#e0e0ff,stroke:#3b82f6
+    style C1 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
+    style C2 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
+    style C3 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
+    style C4 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
+    style F1 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
+    style F2 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
+    style F3 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
+    style F4 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
+    style T1 fill:#1e1b4b,color:#e0e0ff,stroke:#6366f1
+    style T2 fill:#1e1b4b,color:#e0e0ff,stroke:#6366f1
+    style T3 fill:#1e1b4b,color:#e0e0ff,stroke:#6366f1
+```
+
+### Intent Lifecycle
+
+Every intent follows a deterministic state machine with optimistic concurrency control:
+
+```mermaid
+stateDiagram-v2
+    direction LR
+
+    [*] --> Created: create_intent()
+    Created --> Assigned: assign agent
+    Assigned --> Leased: acquire_lease()
+    Leased --> Executing: agent begins work
+
+    Executing --> Executing: patch_state() + version bump
+    Executing --> Conflict: concurrent write
+    Conflict --> Executing: governance resolves
+
+    Executing --> Completed: set_status("completed")
+    Executing --> Failed: error / timeout
+    Failed --> Assigned: retry policy re-assigns
+
+    Completed --> [*]
+
+    classDef active fill:#7c3aed,color:#fff,stroke:#7c3aed
+    classDef conflict fill:#ef4444,color:#fff,stroke:#ef4444
+    classDef success fill:#10b981,color:#fff,stroke:#10b981
+
+    class Created,Assigned active
+    class Leased,Executing active
+    class Conflict conflict
+    class Completed success
+    class Failed conflict
+```
+
+### Agent Coordination Flow
+
+How agents, coordinators, and the protocol server interact in a multi-agent pipeline:
+
+```mermaid
+sequenceDiagram
+    participant C as Coordinator
+    participant S as Protocol Server
+    participant A1 as Agent A
+    participant A2 as Agent B
+
+    rect rgb(30, 30, 60)
+        Note over C,S: Setup Phase
+        C->>S: create_intent("Research Task")
+        S-->>C: intent {id, version: 1}
+        C->>S: delegate → Agent A
+    end
+
+    rect rgb(20, 40, 80)
+        Note over S,A1: Execution Phase
+        S-->>A1: @on_assignment fires
+        A1->>S: acquire_lease("analysis")
+        A1->>S: patch_state({findings: "..."})
+        A1->>S: memory.store("research-123", data)
+        A1->>S: set_status("completed")
+    end
+
+    rect rgb(40, 20, 60)
+        Note over C,A2: Handoff Phase
+        S-->>C: @on_all_complete fires
+        C->>S: delegate → Agent B
+        S-->>A2: @on_assignment fires
+        A2->>S: memory.recall(tags=["research"])
+        A2->>S: patch_state({summary: "..."})
+        A2->>S: set_status("completed")
+    end
+
+    rect rgb(15, 50, 50)
+        Note over C,S: Decision Record
+        S-->>C: @on_all_complete fires
+        C->>S: record_decision("pipeline_complete")
+    end
+```
+
+### Decorator Lifecycle
+
+How lifecycle decorators map to protocol events across `@Agent` and `@Coordinator`:
+
+```mermaid
+graph TB
+    subgraph AgentDecorators["@Agent Lifecycle"]
+        direction TB
+        E1["Intent Created"]
+        E2["@on_assignment"]
+        E3["@on_state_change"]
+        E4["@on_event"]
+        E5["@on_task"]
+        E6["@on_trigger"]
+        E7["@on_access_requested"]
+        E8["@on_complete"]
+        E9["@on_drain"]
+
+        E1 --> E2
+        E2 --> E3
+        E3 --> E4
+        E4 --> E5
+        E5 --> E8
+        E6 -.-> E2
+        E7 -.-> E3
+        E9 -.-> E8
+    end
+
+    subgraph CoordDecorators["@Coordinator Lifecycle"]
+        direction TB
+        D1["Portfolio Created"]
+        D2["Agents Delegated"]
+        D3["@on_conflict"]
+        D4["@on_escalation"]
+        D5["@on_quorum"]
+        D6["@on_all_complete"]
+
+        D1 --> D2
+        D2 --> D3
+        D2 --> D4
+        D2 --> D5
+        D3 --> D6
+        D4 --> D6
+        D5 --> D6
+    end
+
+    subgraph LLM["LLM-Powered Mode  (model=)"]
+        direction TB
+        L1["self.think(prompt)"]
+        L2["Protocol Tools"]
+        L3["Local ToolDef Handlers"]
+        L4["Remote Grants RFC-0014"]
+        L5["self.think_stream(prompt)"]
+
+        L1 --> L2
+        L1 --> L3
+        L1 --> L4
+        L5 --> L2
+        L5 --> L3
+        L5 --> L4
+    end
+
+    AgentDecorators --- LLM
+    CoordDecorators --- LLM
+
+    style AgentDecorators fill:#1a1a2e,color:#c4b5fd,stroke:#7c3aed,stroke-width:2px
+    style CoordDecorators fill:#0f3460,color:#a5f3fc,stroke:#06b6d4,stroke-width:2px
+    style LLM fill:#1e1b4b,color:#c4b5fd,stroke:#8b5cf6,stroke-width:2px
+
+    style E1 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
+    style E2 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
+    style E3 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
+    style E4 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
+    style E5 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
+    style E6 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
+    style E7 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
+    style E8 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
+    style E9 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
+
+    style D1 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
+    style D2 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
+    style D3 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
+    style D4 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
+    style D5 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
+    style D6 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
+
+    style L1 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
+    style L2 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
+    style L3 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
+    style L4 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
+    style L5 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
+```
+
 ## Features
 
 - **Built-in Server** — `openintent-server` for instant protocol server with FastAPI
@@ -373,7 +595,7 @@ MIT License — see [LICENSE](LICENSE) file for details.
 
 ## Links
 
+- [Documentation](https://openintent-ai.github.io/openintent/)
 - [OpenIntent Protocol](https://openintent.ai)
-- [Protocol Specification](https://openintent.ai/docs)
 - [RFC Documents](https://openintent.ai/rfc/0001)
 - [GitHub](https://github.com/openintent-ai/openintent)

@@ -9,11 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Tool System Rename** — `Tool` is now `ToolDef`, `@tool` is now `@define_tool` for clarity. The old names remain as backwards-compatible aliases and will not be removed.
+- **Tool → ToolDef rename** — `Tool` is now `ToolDef`, `@tool` is now `@define_tool` for clarity. The old names remain as backwards-compatible aliases and will not be removed.
+- **Type annotations** — `llm.py` is now fully type-annotated and passes mypy strict mode (previously suppressed via `# mypy: disable-error-code`).
 
 ### Added
 
+- **LLM-Powered Agents** — Add `model=` to `@Agent` or `@Coordinator` to enable agentic tool loops with `self.think(prompt)`, streaming via `self.think_stream(prompt)`, conversation reset via `self.reset_conversation()`, and protocol-native tools (remember, recall, clarify, escalate, update_status, delegate, record_decision, create_plan).
+- **Custom Tools with ToolDef** — `ToolDef(name, description, parameters, handler)` for rich tool definitions with local execution, and `@define_tool(description=, parameters=)` decorator to turn functions into `ToolDef` objects.
+- **Mixed tool sources** — `tools=` on `@Agent`/`@Coordinator` accepts both `ToolDef` objects (local handlers with rich schemas) and plain strings (RFC-0014 protocol grants).
 - **Automatic Tool Tracing** — Every local `ToolDef` handler invocation is automatically traced as a `tool_invocation` protocol event when the agent is connected to an OpenIntent server. Each event records tool name, arguments, result, and execution duration. Tracing is best-effort and never blocks tool execution.
+- **Backwards-compatible aliases** — `Tool` = `ToolDef`, `@tool` = `@define_tool`.
 
 ### Fixed
 

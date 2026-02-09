@@ -11,7 +11,10 @@
 {% block content %}
 
 <style>
-  .md-sidebar { display: none !important; }
+  @media (min-width: 76.25em) {
+    .md-sidebar--primary { display: none !important; }
+  }
+  .md-sidebar--secondary { display: none !important; }
   .md-main__inner { max-width: none; }
   .md-content { max-width: none; margin: 0; }
   .md-content__inner { max-width: none; padding: 0; margin: 0; }
@@ -21,11 +24,10 @@
 
   <!-- Hero -->
   <div class="oi-hero">
-    <div class="oi-hero__badge">v0.8.0 &mdash; Decorator-First Agents</div>
-    <h1 class="oi-hero__title">Trusted Coordination<br>for AI Agents at Scale</h1>
+    <div class="oi-hero__badge">v0.8.1 &mdash; ToolDef &amp; LLM-Powered Agents</div>
+    <h1 class="oi-hero__title">Stop Duct-Taping Your Agents Together</h1>
     <p class="oi-hero__subtitle">
-      An open protocol that gives multi-agent systems the coordination,<br>
-      governance, and auditability to operate beyond the demo.
+      OpenIntent is a durable, auditable protocol for multi-agent coordination. Structured intents replace fragile chat chains. Versioned state replaces guesswork. Ship agent systems that actually work in production.
     </p>
     <div class="oi-hero__actions">
       <a href="getting-started/quickstart/" class="oi-btn oi-btn--primary">Get Started</a>
@@ -44,11 +46,11 @@
       <div class="oi-stat__label">LLM Adapters</div>
     </div>
     <div class="oi-stat">
-      <div class="oi-stat__number">464</div>
+      <div class="oi-stat__number">556</div>
       <div class="oi-stat__label">Tests</div>
     </div>
     <div class="oi-stat">
-      <div class="oi-stat__number">v0.8</div>
+      <div class="oi-stat__number">v0.8.1</div>
       <div class="oi-stat__label">Latest</div>
     </div>
   </div>
