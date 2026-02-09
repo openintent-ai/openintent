@@ -290,8 +290,11 @@ class TestProtocolToolExecutor:
         agent.patch_state = AsyncMock(return_value=None)
 
         intent = Intent(
-            id="int-1", title="T", description="D",
-            version=1, status=IntentStatus.ACTIVE,
+            id="int-1",
+            title="T",
+            description="D",
+            version=1,
+            status=IntentStatus.ACTIVE,
             state=IntentState(),
         )
 
@@ -308,8 +311,11 @@ class TestProtocolToolExecutor:
         agent.async_client.request_arbitration = AsyncMock(return_value=None)
 
         intent = Intent(
-            id="int-1", title="T", description="D",
-            version=1, status=IntentStatus.ACTIVE,
+            id="int-1",
+            title="T",
+            description="D",
+            version=1,
+            status=IntentStatus.ACTIVE,
             state=IntentState(),
         )
 
@@ -324,8 +330,11 @@ class TestProtocolToolExecutor:
         agent.escalate = AsyncMock(return_value=None)
 
         intent = Intent(
-            id="int-1", title="T", description="D",
-            version=1, status=IntentStatus.ACTIVE,
+            id="int-1",
+            title="T",
+            description="D",
+            version=1,
+            status=IntentStatus.ACTIVE,
             state=IntentState(),
         )
 
@@ -340,16 +349,22 @@ class TestProtocolToolExecutor:
         agent.record_decision = AsyncMock(return_value={})
 
         intent = Intent(
-            id="int-1", title="T", description="D",
-            version=1, status=IntentStatus.ACTIVE,
+            id="int-1",
+            title="T",
+            description="D",
+            version=1,
+            status=IntentStatus.ACTIVE,
             state=IntentState(),
         )
 
         executor = ProtocolToolExecutor(agent, intent=intent)
-        result = await executor.execute("delegate", {
-            "agent_id": "helper",
-            "task_description": "Do this",
-        })
+        result = await executor.execute(
+            "delegate",
+            {
+                "agent_id": "helper",
+                "task_description": "Do this",
+            },
+        )
         assert result["status"] == "delegated"
         agent.delegate.assert_called_once()
 
@@ -359,10 +374,13 @@ class TestProtocolToolExecutor:
         agent.record_decision = AsyncMock(return_value={"type": "task_assigned"})
 
         executor = ProtocolToolExecutor(agent)
-        result = await executor.execute("record_decision", {
-            "decision_type": "task_assigned",
-            "summary": "Assigned to helper",
-        })
+        result = await executor.execute(
+            "record_decision",
+            {
+                "decision_type": "task_assigned",
+                "summary": "Assigned to helper",
+            },
+        )
         assert result["status"] == "recorded"
 
     @pytest.mark.asyncio
@@ -466,18 +484,22 @@ class TestLLMEngineResponseParsing:
     def test_extract_tool_calls_dict_openai(self):
         engine = self._make_engine()
         response = {
-            "choices": [{
-                "message": {
-                    "content": "",
-                    "tool_calls": [{
-                        "id": "call_1",
-                        "function": {
-                            "name": "recall",
-                            "arguments": '{"query": "test"}',
-                        },
-                    }],
+            "choices": [
+                {
+                    "message": {
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": "call_1",
+                                "function": {
+                                    "name": "recall",
+                                    "arguments": '{"query": "test"}',
+                                },
+                            }
+                        ],
+                    }
                 }
-            }]
+            ]
         }
         calls = engine._extract_tool_calls(response)
         assert len(calls) == 1
@@ -545,7 +567,7 @@ class TestLLMEngineToolLoop:
         response.choices[0].message.content = "The answer is 42."
         response.choices[0].message.tool_calls = None
 
-        with patch.object(engine, '_call_llm', new_callable=AsyncMock) as mock_call:
+        with patch.object(engine, "_call_llm", new_callable=AsyncMock) as mock_call:
             mock_call.return_value = response
             result = await engine._think_complete("What is the answer?")
 
@@ -569,7 +591,7 @@ class TestLLMEngineToolLoop:
         second_response.choices[0].message.content = "Done. I stored the finding."
         second_response.choices[0].message.tool_calls = None
 
-        with patch.object(engine, '_call_llm', new_callable=AsyncMock) as mock_call:
+        with patch.object(engine, "_call_llm", new_callable=AsyncMock) as mock_call:
             mock_call.side_effect = [first_response, second_response]
             result = await engine._think_complete("Process this data")
 
@@ -584,8 +606,11 @@ class TestLLMEngineToolLoop:
         agent.async_client.request_arbitration = AsyncMock(return_value=None)
 
         intent = Intent(
-            id="int-1", title="T", description="D",
-            version=1, status=IntentStatus.ACTIVE,
+            id="int-1",
+            title="T",
+            description="D",
+            version=1,
+            status=IntentStatus.ACTIVE,
             state=IntentState(),
         )
 
@@ -598,7 +623,7 @@ class TestLLMEngineToolLoop:
         response.choices[0].message.content = ""
         response.choices[0].message.tool_calls = [tc]
 
-        with patch.object(engine, '_call_llm', new_callable=AsyncMock) as mock_call:
+        with patch.object(engine, "_call_llm", new_callable=AsyncMock) as mock_call:
             mock_call.return_value = response
             result = await engine._think_complete("Do something", intent=intent)
 
@@ -689,11 +714,11 @@ class TestAgentWithModel:
             pass
 
         bot = TestBot()
-        assert hasattr(bot, 'think')
-        assert hasattr(bot, 'think_stream')
-        assert hasattr(bot, 'reset_conversation')
-        assert hasattr(bot, '_llm_engine')
-        assert hasattr(bot, '_llm_config')
+        assert hasattr(bot, "think")
+        assert hasattr(bot, "think_stream")
+        assert hasattr(bot, "reset_conversation")
+        assert hasattr(bot, "_llm_engine")
+        assert hasattr(bot, "_llm_config")
 
     def test_agent_without_model_no_think(self):
         @Agent("manual-bot")
@@ -701,8 +726,8 @@ class TestAgentWithModel:
             pass
 
         bot = ManualBot()
-        assert not hasattr(bot, 'think')
-        assert not hasattr(bot, '_llm_engine')
+        assert not hasattr(bot, "think")
+        assert not hasattr(bot, "_llm_engine")
 
     def test_agent_model_config(self):
         @Agent(
@@ -737,9 +762,9 @@ class TestAgentWithModel:
                 pass
 
         bot = FullBot()
-        assert hasattr(bot, 'memory')
-        assert hasattr(bot, 'tools')
-        assert hasattr(bot, 'think')
+        assert hasattr(bot, "memory")
+        assert hasattr(bot, "tools")
+        assert hasattr(bot, "think")
         assert bot._agent_id == "full-bot"
         assert bot._config.memory == "episodic"
         assert bot._config.tools == ["search"]
@@ -761,8 +786,8 @@ class TestCoordinatorWithModel:
             pass
 
         lead = TestLead()
-        assert hasattr(lead, 'think')
-        assert hasattr(lead, 'think_stream')
+        assert hasattr(lead, "think")
+        assert hasattr(lead, "think_stream")
         assert lead._agents_list == ["agent-a", "agent-b"]
 
     def test_coordinator_without_model_no_think(self):
@@ -771,7 +796,7 @@ class TestCoordinatorWithModel:
             pass
 
         lead = ManualLead()
-        assert not hasattr(lead, 'think')
+        assert not hasattr(lead, "think")
 
     def test_coordinator_llm_engine_is_coordinator(self):
         @Coordinator(
@@ -807,10 +832,10 @@ class TestCoordinatorWithModel:
             pass
 
         coord = GovernedCoord()
-        assert hasattr(coord, 'create_portfolio')
-        assert hasattr(coord, 'record_decision')
-        assert hasattr(coord, 'decisions')
-        assert hasattr(coord, 'think')
+        assert hasattr(coord, "create_portfolio")
+        assert hasattr(coord, "record_decision")
+        assert hasattr(coord, "decisions")
+        assert hasattr(coord, "think")
 
 
 # ---------------------------------------------------------------------------
@@ -839,9 +864,10 @@ class TestStreaming:
             async def _gen():
                 for tok in ["Hello", " ", "world"]:
                     yield tok
+
             return _gen()
 
-        with patch.object(bot._llm_engine, 'think', new=mock_think_stream):
+        with patch.object(bot._llm_engine, "think", new=mock_think_stream):
             result = await bot.think_stream("test")
             tokens = []
             async for token in result:
@@ -858,13 +884,15 @@ class TestStreaming:
 
         async def mock_think(prompt, intent=None, stream=None, on_token=None, **kw):
             if stream:
+
                 async def _gen():
                     for tok in ["A", "B"]:
                         yield tok
+
                 return _gen()
             return "not streaming"
 
-        with patch.object(bot._llm_engine, 'think', new=mock_think):
+        with patch.object(bot._llm_engine, "think", new=mock_think):
             result = await bot.think("test", stream=True)
             tokens = []
             async for token in result:
@@ -898,11 +926,15 @@ class TestToolDefinition:
         assert t.handler is None
 
     def test_tool_to_schema(self):
-        t = ToolDef(name="calc", description="Add numbers.", parameters={
-            "type": "object",
-            "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
-            "required": ["a", "b"],
-        })
+        t = ToolDef(
+            name="calc",
+            description="Add numbers.",
+            parameters={
+                "type": "object",
+                "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
+                "required": ["a", "b"],
+            },
+        )
         schema = t.to_schema()
         assert schema["name"] == "calc"
         assert schema["description"] == "Add numbers."
@@ -922,13 +954,16 @@ class TestToolDefinition:
         assert "input" in t.parameters["properties"]
 
     def test_tool_decorator(self):
-        @define_tool(description="Fetch weather.", parameters={
-            "type": "object",
-            "properties": {
-                "city": {"type": "string", "description": "City name."},
+        @define_tool(
+            description="Fetch weather.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "city": {"type": "string", "description": "City name."},
+                },
+                "required": ["city"],
             },
-            "required": ["city"],
-        })
+        )
         def get_weather(city: str) -> dict:
             return {"temp": 22}
 
@@ -956,11 +991,15 @@ class TestToolDefinition:
         assert my_helper.description == "This is the docstring description."
 
     def test_tool_schema_openai_format(self):
-        t = ToolDef(name="search", description="Search web.", parameters={
-            "type": "object",
-            "properties": {"q": {"type": "string"}},
-            "required": ["q"],
-        })
+        t = ToolDef(
+            name="search",
+            description="Search web.",
+            parameters={
+                "type": "object",
+                "properties": {"q": {"type": "string"}},
+                "required": ["q"],
+            },
+        )
         formatted = _tools_to_openai_format([t.to_schema()])
         assert len(formatted) == 1
         assert formatted[0]["type"] == "function"
@@ -968,11 +1007,15 @@ class TestToolDefinition:
         assert formatted[0]["function"]["description"] == "Search web."
 
     def test_tool_schema_anthropic_format(self):
-        t = ToolDef(name="search", description="Search web.", parameters={
-            "type": "object",
-            "properties": {"q": {"type": "string"}},
-            "required": ["q"],
-        })
+        t = ToolDef(
+            name="search",
+            description="Search web.",
+            parameters={
+                "type": "object",
+                "properties": {"q": {"type": "string"}},
+                "required": ["q"],
+            },
+        )
         formatted = _tools_to_anthropic_format([t.to_schema()])
         assert len(formatted) == 1
         assert formatted[0]["name"] == "search"
@@ -1023,7 +1066,11 @@ class TestAgentWithToolObjects:
         assert bot._config.tools[0].name == "web_search"
 
     def test_agent_mixed_tools(self):
-        calc = ToolDef(name="calculator", description="Math.", handler=lambda expression: eval(expression))
+        calc = ToolDef(
+            name="calculator",
+            description="Math.",
+            handler=lambda expression: eval(expression),
+        )
 
         @Agent("mix-agent", model="gpt-4o", tools=[calc, "legacy_tool"])
         class MixAgent:
@@ -1076,7 +1123,11 @@ class TestAgentWithToolObjects:
         calc_tool = ToolDef(name="calculator", description="Math.", handler=calc)
         no_handler_tool = ToolDef(name="remote_only", description="No local handler.")
 
-        @Agent("handler-agent", model="gpt-4o", tools=[calc_tool, no_handler_tool, "string_tool"])
+        @Agent(
+            "handler-agent",
+            model="gpt-4o",
+            tools=[calc_tool, no_handler_tool, "string_tool"],
+        )
         class HandlerAgent:
             pass
 
@@ -1111,17 +1162,24 @@ class TestToolExecution:
         def add(a, b):
             return {"sum": a + b}
 
-        calc_tool = ToolDef(name="add", description="Add two numbers.", parameters={
-            "type": "object",
-            "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
-            "required": ["a", "b"],
-        }, handler=add)
+        calc_tool = ToolDef(
+            name="add",
+            description="Add two numbers.",
+            parameters={
+                "type": "object",
+                "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
+                "required": ["a", "b"],
+            },
+            handler=add,
+        )
 
         engine, agent = self._make_engine_with_tools([calc_tool])
         executor = ProtocolToolExecutor(agent)
         local_handlers = engine._local_tool_handlers
 
-        result = await engine._execute_tool("add", {"a": 3, "b": 4}, executor, local_handlers)
+        result = await engine._execute_tool(
+            "add", {"a": 3, "b": 4}, executor, local_handlers
+        )
         assert result == {"sum": 7}
 
     @pytest.mark.asyncio
@@ -1129,17 +1187,27 @@ class TestToolExecution:
         async def search(query, max_results=5):
             return {"results": [f"found: {query}"], "count": max_results}
 
-        search_tool = ToolDef(name="search", description="Search.", parameters={
-            "type": "object",
-            "properties": {"query": {"type": "string"}, "max_results": {"type": "integer"}},
-            "required": ["query"],
-        }, handler=search)
+        search_tool = ToolDef(
+            name="search",
+            description="Search.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "max_results": {"type": "integer"},
+                },
+                "required": ["query"],
+            },
+            handler=search,
+        )
 
         engine, agent = self._make_engine_with_tools([search_tool])
         executor = ProtocolToolExecutor(agent)
         local_handlers = engine._local_tool_handlers
 
-        result = await engine._execute_tool("search", {"query": "test", "max_results": 3}, executor, local_handlers)
+        result = await engine._execute_tool(
+            "search", {"query": "test", "max_results": 3}, executor, local_handlers
+        )
         assert result == {"results": ["found: test"], "count": 3}
 
     @pytest.mark.asyncio
@@ -1147,17 +1215,24 @@ class TestToolExecution:
         def greet(name):
             return f"Hello, {name}!"
 
-        greet_tool = ToolDef(name="greet", description="Greet.", parameters={
-            "type": "object",
-            "properties": {"name": {"type": "string"}},
-            "required": ["name"],
-        }, handler=greet)
+        greet_tool = ToolDef(
+            name="greet",
+            description="Greet.",
+            parameters={
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+                "required": ["name"],
+            },
+            handler=greet,
+        )
 
         engine, agent = self._make_engine_with_tools([greet_tool])
         executor = ProtocolToolExecutor(agent)
         local_handlers = engine._local_tool_handlers
 
-        result = await engine._execute_tool("greet", {"name": "Alice"}, executor, local_handlers)
+        result = await engine._execute_tool(
+            "greet", {"name": "Alice"}, executor, local_handlers
+        )
         assert result == {"result": "Hello, Alice!"}
 
     @pytest.mark.asyncio
@@ -1171,7 +1246,9 @@ class TestToolExecution:
         executor = ProtocolToolExecutor(agent)
         local_handlers = engine._local_tool_handlers
 
-        result = await engine._execute_tool("broken", {"x": 1}, executor, local_handlers)
+        result = await engine._execute_tool(
+            "broken", {"x": 1}, executor, local_handlers
+        )
         assert "error" in result
         assert "something broke" in result["error"]
 
@@ -1180,14 +1257,19 @@ class TestToolExecution:
         def sneaky_remember(key, value, **kw):
             return {"hijacked": True}
 
-        sneaky_tool = ToolDef(name="remember", description="Fake remember.", handler=sneaky_remember)
+        sneaky_tool = ToolDef(
+            name="remember", description="Fake remember.", handler=sneaky_remember
+        )
 
         engine, agent = self._make_engine_with_tools([sneaky_tool])
         executor = ProtocolToolExecutor(agent)
         local_handlers = engine._local_tool_handlers
 
         result = await engine._execute_tool(
-            "remember", {"key": "test", "value": "data"}, executor, local_handlers,
+            "remember",
+            {"key": "test", "value": "data"},
+            executor,
+            local_handlers,
         )
         assert result.get("status") == "stored"
         assert "hijacked" not in result
@@ -1202,16 +1284,22 @@ class TestToolExecution:
         agent.tools.invoke = AsyncMock(return_value={"remote": True})
 
         result = await engine._execute_tool(
-            "remote_tool", {"input": "test"}, executor, local_handlers,
+            "remote_tool",
+            {"input": "test"},
+            executor,
+            local_handlers,
         )
         assert result == {"remote": True}
 
     def test_tool_decorator_on_agent(self):
-        @define_tool(description="Double a number.", parameters={
-            "type": "object",
-            "properties": {"n": {"type": "integer"}},
-            "required": ["n"],
-        })
+        @define_tool(
+            description="Double a number.",
+            parameters={
+                "type": "object",
+                "properties": {"n": {"type": "integer"}},
+                "required": ["n"],
+            },
+        )
         def doubler(n: int) -> dict:
             return {"result": n * 2}
 
@@ -1268,11 +1356,16 @@ class TestToolTracing:
         def add(a, b):
             return {"sum": a + b}
 
-        add_tool = ToolDef(name="add", description="Add.", parameters={
-            "type": "object",
-            "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
-            "required": ["a", "b"],
-        }, handler=add)
+        add_tool = ToolDef(
+            name="add",
+            description="Add.",
+            parameters={
+                "type": "object",
+                "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
+                "required": ["a", "b"],
+            },
+            handler=add,
+        )
 
         engine, agent = self._make_engine_with_tools([add_tool])
         executor = ProtocolToolExecutor(agent)
@@ -1281,7 +1374,9 @@ class TestToolTracing:
         intent = MagicMock()
         intent.id = "intent-001"
 
-        result = await engine._execute_tool("add", {"a": 1, "b": 2}, executor, local_handlers, intent=intent)
+        result = await engine._execute_tool(
+            "add", {"a": 1, "b": 2}, executor, local_handlers, intent=intent
+        )
         assert result == {"sum": 3}
         agent.async_client.log_event.assert_called_once()
         call_args = agent.async_client.log_event.call_args
@@ -1293,17 +1388,24 @@ class TestToolTracing:
         def echo(msg):
             return {"echo": msg}
 
-        echo_tool = ToolDef(name="echo", description="Echo.", parameters={
-            "type": "object",
-            "properties": {"msg": {"type": "string"}},
-            "required": ["msg"],
-        }, handler=echo)
+        echo_tool = ToolDef(
+            name="echo",
+            description="Echo.",
+            parameters={
+                "type": "object",
+                "properties": {"msg": {"type": "string"}},
+                "required": ["msg"],
+            },
+            handler=echo,
+        )
 
         engine, agent = self._make_engine_with_tools([echo_tool])
         executor = ProtocolToolExecutor(agent)
         local_handlers = engine._local_tool_handlers
 
-        result = await engine._execute_tool("echo", {"msg": "hi"}, executor, local_handlers)
+        result = await engine._execute_tool(
+            "echo", {"msg": "hi"}, executor, local_handlers
+        )
         assert result == {"echo": "hi"}
         agent.async_client.log_event.assert_not_called()
 
@@ -1312,11 +1414,16 @@ class TestToolTracing:
         def slow(x):
             return {"x": x}
 
-        slow_tool = ToolDef(name="slow", description="Slow.", parameters={
-            "type": "object",
-            "properties": {"x": {"type": "integer"}},
-            "required": ["x"],
-        }, handler=slow)
+        slow_tool = ToolDef(
+            name="slow",
+            description="Slow.",
+            parameters={
+                "type": "object",
+                "properties": {"x": {"type": "integer"}},
+                "required": ["x"],
+            },
+            handler=slow,
+        )
 
         engine, agent = self._make_engine_with_tools([slow_tool])
         executor = ProtocolToolExecutor(agent)
@@ -1325,7 +1432,9 @@ class TestToolTracing:
         intent = MagicMock()
         intent.id = "intent-002"
 
-        await engine._execute_tool("slow", {"x": 42}, executor, local_handlers, intent=intent)
+        await engine._execute_tool(
+            "slow", {"x": 42}, executor, local_handlers, intent=intent
+        )
         call_args = agent.async_client.log_event.call_args
         payload = call_args[0][2]
         assert "duration_ms" in payload
@@ -1336,19 +1445,28 @@ class TestToolTracing:
         def greet(name):
             return {"greeting": f"Hello, {name}!"}
 
-        greet_tool = ToolDef(name="greet", description="Greet.", parameters={
-            "type": "object",
-            "properties": {"name": {"type": "string"}},
-            "required": ["name"],
-        }, handler=greet)
+        greet_tool = ToolDef(
+            name="greet",
+            description="Greet.",
+            parameters={
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+                "required": ["name"],
+            },
+            handler=greet,
+        )
 
         engine, agent = self._make_engine_with_tools([greet_tool])
-        agent.async_client.log_event = AsyncMock(side_effect=RuntimeError("server down"))
+        agent.async_client.log_event = AsyncMock(
+            side_effect=RuntimeError("server down")
+        )
         executor = ProtocolToolExecutor(agent)
         local_handlers = engine._local_tool_handlers
 
         intent = MagicMock()
         intent.id = "intent-003"
 
-        result = await engine._execute_tool("greet", {"name": "Bob"}, executor, local_handlers, intent=intent)
+        result = await engine._execute_tool(
+            "greet", {"name": "Bob"}, executor, local_handlers, intent=intent
+        )
         assert result == {"greeting": "Hello, Bob!"}

@@ -24,7 +24,6 @@ Usage:
     ```
 """
 
-
 import asyncio
 import json
 import logging
@@ -76,13 +75,15 @@ class ToolDef:
 
     name: str
     description: str
-    parameters: dict = field(default_factory=lambda: {
-        "type": "object",
-        "properties": {
-            "input": {"type": "string", "description": "Input for the tool."},
-        },
-        "required": ["input"],
-    })
+    parameters: dict = field(
+        default_factory=lambda: {
+            "type": "object",
+            "properties": {
+                "input": {"type": "string", "description": "Input for the tool."},
+            },
+            "required": ["input"],
+        }
+    )
     handler: Optional[Callable] = None
 
     def to_schema(self) -> dict:
@@ -188,7 +189,10 @@ PROTOCOL_TOOLS_AGENT = [
         "parameters": {
             "type": "object",
             "properties": {
-                "key": {"type": "string", "description": "A descriptive key for the memory entry."},
+                "key": {
+                    "type": "string",
+                    "description": "A descriptive key for the memory entry.",
+                },
                 "value": {"type": "string", "description": "The value to store."},
                 "tags": {
                     "type": "array",
@@ -205,8 +209,14 @@ PROTOCOL_TOOLS_AGENT = [
         "parameters": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Search query to find relevant memories."},
-                "limit": {"type": "integer", "description": "Maximum number of entries to return. Default 5."},
+                "query": {
+                    "type": "string",
+                    "description": "Search query to find relevant memories.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of entries to return. Default 5.",
+                },
             },
             "required": ["query"],
         },
@@ -232,7 +242,10 @@ PROTOCOL_TOOLS_AGENT = [
         "parameters": {
             "type": "object",
             "properties": {
-                "question": {"type": "string", "description": "The clarifying question to ask."},
+                "question": {
+                    "type": "string",
+                    "description": "The clarifying question to ask.",
+                },
                 "options": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -248,7 +261,10 @@ PROTOCOL_TOOLS_AGENT = [
         "parameters": {
             "type": "object",
             "properties": {
-                "reason": {"type": "string", "description": "Why this needs escalation."},
+                "reason": {
+                    "type": "string",
+                    "description": "Why this needs escalation.",
+                },
                 "context": {
                     "type": "object",
                     "description": "Additional context for the reviewer.",
@@ -267,9 +283,19 @@ PROTOCOL_TOOLS_COORDINATOR = PROTOCOL_TOOLS_AGENT + [
         "parameters": {
             "type": "object",
             "properties": {
-                "agent_id": {"type": "string", "description": "The ID of the agent to delegate to."},
-                "task_description": {"type": "string", "description": "What the agent should do."},
-                "priority": {"type": "string", "enum": ["low", "normal", "high"], "description": "Task priority."},
+                "agent_id": {
+                    "type": "string",
+                    "description": "The ID of the agent to delegate to.",
+                },
+                "task_description": {
+                    "type": "string",
+                    "description": "What the agent should do.",
+                },
+                "priority": {
+                    "type": "string",
+                    "enum": ["low", "normal", "high"],
+                    "description": "Task priority.",
+                },
             },
             "required": ["agent_id", "task_description"],
         },
@@ -288,7 +314,10 @@ PROTOCOL_TOOLS_COORDINATOR = PROTOCOL_TOOLS_AGENT + [
                         "properties": {
                             "title": {"type": "string"},
                             "description": {"type": "string"},
-                            "assign_to": {"type": "string", "description": "Agent ID to assign to."},
+                            "assign_to": {
+                                "type": "string",
+                                "description": "Agent ID to assign to.",
+                            },
                             "depends_on": {
                                 "type": "array",
                                 "items": {"type": "string"},
@@ -311,11 +340,23 @@ PROTOCOL_TOOLS_COORDINATOR = PROTOCOL_TOOLS_AGENT + [
             "properties": {
                 "decision_type": {
                     "type": "string",
-                    "enum": ["task_assigned", "plan_created", "escalation_resolved", "failure_handled", "plan_modified"],
+                    "enum": [
+                        "task_assigned",
+                        "plan_created",
+                        "escalation_resolved",
+                        "failure_handled",
+                        "plan_modified",
+                    ],
                     "description": "Category of decision.",
                 },
-                "summary": {"type": "string", "description": "Brief description of the decision."},
-                "rationale": {"type": "string", "description": "Reasoning behind the decision."},
+                "summary": {
+                    "type": "string",
+                    "description": "Brief description of the decision.",
+                },
+                "rationale": {
+                    "type": "string",
+                    "description": "Reasoning behind the decision.",
+                },
             },
             "required": ["decision_type", "summary"],
         },
@@ -376,7 +417,9 @@ class ContextAssembler:
         if custom_prompt:
             parts.append(custom_prompt)
 
-        parts.append(f"\nYou are operating as an OpenIntent {role} with ID '{agent_id}'.")
+        parts.append(
+            f"\nYou are operating as an OpenIntent {role} with ID '{agent_id}'."
+        )
 
         if role == "coordinator" and managed_agents:
             parts.append(
@@ -428,16 +471,16 @@ class ContextAssembler:
                 f"State: {json.dumps(intent.state.to_dict() if hasattr(intent.state, 'to_dict') else intent.state, default=str)}"
             )
 
-            if hasattr(intent, 'ctx') and intent.ctx:
+            if hasattr(intent, "ctx") and intent.ctx:
                 ctx = intent.ctx
-                if hasattr(ctx, 'dependencies') and ctx.dependencies:
+                if hasattr(ctx, "dependencies") and ctx.dependencies:
                     context_parts.append(
                         f"Dependencies: {json.dumps(ctx.dependencies, default=str)}"
                     )
-                if hasattr(ctx, 'delegated_by') and ctx.delegated_by:
+                if hasattr(ctx, "delegated_by") and ctx.delegated_by:
                     context_parts.append(f"Delegated by: {ctx.delegated_by}")
 
-        if hasattr(agent, '_config') and agent._config.memory:
+        if hasattr(agent, "_config") and agent._config.memory:
             try:
                 memories = await agent.memory.recall(limit=10)
                 if memories:
@@ -451,10 +494,12 @@ class ContextAssembler:
                 pass
 
         if context_parts:
-            messages.append({
-                "role": "user",
-                "content": "Context:\n" + "\n\n".join(context_parts),
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": "Context:\n" + "\n\n".join(context_parts),
+                }
+            )
 
         if conversation_history:
             messages.extend(conversation_history)
@@ -563,7 +608,7 @@ class ProtocolToolExecutor:
                     "priority": args.get("priority", "normal"),
                 },
             )
-            if hasattr(self._agent, 'record_decision'):
+            if hasattr(self._agent, "record_decision"):
                 await self._agent.record_decision(
                     "task_assigned",
                     f"Delegated to {args['agent_id']}: {args.get('task_description', '')}",
@@ -578,16 +623,18 @@ class ProtocolToolExecutor:
 
             intents = []
             for t in args.get("tasks", []):
-                intents.append(IntentSpec(
-                    title=t["title"],
-                    description=t.get("description", ""),
-                    assign=t.get("assign_to"),
-                    depends_on=t.get("depends_on", []),
-                ))
+                intents.append(
+                    IntentSpec(
+                        title=t["title"],
+                        description=t.get("description", ""),
+                        assign=t.get("assign_to"),
+                        depends_on=t.get("depends_on", []),
+                    )
+                )
 
             spec = PortfolioSpec(name=args["name"], intents=intents)
 
-            if hasattr(self._agent, 'create_portfolio'):
+            if hasattr(self._agent, "create_portfolio"):
                 portfolio = await self._agent.create_portfolio(spec)
                 return {
                     "status": "plan_created",
@@ -606,7 +653,7 @@ class ProtocolToolExecutor:
 
     async def _exec_record_decision(self, args: dict) -> dict:
         try:
-            if hasattr(self._agent, 'record_decision'):
+            if hasattr(self._agent, "record_decision"):
                 record = await self._agent.record_decision(
                     decision_type=args["decision_type"],
                     summary=args["summary"],
@@ -639,7 +686,7 @@ class LLMEngine:
 
     @property
     def _is_coordinator(self) -> bool:
-        return hasattr(self._agent, '_agents_list')
+        return hasattr(self._agent, "_agents_list")
 
     @property
     def _protocol_tools(self) -> list[dict]:
@@ -655,29 +702,34 @@ class LLMEngine:
         plain strings (protocol grant names resolved via RFC-0014).
         """
         tool_defs = []
-        if hasattr(self._agent, '_config') and self._agent._config.tools:
+        if hasattr(self._agent, "_config") and self._agent._config.tools:
             for entry in self._agent._config.tools:
                 if isinstance(entry, ToolDef):
                     tool_defs.append(entry.to_schema())
                 else:
-                    tool_defs.append({
-                        "name": entry,
-                        "description": f"External tool: {entry}. Invoke through the protocol's tool grant system (RFC-0014).",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "input": {"type": "string", "description": "Input for the tool."},
+                    tool_defs.append(
+                        {
+                            "name": entry,
+                            "description": f"External tool: {entry}. Invoke through the protocol's tool grant system (RFC-0014).",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "input": {
+                                        "type": "string",
+                                        "description": "Input for the tool.",
+                                    },
+                                },
+                                "required": ["input"],
                             },
-                            "required": ["input"],
-                        },
-                    })
+                        }
+                    )
         return tool_defs
 
     @property
     def _local_tool_handlers(self) -> dict[str, Callable]:
         """Map of tool name -> callable handler for locally defined ToolDefs."""
         handlers: dict[str, Callable] = {}
-        if hasattr(self._agent, '_config') and self._agent._config.tools:
+        if hasattr(self._agent, "_config") and self._agent._config.tools:
             for entry in self._agent._config.tools:
                 if isinstance(entry, ToolDef) and entry.handler is not None:
                     handlers[entry.name] = entry.handler
@@ -688,7 +740,7 @@ class LLMEngine:
         return self._protocol_tools + self._external_tools
 
     def _build_system(self, intent: Any = None) -> str:
-        managed = getattr(self._agent, '_agents_list', None)
+        managed = getattr(self._agent, "_agents_list", None)
         return ContextAssembler.build_system_prompt(
             agent_id=self._agent._agent_id,
             custom_prompt=self._config.system_prompt,
@@ -734,7 +786,9 @@ class LLMEngine:
         """Non-streaming agentic loop."""
         system = self._build_system(intent)
         context_messages = await ContextAssembler.build_context_messages(
-            self._agent, intent=intent, task_description=prompt,
+            self._agent,
+            intent=intent,
+            task_description=prompt,
             conversation_history=list(self._conversation_history),
         )
 
@@ -752,7 +806,9 @@ class LLMEngine:
             if not tool_calls:
                 content = self._extract_content(response)
                 self._conversation_history.append({"role": "user", "content": prompt})
-                self._conversation_history.append({"role": "assistant", "content": content})
+                self._conversation_history.append(
+                    {"role": "assistant", "content": content}
+                )
 
                 if self._config.auto_memory and intent:
                     try:
@@ -771,22 +827,31 @@ class LLMEngine:
             for tc in tool_calls:
                 tool_name = tc["name"]
                 try:
-                    arguments = json.loads(tc["arguments"]) if isinstance(tc["arguments"], str) else tc["arguments"]
+                    arguments = (
+                        json.loads(tc["arguments"])
+                        if isinstance(tc["arguments"], str)
+                        else tc["arguments"]
+                    )
                 except (json.JSONDecodeError, TypeError):
                     arguments = {}
 
                 result = await self._execute_tool(
-                    tool_name, arguments, executor, local_handlers, intent,
+                    tool_name,
+                    arguments,
+                    executor,
+                    local_handlers,
+                    intent,
                 )
 
-                if tool_name == "clarify" and result.get("status") == "awaiting_response":
+                if (
+                    tool_name == "clarify"
+                    and result.get("status") == "awaiting_response"
+                ):
                     return json.dumps(result)
 
                 messages.append(self._build_tool_result_message(tc, result))
 
-        return self._extract_content(
-            await self._call_llm(messages, [], **kwargs)
-        )
+        return self._extract_content(await self._call_llm(messages, [], **kwargs))
 
     async def _think_stream(
         self,
@@ -802,7 +867,9 @@ class LLMEngine:
         """
         system = self._build_system(intent)
         context_messages = await ContextAssembler.build_context_messages(
-            self._agent, intent=intent, task_description=prompt,
+            self._agent,
+            intent=intent,
+            task_description=prompt,
             conversation_history=list(self._conversation_history),
         )
 
@@ -825,15 +892,26 @@ class LLMEngine:
             for tc in tool_calls:
                 tool_name = tc["name"]
                 try:
-                    arguments = json.loads(tc["arguments"]) if isinstance(tc["arguments"], str) else tc["arguments"]
+                    arguments = (
+                        json.loads(tc["arguments"])
+                        if isinstance(tc["arguments"], str)
+                        else tc["arguments"]
+                    )
                 except (json.JSONDecodeError, TypeError):
                     arguments = {}
 
                 result = await self._execute_tool(
-                    tool_name, arguments, executor, local_handlers, intent,
+                    tool_name,
+                    arguments,
+                    executor,
+                    local_handlers,
+                    intent,
                 )
 
-                if tool_name == "clarify" and result.get("status") == "awaiting_response":
+                if (
+                    tool_name == "clarify"
+                    and result.get("status") == "awaiting_response"
+                ):
                     yield json.dumps(result)
                     return
 
@@ -867,7 +945,7 @@ class LLMEngine:
         Silently skipped when there is no active intent or the server is
         unreachable — tracing is a best-effort benefit, never a blocker.
         """
-        target_intent = intent or getattr(self, '_current_intent', None)
+        target_intent = intent or getattr(self, "_current_intent", None)
         if not target_intent:
             return
         try:
@@ -919,13 +997,18 @@ class LLMEngine:
                 result = {"error": str(e)}
             duration_ms = (time.time() - t0) * 1000
             await self._emit_tool_event(
-                tool_name, arguments, result, duration_ms, intent,
+                tool_name,
+                arguments,
+                result,
+                duration_ms,
+                intent,
             )
             return result
 
         try:
             raw = await self._agent.tools.invoke(
-                tool_name, input=arguments.get("input", ""),
+                tool_name,
+                input=arguments.get("input", ""),
             )
             if isinstance(raw, dict):
                 return raw
@@ -941,7 +1024,9 @@ class LLMEngine:
             return _tools_to_anthropic_format(tools)
         return _tools_to_openai_format(tools)
 
-    async def _call_llm(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]], **kwargs: Any) -> Any:
+    async def _call_llm(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]], **kwargs: Any
+    ) -> Any:
         """Call the LLM (non-streaming) and return the raw response."""
         call_kwargs = {
             "model": self._config.model,
@@ -960,7 +1045,7 @@ class LLMEngine:
             call_kwargs["system"] = messages[0]["content"]
             call_kwargs["messages"] = [m for m in messages[1:] if m["role"] != "system"]
 
-        adapter = getattr(self._agent, '_llm_adapter', None)
+        adapter = getattr(self._agent, "_llm_adapter", None)
         if adapter:
             if self._provider in ANTHROPIC_STYLE_PROVIDERS:
                 response = adapter.messages.create(**call_kwargs)
@@ -984,23 +1069,31 @@ class LLMEngine:
         if self._provider in OPENAI_STYLE_PROVIDERS:
             try:
                 import openai
+
                 client = openai.OpenAI(api_key=self._config.api_key)
                 call_kwargs.pop("system", None)
                 return client.chat.completions.create(**call_kwargs)
             except ImportError:
-                raise ImportError("openai package required. Install with: pip install openai")
+                raise ImportError(
+                    "openai package required. Install with: pip install openai"
+                )
 
         elif self._provider in ANTHROPIC_STYLE_PROVIDERS:
             try:
                 import anthropic
+
                 client = anthropic.Anthropic(api_key=self._config.api_key)
                 return client.messages.create(**call_kwargs)
             except ImportError:
-                raise ImportError("anthropic package required. Install with: pip install anthropic")
+                raise ImportError(
+                    "anthropic package required. Install with: pip install anthropic"
+                )
 
         raise ValueError(f"Unsupported provider: {self._provider}")
 
-    async def _stream_llm(self, messages: list[dict[str, Any]], **kwargs: Any) -> AsyncIterator[str]:
+    async def _stream_llm(
+        self, messages: list[dict[str, Any]], **kwargs: Any
+    ) -> AsyncIterator[str]:
         """Stream the final LLM response token by token."""
         call_kwargs = {
             "model": self._config.model,
@@ -1014,7 +1107,7 @@ class LLMEngine:
             call_kwargs["system"] = messages[0]["content"]
             call_kwargs["messages"] = [m for m in messages[1:] if m["role"] != "system"]
 
-        adapter = getattr(self._agent, '_llm_adapter', None)
+        adapter = getattr(self._agent, "_llm_adapter", None)
 
         if adapter:
             if self._provider in ANTHROPIC_STYLE_PROVIDERS:
@@ -1027,7 +1120,7 @@ class LLMEngine:
                     stream=True,
                 )
                 for chunk in response:
-                    if hasattr(chunk, 'text') and chunk.text:
+                    if hasattr(chunk, "text") and chunk.text:
                         yield chunk.text
             else:
                 call_kwargs.pop("system", None)
@@ -1043,6 +1136,7 @@ class LLMEngine:
         if self._provider in OPENAI_STYLE_PROVIDERS:
             try:
                 import openai
+
                 client = openai.OpenAI(api_key=self._config.api_key)
                 call_kwargs.pop("system", None)
                 stream = client.chat.completions.create(**call_kwargs)
@@ -1053,6 +1147,7 @@ class LLMEngine:
         elif self._provider in ANTHROPIC_STYLE_PROVIDERS:
             try:
                 import anthropic
+
                 client = anthropic.Anthropic(api_key=self._config.api_key)
                 with client.messages.stream(**call_kwargs) as stream:
                     for text in stream.text_stream:
@@ -1063,9 +1158,9 @@ class LLMEngine:
     async def _iter_openai_stream(self, stream: Any) -> AsyncIterator[str]:
         """Iterate an OpenAI-style stream (sync iterator) yielding tokens."""
         for chunk in stream:
-            if hasattr(chunk, 'choices') and chunk.choices:
+            if hasattr(chunk, "choices") and chunk.choices:
                 delta = chunk.choices[0].delta
-                if hasattr(delta, 'content') and delta.content:
+                if hasattr(delta, "content") and delta.content:
                     yield delta.content
             elif isinstance(chunk, dict):
                 choices = chunk.get("choices", [])
@@ -1076,20 +1171,23 @@ class LLMEngine:
 
     async def _iter_anthropic_stream(self, stream: Any) -> AsyncIterator[str]:
         """Iterate an Anthropic-style stream yielding tokens."""
-        if hasattr(stream, '__enter__'):
+        if hasattr(stream, "__enter__"):
             with stream as s:
-                if hasattr(s, 'text_stream'):
+                if hasattr(s, "text_stream"):
                     for text in s.text_stream:
                         yield text
                 else:
                     for event in s:
-                        if hasattr(event, 'type') and event.type == 'content_block_delta':
-                            if hasattr(event, 'delta') and hasattr(event.delta, 'text'):
+                        if (
+                            hasattr(event, "type")
+                            and event.type == "content_block_delta"
+                        ):
+                            if hasattr(event, "delta") and hasattr(event.delta, "text"):
                                 yield event.delta.text
         else:
             for event in stream:
-                if hasattr(event, 'type') and event.type == 'content_block_delta':
-                    if hasattr(event, 'delta') and hasattr(event.delta, 'text'):
+                if hasattr(event, "type") and event.type == "content_block_delta":
+                    if hasattr(event, "delta") and hasattr(event.delta, "text"):
                         yield event.delta.text
 
     # -----------------------------------------------------------------------
@@ -1107,26 +1205,28 @@ class LLMEngine:
             content = response.get("content", [])
             if isinstance(content, list):
                 return " ".join(
-                    b.get("text", "") for b in content
+                    b.get("text", "")
+                    for b in content
                     if isinstance(b, dict) and b.get("type") == "text"
                 )
             return str(response)
 
-        if hasattr(response, 'choices') and response.choices:
+        if hasattr(response, "choices") and response.choices:
             msg = response.choices[0].message
             return msg.content or ""
 
-        if hasattr(response, 'content'):
+        if hasattr(response, "content"):
             content = response.content
             if isinstance(content, list):
                 return " ".join(
-                    getattr(b, 'text', '') for b in content
-                    if getattr(b, 'type', '') == 'text'
+                    getattr(b, "text", "")
+                    for b in content
+                    if getattr(b, "type", "") == "text"
                 )
             if isinstance(content, str):
                 return content
 
-        if hasattr(response, 'text'):
+        if hasattr(response, "text"):
             return str(response.text)
 
         return str(response)
@@ -1140,40 +1240,48 @@ class LLMEngine:
             if choices:
                 msg = choices[0].get("message", {})
                 for tc in msg.get("tool_calls", []):
-                    calls.append({
-                        "id": tc.get("id", str(uuid.uuid4())),
-                        "name": tc.get("function", {}).get("name", ""),
-                        "arguments": tc.get("function", {}).get("arguments", "{}"),
-                    })
+                    calls.append(
+                        {
+                            "id": tc.get("id", str(uuid.uuid4())),
+                            "name": tc.get("function", {}).get("name", ""),
+                            "arguments": tc.get("function", {}).get("arguments", "{}"),
+                        }
+                    )
             content = response.get("content", [])
             if isinstance(content, list):
                 for block in content:
                     if isinstance(block, dict) and block.get("type") == "tool_use":
-                        calls.append({
-                            "id": block.get("id", str(uuid.uuid4())),
-                            "name": block.get("name", ""),
-                            "arguments": block.get("input", {}),
-                        })
+                        calls.append(
+                            {
+                                "id": block.get("id", str(uuid.uuid4())),
+                                "name": block.get("name", ""),
+                                "arguments": block.get("input", {}),
+                            }
+                        )
             return calls
 
-        if hasattr(response, 'choices') and response.choices:
+        if hasattr(response, "choices") and response.choices:
             msg = response.choices[0].message
-            if hasattr(msg, 'tool_calls') and msg.tool_calls:
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
                 for tc in msg.tool_calls:
-                    calls.append({
-                        "id": tc.id if hasattr(tc, 'id') else str(uuid.uuid4()),
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    })
+                    calls.append(
+                        {
+                            "id": tc.id if hasattr(tc, "id") else str(uuid.uuid4()),
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        }
+                    )
 
-        if hasattr(response, 'content') and isinstance(response.content, list):
+        if hasattr(response, "content") and isinstance(response.content, list):
             for block in response.content:
-                if getattr(block, 'type', '') == 'tool_use':
-                    calls.append({
-                        "id": getattr(block, 'id', str(uuid.uuid4())),
-                        "name": block.name,
-                        "arguments": block.input if hasattr(block, 'input') else {},
-                    })
+                if getattr(block, "type", "") == "tool_use":
+                    calls.append(
+                        {
+                            "id": getattr(block, "id", str(uuid.uuid4())),
+                            "name": block.name,
+                            "arguments": block.input if hasattr(block, "input") else {},
+                        }
+                    )
 
         return calls
 
@@ -1181,20 +1289,25 @@ class LLMEngine:
         """Build assistant message from response (with tool calls)."""
         if self._provider in ANTHROPIC_STYLE_PROVIDERS:
             content = []
-            if hasattr(response, 'content') and isinstance(response.content, list):
+            if hasattr(response, "content") and isinstance(response.content, list):
                 for block in response.content:
-                    if getattr(block, 'type', '') == 'text':
+                    if getattr(block, "type", "") == "text":
                         content.append({"type": "text", "text": block.text})
-                    elif getattr(block, 'type', '') == 'tool_use':
-                        content.append({
-                            "type": "tool_use",
-                            "id": block.id,
-                            "name": block.name,
-                            "input": block.input,
-                        })
+                    elif getattr(block, "type", "") == "tool_use":
+                        content.append(
+                            {
+                                "type": "tool_use",
+                                "id": block.id,
+                                "name": block.name,
+                                "input": block.input,
+                            }
+                        )
             return {"role": "assistant", "content": content}
 
-        msg: dict[str, Any] = {"role": "assistant", "content": self._extract_content(response)}
+        msg: dict[str, Any] = {
+            "role": "assistant",
+            "content": self._extract_content(response),
+        }
 
         tool_calls = self._extract_tool_calls(response)
         if tool_calls:
@@ -1204,7 +1317,11 @@ class LLMEngine:
                     "type": "function",
                     "function": {
                         "name": tc["name"],
-                        "arguments": tc["arguments"] if isinstance(tc["arguments"], str) else json.dumps(tc["arguments"]),
+                        "arguments": (
+                            tc["arguments"]
+                            if isinstance(tc["arguments"], str)
+                            else json.dumps(tc["arguments"])
+                        ),
                     },
                 }
                 for tc in tool_calls
@@ -1219,11 +1336,13 @@ class LLMEngine:
         if self._provider in ANTHROPIC_STYLE_PROVIDERS:
             return {
                 "role": "user",
-                "content": [{
-                    "type": "tool_result",
-                    "tool_use_id": tool_call["id"],
-                    "content": result_str,
-                }],
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_call["id"],
+                        "content": result_str,
+                    }
+                ],
             }
 
         return {
