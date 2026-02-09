@@ -36,6 +36,7 @@ from .exceptions import (
     OpenIntentError,
     ValidationError,
 )
+from .llm import LLMConfig, LLMEngine, Tool, ToolDef, define_tool, tool
 from .models import (
     AccessPolicy,
     AccessRequest,
@@ -161,7 +162,7 @@ def get_server() -> tuple[Any, Any, Any]:
         )
 
 
-__version__ = "0.8.0"
+__version__ = "0.8.1"
 __all__ = [
     "OpenIntentClient",
     "AsyncOpenIntentClient",
@@ -282,4 +283,10 @@ __all__ = [
     "GovernanceConfig",
     "validate_workflow",
     "get_server",
+    "LLMConfig",
+    "LLMEngine",
+    "ToolDef",
+    "define_tool",
+    "Tool",
+    "tool",
 ]

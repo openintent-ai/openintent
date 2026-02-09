@@ -124,6 +124,7 @@ nav:
     - Triggers & Reactive Scheduling: guide/triggers.md
     - YAML Workflows: guide/workflows.md
     - Agent Abstractions: guide/agents.md
+    - LLM-Powered Agents: guide/llm-agents.md
     - LLM Adapters: guide/adapters.md
     - Built-in Server: guide/server.md
   - API Reference:
@@ -162,6 +163,7 @@ nav:
     - Intent Lifecycle: examples/intent-lifecycle.md
     - Leasing & Concurrency: examples/leasing-concurrency.md
     - Governance & Arbitration: examples/governance-arbitration.md
+    - LLM-Powered Agents: examples/llm-agents.md
     - LLM Adapters: examples/llm-adapters.md
     - Task Planning: examples/task-planning.md
     - Credential Vaults: examples/credential-vaults.md

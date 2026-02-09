@@ -5,6 +5,22 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-02-08
+
+### Changed
+
+- **Tool System Rename** — `Tool` is now `ToolDef`, `@tool` is now `@define_tool` for clarity. The old names remain as backwards-compatible aliases and will not be removed.
+
+### Added
+
+- **Automatic Tool Tracing** — Every local `ToolDef` handler invocation is automatically traced as a `tool_invocation` protocol event when the agent is connected to an OpenIntent server. Each event records tool name, arguments, result, and execution duration. Tracing is best-effort and never blocks tool execution.
+
+### Fixed
+
+- Unified tool execution model documentation to clarify the three-tier priority: protocol tools > local handlers (`ToolDef`) > remote protocol grants (RFC-0014 strings).
+
+---
+
 ## [0.8.0] - 2026-02-08
 
 ### Added

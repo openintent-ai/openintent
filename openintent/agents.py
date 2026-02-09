@@ -377,7 +377,7 @@ class AgentConfig:
     memory: Optional[str] = None  # "working", "episodic", "semantic"
     memory_namespace: Optional[str] = None
     # v0.8.0: Tools (RFC-0014)
-    tools: list[str] = field(default_factory=list)
+    tools: list = field(default_factory=list)
 
 
 # ==================== Base Agent Class ====================
@@ -1021,27 +1021,112 @@ class _TempAccessContext:
                 pass
 
 
+def _setup_llm_engine(
+    agent_instance,
+    model: str,
+    provider: Optional[str] = None,
+    system_prompt: Optional[str] = None,
+    temperature: float = 0.7,
+    max_tokens: int = 4096,
+    max_tool_rounds: int = 10,
+    planning: bool = False,
+    stream_by_default: bool = False,
+    api_key_override: Optional[str] = None,
+) -> None:
+    """Attach LLM engine, think(), and think_stream() to an agent instance."""
+    from .llm import LLMConfig, LLMEngine, _resolve_provider
+
+    resolved_provider = provider or _resolve_provider(model)
+
+    llm_config = LLMConfig(
+        model=model,
+        provider=resolved_provider,
+        api_key=api_key_override,
+        system_prompt=system_prompt,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        max_tool_rounds=max_tool_rounds,
+        planning=planning,
+        stream_by_default=stream_by_default,
+    )
+
+    engine = LLMEngine(agent_instance, llm_config)
+    agent_instance._llm_engine = engine
+    agent_instance._llm_config = llm_config
+    agent_instance._llm_adapter = None
+
+    async def think(prompt, intent=None, stream=None, on_token=None, **kw):
+        return await engine.think(
+            prompt, intent=intent, stream=stream, on_token=on_token, **kw
+        )
+
+    async def think_stream(prompt, intent=None, on_token=None, **kw):
+        return await engine.think(
+            prompt, intent=intent, stream=True, on_token=on_token, **kw
+        )
+
+    agent_instance.think = think
+    agent_instance.think_stream = think_stream
+    agent_instance.reset_conversation = engine.reset_history
+
+
 def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
     agent_id: str,
     config: Optional[AgentConfig] = None,
     capabilities: Optional[list[str]] = None,
     memory: Optional[str] = None,
-    tools: Optional[list[str]] = None,
+    tools: Optional[list] = None,
     auto_heartbeat: bool = True,
+    model: Optional[str] = None,
+    provider: Optional[str] = None,
+    system_prompt: Optional[str] = None,
+    temperature: float = 0.7,
+    max_tokens: int = 4096,
+    max_tool_rounds: int = 10,
+    planning: bool = False,
+    stream_by_default: bool = False,
     **kwargs: Any,
 ) -> Callable[[type], type]:
     """
     Class decorator to create an Agent from a class.
 
-    Example:
+    When ``model`` is provided, the agent becomes LLM-powered:
+    ``self.think(prompt)`` runs an agentic loop that reasons, calls
+    protocol tools (memory, escalation, clarification), and returns a
+    result. ``self.think_stream(prompt)`` does the same but yields tokens.
+
+    Tools can be plain strings (resolved via RFC-0014 protocol grants)
+    or ``Tool`` objects with rich descriptions, parameter schemas, and
+    local callable handlers.
+
+    Example — manual agent (no model):
         ```python
         @Agent("research-bot")
         class ResearchAgent:
             @on_assignment
             async def work(self, intent):
                 return {"result": "done"}
+        ```
 
-        ResearchAgent.run()
+    Example — LLM-powered agent with Tool objects:
+        ```python
+        from openintent import Agent, Tool, tool, on_assignment
+
+        @tool(description="Search the web.", parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query."},
+            },
+            "required": ["query"],
+        })
+        async def web_search(query: str) -> dict:
+            return {"results": [...]}
+
+        @Agent("analyst", model="gpt-4o", tools=[web_search])
+        class Analyst:
+            @on_assignment
+            async def work(self, intent):
+                return await self.think(intent.description)
         ```
     """
 
@@ -1060,6 +1145,21 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
             if tools:
                 self._config.tools = tools
             self._config.auto_heartbeat = auto_heartbeat
+
+            if model:
+                _setup_llm_engine(
+                    self,
+                    model=model,
+                    provider=provider,
+                    system_prompt=system_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    max_tool_rounds=max_tool_rounds,
+                    planning=planning,
+                    stream_by_default=stream_by_default,
+                    api_key_override=kwargs.get("llm_api_key"),
+                )
+
             if original_init and original_init is not object.__init__:
                 original_init(self)
 
@@ -1106,8 +1206,16 @@ def Coordinator(  # noqa: N802
     config: Optional[AgentConfig] = None,
     capabilities: Optional[list[str]] = None,
     memory: Optional[str] = None,
-    tools: Optional[list[str]] = None,
+    tools: Optional[list] = None,
     auto_heartbeat: bool = True,
+    model: Optional[str] = None,
+    provider: Optional[str] = None,
+    system_prompt: Optional[str] = None,
+    temperature: float = 0.7,
+    max_tokens: int = 4096,
+    max_tool_rounds: int = 10,
+    planning: bool = True,
+    stream_by_default: bool = False,
     **kwargs: Any,
 ) -> Callable[[type], type]:
     """
@@ -1116,7 +1224,12 @@ def Coordinator(  # noqa: N802
     A Coordinator manages portfolios of intents, handles dependency
     tracking, multi-intent orchestration, and governance.
 
-    Example:
+    When ``model`` is provided, the coordinator becomes LLM-powered:
+    ``self.think(prompt)`` reasons about delegation, planning, and
+    governance decisions. The LLM can call coordinator-specific tools
+    like ``delegate``, ``create_plan``, and ``record_decision``.
+
+    Example — manual coordinator:
         ```python
         @Coordinator("orchestrator", agents=["researcher", "writer"])
         class MyCoordinator:
@@ -1130,12 +1243,22 @@ def Coordinator(  # noqa: N802
                     ]
                 )
                 return await self.execute(spec)
+        ```
 
-            @on_all_complete
-            async def finalize(self, portfolio):
-                return merge_results(portfolio.intents)
-
-        MyCoordinator.run()
+    Example — LLM-powered coordinator:
+        ```python
+        @Coordinator(
+            "lead",
+            model="claude-sonnet-4-20250514",
+            agents=["researcher", "writer", "reviewer"],
+            memory="episodic",
+        )
+        class ProjectLead:
+            @on_assignment
+            async def plan(self, intent):
+                return await self.think(
+                    f"Break down this project and delegate to your team: {intent.description}"
+                )
         ```
     """
 
@@ -1179,6 +1302,20 @@ def Coordinator(  # noqa: N802
                     if handler_type in self._handlers and func not in registered_funcs:
                         self._handlers[handler_type].append(method)
                         registered_funcs.add(func)
+            if model:
+                _setup_llm_engine(
+                    self,
+                    model=model,
+                    provider=provider,
+                    system_prompt=system_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    max_tool_rounds=max_tool_rounds,
+                    planning=planning,
+                    stream_by_default=stream_by_default,
+                    api_key_override=kwargs.get("llm_api_key"),
+                )
+
             if original_init and original_init is not object.__init__:
                 original_init(self)
 
