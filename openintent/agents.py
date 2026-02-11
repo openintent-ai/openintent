@@ -787,7 +787,11 @@ class BaseAgent(ABC):
                     result = await self._call_handler(
                         handler, intent, retry_attempt, last_error
                     )
-                    if result and isinstance(result, dict) and self._config.auto_complete:
+                    if (
+                        result
+                        and isinstance(result, dict)
+                        and self._config.auto_complete
+                    ):
                         await self.patch_state(intent_id, result)
                 except Exception as e:
                     logger.exception(f"Retry handler error: {e}")
@@ -797,7 +801,11 @@ class BaseAgent(ABC):
             for handler in self._handlers["handoff"]:
                 try:
                     result = await self._call_handler(handler, intent, delegated_by)
-                    if result and isinstance(result, dict) and self._config.auto_complete:
+                    if (
+                        result
+                        and isinstance(result, dict)
+                        and self._config.auto_complete
+                    ):
                         await self.patch_state(intent_id, result)
                 except Exception as e:
                     logger.exception(f"Handoff handler error: {e}")
@@ -807,9 +815,7 @@ class BaseAgent(ABC):
             try:
                 check = await self._call_handler(guardrail, intent)
                 if check is False:
-                    logger.warning(
-                        f"Input guardrail rejected intent {intent_id}"
-                    )
+                    logger.warning(f"Input guardrail rejected intent {intent_id}")
                     return
             except GuardrailError as e:
                 logger.warning(f"Input guardrail rejected intent {intent_id}: {e}")
@@ -1296,9 +1302,7 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
     return decorator
 
 
-def _install_builtin_guardrails(
-    agent_instance, guardrail_names: list[str]
-) -> None:
+def _install_builtin_guardrails(agent_instance, guardrail_names: list[str]) -> None:
     """Install built-in guardrail handlers based on guardrail name strings.
 
     Supported guardrails:

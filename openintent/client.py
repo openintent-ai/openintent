@@ -2235,7 +2235,11 @@ class OpenIntentClient:
         return self._handle_response(response)  # type: ignore[return-value]
 
     def invoke_tool(
-        self, tool_name: str, agent_id: str, parameters: Optional[dict[str, Any]] = None, **kwargs: Any
+        self,
+        tool_name: str,
+        agent_id: str,
+        parameters: Optional[dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> dict:
         """Invoke a tool through the server's tool proxy (RFC-0014).
 
@@ -3727,7 +3731,11 @@ class AsyncOpenIntentClient:
         return self._handle_response(response)  # type: ignore[return-value]
 
     async def invoke_tool(
-        self, tool_name: str, agent_id: str, parameters: Optional[dict[str, Any]] = None, **kwargs: Any
+        self,
+        tool_name: str,
+        agent_id: str,
+        parameters: Optional[dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> dict:
         """Invoke a tool through the server's tool proxy (RFC-0014).
 

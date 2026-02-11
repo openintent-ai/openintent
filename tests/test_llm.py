@@ -1571,9 +1571,7 @@ class TestRemoteToolWithFullArguments:
         local_handlers = engine._local_tool_handlers
 
         agent.tools = MagicMock()
-        agent.tools.invoke = AsyncMock(
-            side_effect=RuntimeError("server unavailable")
-        )
+        agent.tools.invoke = AsyncMock(side_effect=RuntimeError("server unavailable"))
 
         result = await engine._execute_tool(
             "failing_tool",
@@ -1622,9 +1620,7 @@ class TestMixedToolThinkLoop:
         agent.async_client.log_event = AsyncMock(return_value=None)
 
         agent.tools = MagicMock()
-        agent.tools.invoke = AsyncMock(
-            return_value={"results": ["search result"]}
-        )
+        agent.tools.invoke = AsyncMock(return_value={"results": ["search result"]})
 
         config = LLMConfig(model="gpt-4o", provider="openai")
         engine = LLMEngine(agent, config)
@@ -1656,12 +1652,16 @@ class TestMixedToolThinkLoop:
 
         final_response = MagicMock()
         final_response.choices = [MagicMock()]
-        final_response.choices[0].message.content = "Calculator says 5, search found results."
+        final_response.choices[0].message.content = (
+            "Calculator says 5, search found results."
+        )
         final_response.choices[0].message.tool_calls = None
 
         with patch.object(engine, "_call_llm", new_callable=AsyncMock) as mock_call:
             mock_call.side_effect = [first_response, second_response, final_response]
-            result = await engine._think_complete("Calculate 2+3 and search for openintent")
+            result = await engine._think_complete(
+                "Calculate 2+3 and search for openintent"
+            )
 
         assert result == "Calculator says 5, search found results."
         assert mock_call.call_count == 3

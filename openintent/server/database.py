@@ -1398,7 +1398,9 @@ class Database:
         session.refresh(grant)
         return grant
 
-    def find_agent_grant_for_tool(self, session: Session, agent_id: str, tool_name: str) -> Optional[ToolGrantModel]:
+    def find_agent_grant_for_tool(
+        self, session: Session, agent_id: str, tool_name: str
+    ) -> Optional[ToolGrantModel]:
         """Find an active grant for an agent that covers a specific tool/service name.
 
         Matches in priority order:

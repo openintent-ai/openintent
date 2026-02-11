@@ -3026,25 +3026,24 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             if not grant:
                 raise HTTPException(
                     status_code=403,
-                    detail=f"No active grant found for agent '{request.agent_id}' to use tool '{request.tool_name}'"
+                    detail=f"No active grant found for agent '{request.agent_id}' to use tool '{request.tool_name}'",
                 )
 
             if grant.expires_at and grant.expires_at < datetime.utcnow():
                 raise HTTPException(
                     status_code=403,
-                    detail=f"Grant for tool '{request.tool_name}' has expired"
+                    detail=f"Grant for tool '{request.tool_name}' has expired",
                 )
 
             credential = db.get_credential(session, grant.credential_id)
             if not credential:
                 raise HTTPException(
-                    status_code=500,
-                    detail="Grant references a missing credential"
+                    status_code=500, detail="Grant references a missing credential"
                 )
             if credential.status != "active":
                 raise HTTPException(
                     status_code=403,
-                    detail=f"Credential for tool '{request.tool_name}' is {credential.status}"
+                    detail=f"Credential for tool '{request.tool_name}' is {credential.status}",
                 )
 
             if grant.constraints and isinstance(grant.constraints, dict):
@@ -3062,7 +3061,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                     if recent_count >= max_per_hour:
                         raise HTTPException(
                             status_code=429,
-                            detail=f"Rate limit exceeded: {max_per_hour} invocations per hour"
+                            detail=f"Rate limit exceeded: {max_per_hour} invocations per hour",
                         )
 
             invocation_id = str(uuid4())
