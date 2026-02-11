@@ -11,9 +11,11 @@ from .agents import (
     AgentConfig,
     BaseAgent,
     Coordinator,
+    GuardrailError,
     IntentSpec,
     PortfolioSpec,
     Worker,
+    input_guardrail,
     on_access_requested,
     on_all_complete,
     on_assignment,
@@ -22,11 +24,14 @@ from .agents import (
     on_drain,
     on_escalation,
     on_event,
+    on_handoff,
     on_lease_available,
     on_quorum,
+    on_retry,
     on_state_change,
     on_task,
     on_trigger,
+    output_guardrail,
 )
 from .client import AsyncOpenIntentClient, OpenIntentClient
 from .exceptions import (
@@ -162,7 +167,7 @@ def get_server() -> tuple[Any, Any, Any]:
         )
 
 
-__version__ = "0.8.1"
+__version__ = "0.9.0"
 __all__ = [
     "OpenIntentClient",
     "AsyncOpenIntentClient",
@@ -262,6 +267,8 @@ __all__ = [
     "AgentConfig",
     "IntentSpec",
     "PortfolioSpec",
+    "GuardrailError",
+    "input_guardrail",
     "on_access_requested",
     "on_all_complete",
     "on_assignment",
@@ -270,11 +277,14 @@ __all__ = [
     "on_drain",
     "on_escalation",
     "on_event",
+    "on_handoff",
     "on_lease_available",
     "on_quorum",
+    "on_retry",
     "on_state_change",
     "on_task",
     "on_trigger",
+    "output_guardrail",
     "WorkflowSpec",
     "WorkflowError",
     "WorkflowValidationError",

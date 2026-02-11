@@ -44,40 +44,6 @@ from .streaming import SSEEvent, SSEEventType, SSEStream, SSESubscription
 logger = logging.getLogger("openintent.agents")
 
 
-class _MemoryProxy:
-    """Proxy for agent memory operations."""
-
-    def __init__(self, agent):
-        self._agent = agent
-
-    async def store(self, key, value, **kwargs):
-        return await self._agent.async_client.memory.store(
-            agent_id=self._agent._agent_id, key=key, value=value, **kwargs
-        )
-
-    async def recall(self, **kwargs):
-        return await self._agent.async_client.memory.recall(
-            agent_id=self._agent._agent_id, **kwargs
-        )
-
-    async def pin(self, key):
-        return await self._agent.async_client.memory.pin(
-            agent_id=self._agent._agent_id, key=key
-        )
-
-
-class _TasksProxy:
-    """Proxy for agent task operations."""
-
-    def __init__(self, agent):
-        self._agent = agent
-
-    async def create(self, intent_id, **kwargs):
-        return await self._agent.async_client.tasks.create(
-            intent_id=intent_id, **kwargs
-        )
-
-
 class _ToolsProxy:
     """Proxy for agent tool operations."""
 
@@ -85,8 +51,10 @@ class _ToolsProxy:
         self._agent = agent
 
     async def invoke(self, tool_name, **kwargs):
-        return await self._agent.async_client.tools.invoke(
-            agent_id=self._agent._agent_id, tool_name=tool_name, **kwargs
+        return await self._agent.async_client.invoke_tool(
+            tool_name=tool_name,
+            agent_id=self._agent._agent_id,
+            parameters=kwargs,
         )
 
 
@@ -309,6 +277,96 @@ def on_quorum(threshold: float = 0.5) -> Callable:
     return decorator
 
 
+def on_handoff(func: Callable) -> Callable:
+    """
+    Decorator: Called when this agent receives work delegated from another agent.
+
+    Unlike @on_assignment which fires for all assignments, @on_handoff fires
+    only when the assignment includes delegation context (delegated_by is set).
+    The handler receives the intent and the delegating agent's ID.
+
+    Example:
+        ```python
+        @on_handoff
+        async def received(self, intent, from_agent):
+            previous = await self.memory.recall(key=f"handoff:{intent.id}")
+            return {"status": "continuing", "from": from_agent}
+        ```
+    """
+    func._openintent_handler = "handoff"
+    return func
+
+
+def on_retry(func: Callable) -> Callable:
+    """
+    Decorator: Called when an intent is reassigned after a previous failure.
+
+    The handler receives the intent and retry metadata (attempt number,
+    previous failure reason). Allows agents to adapt behaviour on retries
+    (e.g. use a different strategy, reduce scope, or escalate).
+
+    Example:
+        ```python
+        @on_retry
+        async def handle_retry(self, intent, attempt, last_error):
+            if attempt >= 3:
+                await self.escalate(intent.id, "Too many retries")
+                return
+            return await self.think(f"Retry attempt {attempt}: {intent.title}")
+        ```
+    """
+    func._openintent_handler = "retry"
+    return func
+
+
+def input_guardrail(func: Callable) -> Callable:
+    """
+    Decorator: Validates or transforms intent data before assignment handlers run.
+
+    Input guardrails execute in registration order before any @on_assignment
+    handler. If a guardrail raises ``GuardrailError`` (or returns ``False``),
+    the assignment is rejected and the intent can be escalated.
+
+    Example:
+        ```python
+        @input_guardrail
+        async def check_scope(self, intent):
+            if len(intent.description) > 10_000:
+                raise GuardrailError("Input too long")
+        ```
+    """
+    func._openintent_handler = "input_guardrail"
+    return func
+
+
+def output_guardrail(func: Callable) -> Callable:
+    """
+    Decorator: Validates or transforms handler results before they are committed.
+
+    Output guardrails execute in registration order after @on_assignment
+    handlers return. The guardrail receives the intent and the result dict.
+    If it raises ``GuardrailError`` (or returns ``False``), the result is
+    discarded and the intent can be escalated.
+
+    Example:
+        ```python
+        @output_guardrail
+        async def check_pii(self, intent, result):
+            for key, val in result.items():
+                if contains_pii(str(val)):
+                    raise GuardrailError(f"PII detected in '{key}'")
+        ```
+    """
+    func._openintent_handler = "output_guardrail"
+    return func
+
+
+class GuardrailError(Exception):
+    """Raised by input/output guardrails to reject processing."""
+
+    pass
+
+
 # ==================== Portfolio DSL ====================
 
 
@@ -436,6 +494,10 @@ class BaseAgent(ABC):
             "task": [],
             "trigger": [],
             "drain": [],
+            "handoff": [],
+            "retry": [],
+            "input_guardrail": [],
+            "output_guardrail": [],
         }
 
         for name in dir(self):
@@ -475,7 +537,7 @@ class BaseAgent(ABC):
         return self._async_client
 
     @property
-    def memory(self) -> _MemoryProxy:
+    def memory(self) -> "_MemoryProxy":
         """Access agent memory (RFC-0015). Configure via @Agent(memory="episodic")."""
         if not self._memory_proxy:
             self._memory_proxy = _MemoryProxy(
@@ -487,7 +549,7 @@ class BaseAgent(ABC):
         return self._memory_proxy
 
     @property
-    def tasks(self) -> _TasksProxy:
+    def tasks(self) -> "_TasksProxy":
         """Access task operations (RFC-0012)."""
         if not self._tasks_proxy:
             self._tasks_proxy = _TasksProxy(self.async_client, self._agent_id)
@@ -497,11 +559,7 @@ class BaseAgent(ABC):
     def tools(self) -> _ToolsProxy:
         """Access tool invocation (RFC-0014). Configure via @Agent(tools=["web_search"])."""
         if not self._tools_proxy:
-            self._tools_proxy = _ToolsProxy(
-                self.async_client,
-                self._agent_id,
-                tool_names=self._config.tools,
-            )
+            self._tools_proxy = _ToolsProxy(self)
         return self._tools_proxy
 
     def lease(self, intent_id: str, scope: str, duration_seconds: int = 300):
@@ -707,7 +765,7 @@ class BaseAgent(ABC):
             logger.exception(f"Error handling event {event.type}: {e}")
 
     async def _on_assignment(self, event: SSEEvent) -> None:
-        """Handle assignment events with auto-populated context."""
+        """Handle assignment events with guardrails, handoff, and retry support."""
         intent_id = event.data.get("intent_id")
         if not intent_id:
             return
@@ -715,15 +773,77 @@ class BaseAgent(ABC):
         intent = await self.async_client.get_intent(intent_id)
 
         ctx = await self._build_context(intent)
-        if event.data.get("delegated_by"):
-            ctx.delegated_by = event.data["delegated_by"]
+        delegated_by = event.data.get("delegated_by")
+        if delegated_by:
+            ctx.delegated_by = delegated_by
         intent.ctx = ctx
+
+        retry_attempt = event.data.get("retry_attempt", 0)
+        last_error = event.data.get("last_error")
+
+        if retry_attempt and self._handlers["retry"]:
+            for handler in self._handlers["retry"]:
+                try:
+                    result = await self._call_handler(
+                        handler, intent, retry_attempt, last_error
+                    )
+                    if result and isinstance(result, dict) and self._config.auto_complete:
+                        await self.patch_state(intent_id, result)
+                except Exception as e:
+                    logger.exception(f"Retry handler error: {e}")
+            return
+
+        if delegated_by and self._handlers["handoff"]:
+            for handler in self._handlers["handoff"]:
+                try:
+                    result = await self._call_handler(handler, intent, delegated_by)
+                    if result and isinstance(result, dict) and self._config.auto_complete:
+                        await self.patch_state(intent_id, result)
+                except Exception as e:
+                    logger.exception(f"Handoff handler error: {e}")
+            return
+
+        for guardrail in self._handlers["input_guardrail"]:
+            try:
+                check = await self._call_handler(guardrail, intent)
+                if check is False:
+                    logger.warning(
+                        f"Input guardrail rejected intent {intent_id}"
+                    )
+                    return
+            except GuardrailError as e:
+                logger.warning(f"Input guardrail rejected intent {intent_id}: {e}")
+                return
+            except Exception as e:
+                logger.exception(f"Input guardrail error: {e}")
+                return
 
         for handler in self._handlers["assignment"]:
             try:
                 result = await self._call_handler(handler, intent)
-                if result and isinstance(result, dict) and self._config.auto_complete:
-                    await self.patch_state(intent_id, result)
+                if result and isinstance(result, dict):
+                    for guardrail in self._handlers["output_guardrail"]:
+                        try:
+                            check = await self._call_handler(guardrail, intent, result)
+                            if check is False:
+                                logger.warning(
+                                    f"Output guardrail rejected result for {intent_id}"
+                                )
+                                result = None
+                                break
+                        except GuardrailError as e:
+                            logger.warning(
+                                f"Output guardrail rejected result for {intent_id}: {e}"
+                            )
+                            result = None
+                            break
+                        except Exception as e:
+                            logger.exception(f"Output guardrail error: {e}")
+                            result = None
+                            break
+
+                    if result and self._config.auto_complete:
+                        await self.patch_state(intent_id, result)
             except Exception as e:
                 logger.exception(f"Assignment handler error: {e}")
 
@@ -967,25 +1087,6 @@ class _TasksProxy:
         return await self._client_ref.tasks.list(intent_id=intent_id, status=status)
 
 
-class _ToolsProxy:
-    """Proxy for tool invocation from agent methods."""
-
-    def __init__(self, client_ref, agent_id: str, tool_names: list[str]):
-        self._client_ref = client_ref
-        self._agent_id = agent_id
-        self._tool_names = tool_names
-
-    async def invoke(self, tool_name: str, **kwargs) -> Any:
-        """Invoke a tool by name with automatic grant resolution."""
-        return await self._client_ref.tools.invoke(
-            tool_name=tool_name, agent_id=self._agent_id, **kwargs
-        )
-
-    async def list_grants(self) -> list:
-        """List active tool grants for this agent."""
-        return await self._client_ref.tools.list_grants(agent_id=self._agent_id)
-
-
 class _TempAccessContext:
     """Async context manager for temporary access grants."""
 
@@ -1195,6 +1296,67 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
     return decorator
 
 
+def _install_builtin_guardrails(
+    agent_instance, guardrail_names: list[str]
+) -> None:
+    """Install built-in guardrail handlers based on guardrail name strings.
+
+    Supported guardrails:
+    - "require_approval": logs a decision record before any assignment is processed
+    - "budget_limit": rejects intents whose cost estimate exceeds constraints
+    - "agent_allowlist": rejects delegation to agents not in the managed list
+    """
+    for name in guardrail_names:
+        if name == "require_approval":
+
+            async def _approval_guardrail(intent):
+                logger.info(
+                    f"Guardrail 'require_approval': assignment to intent "
+                    f"{intent.id} requires approval"
+                )
+                if hasattr(agent_instance, "record_decision"):
+                    await agent_instance.record_decision(
+                        "guardrail",
+                        f"require_approval check for intent {intent.id}",
+                        rationale="Built-in guardrail: require_approval",
+                    )
+
+            _approval_guardrail._openintent_handler = "input_guardrail"
+            agent_instance._handlers["input_guardrail"].append(_approval_guardrail)
+
+        elif name == "budget_limit":
+
+            async def _budget_guardrail(intent):
+                cost_limit = getattr(intent, "constraints", {})
+                if isinstance(cost_limit, dict) and cost_limit.get("max_cost"):
+                    current = getattr(intent, "cost_total", 0) or 0
+                    if current > cost_limit["max_cost"]:
+                        raise GuardrailError(
+                            f"Budget exceeded: {current} > {cost_limit['max_cost']}"
+                        )
+
+            _budget_guardrail._openintent_handler = "input_guardrail"
+            agent_instance._handlers["input_guardrail"].append(_budget_guardrail)
+
+        elif name == "agent_allowlist":
+
+            async def _allowlist_guardrail(intent, result):
+                delegated_to = (
+                    result.get("delegated_to") if isinstance(result, dict) else None
+                )
+                if delegated_to and hasattr(agent_instance, "_agents_list"):
+                    if delegated_to not in agent_instance._agents_list:
+                        raise GuardrailError(
+                            f"Agent '{delegated_to}' not in managed agent list"
+                        )
+
+            _allowlist_guardrail._openintent_handler = "output_guardrail"
+            agent_instance._handlers["output_guardrail"].append(_allowlist_guardrail)
+
+        else:
+            logger.warning(f"Unknown built-in guardrail: '{name}' — ignored")
+
+
 # ==================== Coordinator Decorator ====================
 
 
@@ -1283,7 +1445,9 @@ def Coordinator(  # noqa: N802
             self._decision_log = []
             self._portfolios = {}
             self._intent_to_portfolio = {}
+            self._pending_approvals: dict[str, asyncio.Future] = {}
             self._handlers.update({"conflict": [], "escalation": [], "quorum": []})
+            _install_builtin_guardrails(self, self._guardrails)
             registered_funcs = set()
             for handler_type, handler_list in self._handlers.items():
                 for h in handler_list:

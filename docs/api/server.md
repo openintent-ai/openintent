@@ -26,6 +26,46 @@ Built-in FastAPI server implementing all 17 OpenIntent RFCs.
     options:
       show_source: false
 
+## Tool Invocation Endpoint (v0.9.0)
+
+The server provides a tool invocation proxy at `POST /api/v1/tools/invoke`. This endpoint:
+
+1. Validates the agent has a matching tool grant (3-tier resolution)
+2. Resolves credentials from the vault (never exposed to the agent)
+3. Enforces rate limits on the grant
+4. Executes the tool
+5. Records the invocation for audit
+
+### Request
+
+```json
+{
+  "tool_name": "web_search",
+  "agent_id": "researcher",
+  "parameters": {"query": "OpenIntent protocol"}
+}
+```
+
+### Response
+
+```json
+{
+  "tool_name": "web_search",
+  "agent_id": "researcher",
+  "result": {"results": ["..."]},
+  "duration_ms": 230,
+  "grant_id": "grant-abc123"
+}
+```
+
+### Grant Resolution Order
+
+| Priority | Source | Match Condition |
+|----------|--------|-----------------|
+| 1 | `grant.scopes` | Tool name found in scopes list |
+| 2 | `grant.context["tools"]` | Tool name found in context tools array |
+| 3 | `credential.service` | Credential service name matches tool name |
+
 ## CLI
 
 The server can be started via command line:

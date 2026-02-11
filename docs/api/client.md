@@ -41,6 +41,7 @@ The synchronous client for interacting with an OpenIntent server.
         - log_tool_call_started
         - log_tool_call_completed
         - log_tool_call_failed
+        - invoke_tool
         - discover
 
 ## AsyncOpenIntentClient
@@ -97,4 +98,5 @@ The asynchronous client for async applications, with full RFC 0012-0017 support.
         - update_trigger
         - fire_trigger
         - delete_trigger
+        - invoke_tool
         - close

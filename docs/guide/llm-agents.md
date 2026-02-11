@@ -4,6 +4,9 @@ title: LLM-Powered Agents
 
 # LLM-Powered Agents
 
+!!! tip "Preferred pattern"
+    Adding `model=` to `@Agent` or `@Coordinator` is the recommended way to build agents. It gives the agent an LLM brain with an agentic tool loop, streaming, and protocol-native tools — all with zero extra wiring. An LLM is not always needed, but when it fits, this is the pattern to use.
+
 Add `model=` to any `@Agent` or `@Coordinator` decorator and the agent gains an LLM brain. The agent can reason about tasks, call protocol tools (memory, escalation, delegation), and stream responses --- all without leaving the OpenIntent protocol.
 
 ## Quick Start

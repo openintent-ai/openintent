@@ -54,6 +54,23 @@ Zero-boilerplate agent classes with auto-subscription, state auto-patching, and 
 ```python
 from openintent.agents import Agent, on_assignment, on_complete, on_state_change
 
+@Agent(
+    "research-agent",
+    model: str = None,                # LLM model — enables self.think() (see LLM Agents guide)
+    memory: str = "episodic",         # Memory tier: "working", "episodic", or "semantic"
+    tools: list = None,               # ToolDef objects or RFC-0014 grant names
+    capabilities: list = None,        # Declared capabilities for discovery & routing
+    auto_heartbeat: bool = True,      # Automatic heartbeat registration (RFC-0016)
+    heartbeat_interval: int = 30,     # Seconds between heartbeats
+    drain_timeout: int = 60,          # Seconds to wait during graceful shutdown
+    config: AgentConfig = None,       # Full config object (overrides individual args)
+)
+```
+
+!!! tip "Preferred pattern: LLM-Powered Agents"
+    Adding `model=` to `@Agent` is the recommended way to build agents. It gives the agent an LLM brain with an agentic tool loop (`self.think()`), streaming (`self.think_stream()`), and protocol-native tools — all with zero extra wiring. See the [LLM-Powered Agents guide](llm-agents.md) for full details.
+
+```python
 @Agent("research-agent")
 class ResearchAgent:
 
@@ -127,7 +144,34 @@ class AnalystAgent:
 | `@on_task(status)` | Task lifecycle event | 0012 |
 | `@on_trigger(name)` | Trigger fires | 0017 |
 | `@on_drain` | Graceful shutdown signal | 0016 |
+| `@on_handoff` | Agent receives work delegated from another agent | 0013 |
+| `@on_retry` | Intent reassigned after a previous failure | 0010 |
 | `@on_all_complete` | All portfolio intents complete | 0007 |
+
+### Guardrail Decorators
+
+| Decorator | Trigger |
+|-----------|---------|
+| `@input_guardrail` | Validate intent data before assignment handlers run |
+| `@output_guardrail` | Validate handler results before they are committed |
+
+Raise `GuardrailError` to reject:
+
+```python
+from openintent.agents import Agent, on_assignment, input_guardrail, GuardrailError
+
+@Agent("safe-agent")
+class SafeAgent:
+
+    @input_guardrail
+    async def validate(self, intent):
+        if intent.state.get("risk_score", 0) > 0.9:
+            raise GuardrailError("Risk score too high")
+
+    @on_assignment
+    async def work(self, intent):
+        return {"status": "processed"}
+```
 
 ```mermaid
 stateDiagram-v2
@@ -287,6 +331,58 @@ First-class declarative configuration for protocol features. Import from `openin
 Multi-agent orchestration with governance features:
 
 ```python
+@Coordinator(
+    coordinator_id: str,              # Unique identifier for this coordinator
+    model: str = None,                # LLM model — enables self.think() for planning & delegation
+    agents: list = None,              # Agent IDs managed by this coordinator
+    strategy: str = "sequential",     # "sequential", "parallel", "adaptive"
+    guardrails: list = None,          # Guardrail rules applied to all delegated work
+    memory: str = "episodic",         # Memory tier: "working", "episodic", or "semantic"
+    tools: list = None,               # ToolDef objects or RFC-0014 grant names
+    capabilities: list = None,        # Declared capabilities for discovery
+    auto_heartbeat: bool = True,      # Automatic heartbeat registration
+    config: AgentConfig = None,       # Full config object (overrides individual args)
+)
+```
+
+### Built-in Coordinator Guardrails
+
+The `guardrails=` parameter on `@Coordinator` accepts these built-in policies:
+
+| Policy | Description |
+|--------|-------------|
+| `"require_approval"` | Logs decision records before assignment |
+| `"budget_limit"` | Rejects intents exceeding cost constraints |
+| `"agent_allowlist"` | Rejects delegation to agents outside the managed list |
+
+### LLM-Powered Coordinator
+
+Add `model=` and the coordinator can autonomously plan, delegate, and make decisions:
+
+```python
+from openintent import Coordinator, on_assignment
+
+@Coordinator(
+    "project-lead",
+    model="claude-sonnet-4-20250514",
+    agents=["researcher", "writer", "reviewer"],
+    memory="episodic",
+    guardrails=["require_approval"],
+)
+class ProjectLead:
+    @on_assignment
+    async def plan(self, intent):
+        return await self.think(
+            f"Break down this project and delegate to your team: "
+            f"{intent.description}"
+        )
+```
+
+See [LLM-Powered Agents](llm-agents.md#llm-powered-coordinators) for full coordinator LLM details.
+
+### Manual Coordinator Example
+
+```python
 from openintent.agents import (
     Coordinator, on_conflict, on_escalation, on_quorum
 )
@@ -334,6 +430,8 @@ class TeamCoordinator:
 
 | Method | Description |
 |--------|-------------|
+| `self.think(prompt)` | Agentic tool loop — sends prompt to LLM, executes tool calls, returns final text (requires `model=`) |
+| `self.think_stream(prompt)` | Same agentic loop but yields tokens as they arrive (requires `model=`) |
 | `self.delegate(title, agents)` | Delegate work to agents |
 | `self.record_decision(...)` | Record governance decision |
 | `self.decisions` | Access decision audit log |

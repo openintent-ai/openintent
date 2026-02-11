@@ -9,6 +9,23 @@ Coordinators manage portfolios of intents, delegate work to agents, track depend
 ## The @Coordinator Decorator
 
 ```python
+@Coordinator(
+    coordinator_id: str,              # Unique identifier
+    model: str = None,                # LLM model — enables self.think() for planning & delegation
+    agents: list = None,              # Agent IDs managed by this coordinator
+    strategy: str = "sequential",     # "sequential", "parallel", "adaptive"
+    guardrails: list = None,          # Guardrail rules applied to all delegated work
+    memory: str = "episodic",         # Memory tier: "working", "episodic", or "semantic"
+    tools: list = None,               # ToolDef objects or RFC-0014 grant names
+    capabilities: list = None,        # Declared capabilities for discovery
+    auto_heartbeat: bool = True,      # Automatic heartbeat registration
+)
+```
+
+!!! tip "Preferred pattern: LLM-Powered Coordinators"
+    Adding `model=` is the recommended way to build coordinators. The LLM can autonomously plan, delegate, and record decisions. See [LLM-Powered Agents](llm-agents.md#llm-powered-coordinators) for full details.
+
+```python
 from openintent.agents import Coordinator, on_assignment, on_conflict, on_escalation
 
 @Coordinator("orchestrator",
@@ -108,18 +125,38 @@ class ParallelCoordinator:
 
 ## Governance & Guardrails
 
-Guardrails define constraints that the coordinator enforces:
+Guardrails define constraints that the coordinator enforces.
+
+### Built-in Guardrails
+
+The `guardrails=` parameter accepts these built-in policies (v0.9.0):
+
+| Policy | Description |
+|--------|-------------|
+| `"require_approval"` | Logs decision records before assignment |
+| `"budget_limit"` | Rejects intents exceeding cost constraints |
+| `"agent_allowlist"` | Rejects delegation to agents outside the managed list |
+
+### Custom Guardrails
+
+You can also use `@input_guardrail` and `@output_guardrail` decorators for custom validation:
 
 ```python
+from openintent.agents import Coordinator, on_assignment, input_guardrail, GuardrailError
+
 @Coordinator("governed-lead",
     agents=["researcher"],
-    guardrails=["budget_check", "quality_gate", "safety_review"]
+    guardrails=["require_approval", "budget_limit"]
 )
 class GovernedCoordinator:
 
+    @input_guardrail
+    async def check_budget(self, intent):
+        if intent.state.get("estimated_cost", 0) > 100:
+            raise GuardrailError("Budget exceeded")
+
     @on_assignment
     async def plan(self, intent):
-        # Guardrails are checked before delegation
         await self.delegate(
             title="Expensive research",
             agents=["researcher"],

@@ -5,6 +5,54 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-02-11
+
+### Added
+
+- **Server-Side Tool Invocation** — `POST /api/v1/tools/invoke` endpoint enables agents to invoke tools through the server proxy without ever accessing raw credentials. The server resolves the appropriate grant, injects credentials from the vault, enforces rate limits, and records the invocation for audit.
+- **3-Tier Grant Resolution** — Tool invocations are matched to grants using a three-tier resolution strategy: (1) `grant.scopes` contains the tool name, (2) `grant.context["tools"]` contains the tool name, (3) `credential.service` matches the tool name.
+- **Client `invoke_tool()` Methods** — `OpenIntentClient.invoke_tool(tool_name, agent_id, parameters)` (sync) and `AsyncOpenIntentClient.invoke_tool(tool_name, agent_id, parameters)` (async) for programmatic server-side tool invocation.
+- **Agent `self.tools.invoke()` via Server Proxy** — `_ToolsProxy` on agents delegates string tool names to `client.invoke_tool()`, completing the server-side invocation chain.
+- **Invocation Audit Trail** — Every server-side tool invocation is recorded with agent ID, tool name, parameters, result, duration, and timestamp.
+
+- **`@on_handoff` Decorator** — Lifecycle hook for delegated assignments. Handler receives intent and delegating agent's ID.
+- **`@on_retry` Decorator** — Lifecycle hook for retry assignments (RFC-0010). Handler receives intent, attempt number, and last error.
+- **`@input_guardrail` / `@output_guardrail` Decorators** — Validation pipeline: input guardrails reject before processing, output guardrails validate before commit. Raise `GuardrailError` to reject.
+- **Built-in Coordinator Guardrails** — `guardrails=` on `@Coordinator` is now active: `"require_approval"`, `"budget_limit"`, `"agent_allowlist"`.
+
+### Fixed
+
+- **`_ToolsProxy` duplicate class** — Removed duplicate `_ToolsProxy` definition that caused agent tool proxy to silently fail.
+- **Dead proxy code** — Removed shadowed `_MemoryProxy` and `_TasksProxy` duplicate definitions.
+- **Grant matching for mismatched tool/service names** — `find_agent_grant_for_tool()` now correctly resolves grants where tool name differs from credential service name.
+- **Inert `guardrails=` parameter** — `guardrails=` on `@Coordinator` was accepted but unused. Now wires into guardrail pipeline.
+
+### Changed
+
+- Tool execution priority enforced: protocol tools > local `ToolDef` handlers > remote RFC-0014 server grants.
+- 556+ tests passing across all 17 RFCs.
+
+---
+
+## [0.8.1] - 2026-02-08
+
+### Changed
+
+- **Tool → ToolDef rename** — `Tool` is now `ToolDef`, `@tool` is now `@define_tool` for clarity. The old names remain as backwards-compatible aliases.
+- **Type annotations** — `llm.py` fully type-annotated, passes mypy strict mode.
+
+### Added
+
+- **LLM-Powered Agents** — `model=` on `@Agent`/`@Coordinator` for agentic tool loops with `self.think()`, `self.think_stream()`, `self.reset_conversation()`, and protocol-native tools.
+- **Custom Tools with ToolDef** — `ToolDef(name, description, parameters, handler)` and `@define_tool` decorator.
+- **Automatic Tool Tracing** — Local `ToolDef` invocations emit `tool_invocation` protocol events (best-effort, never blocks).
+
+### Fixed
+
+- Unified tool execution model documentation.
+
+---
+
 ## [0.8.0] - 2026-02-08
 
 ### Added

@@ -1398,6 +1398,34 @@ class Database:
         session.refresh(grant)
         return grant
 
+    def find_agent_grant_for_tool(self, session: Session, agent_id: str, tool_name: str) -> Optional[ToolGrantModel]:
+        """Find an active grant for an agent that covers a specific tool/service name.
+
+        Matches in priority order:
+        1. Grant scopes contain the tool name (e.g. scopes=["web_search"])
+        2. Grant context has a 'tools' list containing the tool name
+        3. Credential service matches the tool name exactly
+        """
+        grants = (
+            session.query(ToolGrantModel)
+            .filter(
+                ToolGrantModel.agent_id == agent_id,
+                ToolGrantModel.status == "active",
+            )
+            .all()
+        )
+        for grant in grants:
+            if grant.scopes and tool_name in grant.scopes:
+                return grant
+            ctx = grant.context or {}
+            if isinstance(ctx, dict) and tool_name in ctx.get("tools", []):
+                return grant
+        for grant in grants:
+            credential = self.get_credential(session, grant.credential_id)
+            if credential and credential.service == tool_name:
+                return grant
+        return None
+
     # ==================== Tool Invocations (RFC-0014) ====================
 
     def create_tool_invocation(self, session: Session, **kwargs) -> ToolInvocationModel:

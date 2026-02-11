@@ -2234,6 +2234,23 @@ class OpenIntentClient:
         )  # noqa: E501
         return self._handle_response(response)  # type: ignore[return-value]
 
+    def invoke_tool(
+        self, tool_name: str, agent_id: str, parameters: Optional[dict[str, Any]] = None, **kwargs: Any
+    ) -> dict:
+        """Invoke a tool through the server's tool proxy (RFC-0014).
+
+        The server resolves the agent's grant, retrieves the credential,
+        executes the tool, and records the invocation.
+        """
+        payload: dict[str, Any] = {
+            "tool_name": tool_name,
+            "agent_id": agent_id,
+            "parameters": parameters or {},
+        }
+        payload.update(kwargs)
+        response = self._client.post("/api/v1/tools/invoke", json=payload)
+        return self._handle_response(response)
+
     # ==================== Agent Memory (RFC-0015) ====================
 
     def create_memory(
@@ -3708,6 +3725,23 @@ class AsyncOpenIntentClient:
             f"/api/v1/grants/{grant_id}/invocations", params={"limit": limit}
         )  # noqa: E501
         return self._handle_response(response)  # type: ignore[return-value]
+
+    async def invoke_tool(
+        self, tool_name: str, agent_id: str, parameters: Optional[dict[str, Any]] = None, **kwargs: Any
+    ) -> dict:
+        """Invoke a tool through the server's tool proxy (RFC-0014).
+
+        The server resolves the agent's grant, retrieves the credential,
+        executes the tool, and records the invocation.
+        """
+        payload: dict[str, Any] = {
+            "tool_name": tool_name,
+            "agent_id": agent_id,
+            "parameters": parameters or {},
+        }
+        payload.update(kwargs)
+        response = await self._client.post("/api/v1/tools/invoke", json=payload)
+        return self._handle_response(response)
 
     # ==================== Agent Memory (RFC-0015) ====================
 

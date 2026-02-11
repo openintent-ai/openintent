@@ -96,6 +96,77 @@ for entry in audit:
     print(f"[{entry.timestamp}] {entry.tool_name}: {entry.status}")
 ```
 
+## Server-Side Tool Invocation (v0.9.0)
+
+Invoke tools through the server proxy — credentials stay server-side:
+
+```python
+from openintent import OpenIntentClient
+
+client = OpenIntentClient(
+    base_url="http://localhost:8000",
+    agent_id="researcher"
+)
+
+# Invoke a tool via server proxy (grant is validated automatically)
+result = client.invoke_tool(
+    tool_name="web_search",
+    agent_id="researcher",
+    parameters={"query": "OpenIntent protocol documentation"}
+)
+print(f"Results: {result}")
+
+# Async version
+from openintent import AsyncOpenIntentClient
+
+async_client = AsyncOpenIntentClient(
+    base_url="http://localhost:8000",
+    agent_id="researcher"
+)
+result = await async_client.invoke_tool(
+    tool_name="web_search",
+    agent_id="researcher",
+    parameters={"query": "OpenIntent protocol documentation"}
+)
+```
+
+### Via REST API
+
+```bash
+curl -X POST http://localhost:8000/api/v1/tools/invoke \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: dev-user-key" \
+  -d '{
+    "tool_name": "web_search",
+    "agent_id": "researcher",
+    "parameters": {"query": "OpenIntent protocol"}
+  }'
+```
+
+### Via Agent Self-Access
+
+```python
+from openintent.agents import Agent, on_assignment
+
+@Agent("researcher", tools=["web_search", "summarize"])
+class Researcher:
+
+    @on_assignment
+    async def handle(self, intent):
+        # String tool names invoke via server proxy
+        results = await self.tools.invoke(
+            "web_search",
+            {"query": intent.description}
+        )
+
+        summary = await self.tools.invoke(
+            "summarize",
+            {"text": str(results)}
+        )
+
+        return {"results": results, "summary": summary}
+```
+
 ## Revoking Grants
 
 ```python

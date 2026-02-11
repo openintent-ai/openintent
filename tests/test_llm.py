@@ -1470,3 +1470,202 @@ class TestToolTracing:
             "greet", {"name": "Bob"}, executor, local_handlers, intent=intent
         )
         assert result == {"greeting": "Hello, Bob!"}
+
+
+# ---------------------------------------------------------------------------
+# _ToolsProxy — delegates to client.invoke_tool
+# ---------------------------------------------------------------------------
+
+
+class TestToolsProxy:
+    @pytest.mark.asyncio
+    async def test_proxy_delegates_to_client(self):
+        from openintent.agents import _ToolsProxy
+
+        agent = MagicMock()
+        agent._agent_id = "agent-007"
+        agent.async_client = MagicMock()
+        agent.async_client.invoke_tool = AsyncMock(
+            return_value={"status": "success", "result": {"data": 42}}
+        )
+
+        proxy = _ToolsProxy(agent)
+        result = await proxy.invoke("web_search", query="openintent", max_results=3)
+
+        agent.async_client.invoke_tool.assert_called_once_with(
+            tool_name="web_search",
+            agent_id="agent-007",
+            parameters={"query": "openintent", "max_results": 3},
+        )
+        assert result["status"] == "success"
+        assert result["result"]["data"] == 42
+
+    @pytest.mark.asyncio
+    async def test_proxy_with_no_kwargs(self):
+        from openintent.agents import _ToolsProxy
+
+        agent = MagicMock()
+        agent._agent_id = "agent-x"
+        agent.async_client = MagicMock()
+        agent.async_client.invoke_tool = AsyncMock(return_value={"ok": True})
+
+        proxy = _ToolsProxy(agent)
+        result = await proxy.invoke("ping")
+
+        agent.async_client.invoke_tool.assert_called_once_with(
+            tool_name="ping",
+            agent_id="agent-x",
+            parameters={},
+        )
+        assert result == {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Remote tool with full arguments via _execute_tool
+# ---------------------------------------------------------------------------
+
+
+class TestRemoteToolWithFullArguments:
+    def _make_engine_with_tools(self, tools):
+        agent = MagicMock()
+        agent._agent_id = "test"
+        agent._config = AgentConfig(memory="episodic", tools=tools)
+        agent.memory = MagicMock()
+        agent.memory.recall = AsyncMock(return_value=[])
+        agent.memory.store = AsyncMock(return_value=None)
+        agent._agents_list = None
+        agent.async_client = MagicMock()
+        agent.async_client.log_event = AsyncMock(return_value=None)
+
+        config = LLMConfig(model="gpt-4o", provider="openai")
+        engine = LLMEngine(agent, config)
+        return engine, agent
+
+    @pytest.mark.asyncio
+    async def test_remote_receives_all_arguments(self):
+        engine, agent = self._make_engine_with_tools(["web_search"])
+        executor = ProtocolToolExecutor(agent)
+        local_handlers = engine._local_tool_handlers
+
+        agent.tools = MagicMock()
+        agent.tools.invoke = AsyncMock(return_value={"results": ["page1"]})
+
+        result = await engine._execute_tool(
+            "web_search",
+            {"query": "test", "max_results": 10, "language": "en"},
+            executor,
+            local_handlers,
+        )
+        assert result == {"results": ["page1"]}
+        agent.tools.invoke.assert_called_once_with(
+            "web_search",
+            query="test",
+            max_results=10,
+            language="en",
+        )
+
+    @pytest.mark.asyncio
+    async def test_remote_error_returns_error_dict(self):
+        engine, agent = self._make_engine_with_tools(["failing_tool"])
+        executor = ProtocolToolExecutor(agent)
+        local_handlers = engine._local_tool_handlers
+
+        agent.tools = MagicMock()
+        agent.tools.invoke = AsyncMock(
+            side_effect=RuntimeError("server unavailable")
+        )
+
+        result = await engine._execute_tool(
+            "failing_tool",
+            {"param": "value"},
+            executor,
+            local_handlers,
+        )
+        assert "error" in result
+        assert "server unavailable" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# Mixed tool usage in full think loop
+# ---------------------------------------------------------------------------
+
+
+class TestMixedToolThinkLoop:
+    def _make_engine_with_mixed_tools(self):
+        def calc(expression):
+            return {"answer": eval(expression)}
+
+        calc_tool = ToolDef(
+            name="calculator",
+            description="Evaluate math.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "expression": {"type": "string"},
+                },
+                "required": ["expression"],
+            },
+            handler=calc,
+        )
+
+        agent = MagicMock()
+        agent._agent_id = "mixed-agent"
+        agent._config = AgentConfig(
+            memory="episodic",
+            tools=[calc_tool, "web_search"],
+        )
+        agent.memory = MagicMock()
+        agent.memory.recall = AsyncMock(return_value=[])
+        agent.memory.store = AsyncMock(return_value=None)
+        agent._agents_list = None
+        agent.async_client = MagicMock()
+        agent.async_client.log_event = AsyncMock(return_value=None)
+
+        agent.tools = MagicMock()
+        agent.tools.invoke = AsyncMock(
+            return_value={"results": ["search result"]}
+        )
+
+        config = LLMConfig(model="gpt-4o", provider="openai")
+        engine = LLMEngine(agent, config)
+        return engine, agent
+
+    @pytest.mark.asyncio
+    async def test_think_uses_local_then_remote(self):
+        engine, agent = self._make_engine_with_mixed_tools()
+
+        tc_local = MagicMock()
+        tc_local.id = "call_1"
+        tc_local.function.name = "calculator"
+        tc_local.function.arguments = '{"expression": "2+3"}'
+
+        first_response = MagicMock()
+        first_response.choices = [MagicMock()]
+        first_response.choices[0].message.content = ""
+        first_response.choices[0].message.tool_calls = [tc_local]
+
+        tc_remote = MagicMock()
+        tc_remote.id = "call_2"
+        tc_remote.function.name = "web_search"
+        tc_remote.function.arguments = '{"query": "openintent protocol"}'
+
+        second_response = MagicMock()
+        second_response.choices = [MagicMock()]
+        second_response.choices[0].message.content = ""
+        second_response.choices[0].message.tool_calls = [tc_remote]
+
+        final_response = MagicMock()
+        final_response.choices = [MagicMock()]
+        final_response.choices[0].message.content = "Calculator says 5, search found results."
+        final_response.choices[0].message.tool_calls = None
+
+        with patch.object(engine, "_call_llm", new_callable=AsyncMock) as mock_call:
+            mock_call.side_effect = [first_response, second_response, final_response]
+            result = await engine._think_complete("Calculate 2+3 and search for openintent")
+
+        assert result == "Calculator says 5, search found results."
+        assert mock_call.call_count == 3
+        agent.tools.invoke.assert_called_once_with(
+            "web_search",
+            query="openintent protocol",
+        )

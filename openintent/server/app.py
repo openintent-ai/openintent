@@ -564,6 +564,22 @@ class GrantResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ToolInvokeRequest(BaseModel):
+    tool_name: str
+    agent_id: str
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+    idempotency_key: Optional[str] = None
+
+
+class ToolInvokeResponse(BaseModel):
+    invocation_id: str
+    tool_name: str
+    status: str
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    duration_ms: Optional[int] = None
+
+
 class InvocationCreate(BaseModel):
     grant_id: str
     service: str
@@ -808,6 +824,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 "leasing",
                 "governance",
                 "access-control",
+                "tools",
             ],
             "openApiUrl": "/openapi.json",
         }
@@ -2979,6 +2996,113 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         try:
             invocations = db.list_tool_invocations(session, grant_id, limit=limit)
             return [InvocationResponse.model_validate(i) for i in invocations]
+        finally:
+            session.close()
+
+    # ==================== Tool Invoke Proxy (RFC-0014) ====================
+
+    @app.post("/api/v1/tools/invoke", response_model=ToolInvokeResponse)
+    async def invoke_tool(
+        request: ToolInvokeRequest,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        """Invoke a tool through the server's tool proxy (RFC-0014).
+
+        The server resolves the agent's grant, retrieves the credential,
+        and records the invocation. For now, tool execution is stubbed
+        — the server validates grant access and records the invocation
+        with a placeholder result. External tool execution adapters
+        will be added in a future release.
+        """
+        import time
+        from uuid import uuid4
+
+        session = db.get_session()
+        try:
+            grant = db.find_agent_grant_for_tool(
+                session, request.agent_id, request.tool_name
+            )
+            if not grant:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"No active grant found for agent '{request.agent_id}' to use tool '{request.tool_name}'"
+                )
+
+            if grant.expires_at and grant.expires_at < datetime.utcnow():
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Grant for tool '{request.tool_name}' has expired"
+                )
+
+            credential = db.get_credential(session, grant.credential_id)
+            if not credential:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Grant references a missing credential"
+                )
+            if credential.status != "active":
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Credential for tool '{request.tool_name}' is {credential.status}"
+                )
+
+            if grant.constraints and isinstance(grant.constraints, dict):
+                max_per_hour = grant.constraints.get("max_invocations_per_hour")
+                if max_per_hour is not None:
+                    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+                    recent_count = (
+                        session.query(ToolInvocationModel)
+                        .filter(
+                            ToolInvocationModel.grant_id == grant.id,
+                            ToolInvocationModel.timestamp >= one_hour_ago,
+                        )
+                        .count()
+                    )
+                    if recent_count >= max_per_hour:
+                        raise HTTPException(
+                            status_code=429,
+                            detail=f"Rate limit exceeded: {max_per_hour} invocations per hour"
+                        )
+
+            invocation_id = str(uuid4())
+            t0 = time.time()
+
+            tool_result = {
+                "tool_name": request.tool_name,
+                "service": credential.service,
+                "parameters": request.parameters,
+                "message": f"Tool '{request.tool_name}' invoked via server proxy",
+                "credential_service": credential.service,
+                "credential_auth_type": credential.auth_type,
+            }
+
+            duration_ms = int((time.time() - t0) * 1000)
+
+            db.create_tool_invocation(
+                session,
+                grant_id=grant.id,
+                service=credential.service,
+                tool=request.tool_name,
+                agent_id=request.agent_id,
+                parameters=request.parameters,
+                status="success",
+                result=tool_result,
+                duration_ms=duration_ms,
+                idempotency_key=request.idempotency_key,
+            )
+
+            return ToolInvokeResponse(
+                invocation_id=invocation_id,
+                tool_name=request.tool_name,
+                status="success",
+                result=tool_result,
+                duration_ms=duration_ms,
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
         finally:
             session.close()
 

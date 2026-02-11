@@ -155,18 +155,82 @@ for tool in tools:
 
 ---
 
-## Server-Side Tool Proxy
+## Server-Side Tool Invocation (v0.9.0)
 
-The built-in server can proxy tool invocations, keeping credentials server-side:
+The built-in server proxies tool invocations, keeping credentials server-side. Agents invoke tools via `POST /api/v1/tools/invoke` — the server resolves the grant, injects credentials from the vault, enforces rate limits, executes the tool, and records the invocation.
 
 ```
-Agent → Server → Tool Provider
-         ↑
-    Credentials from vault
-    (never exposed to agent)
+Agent → POST /api/v1/tools/invoke → Server → Tool Provider
+                                       ↑
+                                  Credentials from vault
+                                  (never exposed to agent)
 ```
 
-This means agents never see raw API keys — the server handles authentication transparently.
+### 3-Tier Grant Resolution
+
+When an agent invokes a tool, the server finds the matching grant using three tiers:
+
+1. **`grant.scopes`** — grant's scopes list contains the tool name
+2. **`grant.context["tools"]`** — grant's context has a `tools` array containing the tool name
+3. **`credential.service`** — the linked credential's service field matches the tool name
+
+This resolves the common mismatch where tool names (e.g. `"web_search"`) differ from credential service names (e.g. `"serpapi"`).
+
+### Client API
+
+```python
+# Synchronous
+result = client.invoke_tool(
+    tool_name="web_search",
+    agent_id="researcher",
+    parameters={"query": "OpenIntent protocol"}
+)
+
+# Asynchronous
+result = await async_client.invoke_tool(
+    tool_name="web_search",
+    agent_id="researcher",
+    parameters={"query": "OpenIntent protocol"}
+)
+```
+
+### Agent Proxy
+
+Agents using string tool names in `tools=` automatically invoke via the server:
+
+```python
+@Agent("researcher", tools=["web_search"])
+class Researcher:
+    @on_assignment
+    async def handle(self, intent):
+        result = await self.tools.invoke("web_search", {"query": intent.title})
+        return {"results": result}
+```
+
+### REST Endpoint
+
+```bash
+curl -X POST http://localhost:8000/api/v1/tools/invoke \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: dev-user-key" \
+  -d '{
+    "tool_name": "web_search",
+    "agent_id": "researcher",
+    "parameters": {"query": "OpenIntent protocol"}
+  }'
+```
+
+Response:
+
+```json
+{
+  "tool_name": "web_search",
+  "agent_id": "researcher",
+  "result": {"results": ["..."]},
+  "duration_ms": 230,
+  "grant_id": "grant-abc123"
+}
+```
 
 ## Tools in YAML Workflows
 

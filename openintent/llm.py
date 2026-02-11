@@ -1008,7 +1008,7 @@ class LLMEngine:
         try:
             raw = await self._agent.tools.invoke(
                 tool_name,
-                input=arguments.get("input", ""),
+                **arguments,
             )
             if isinstance(raw, dict):
                 return raw
