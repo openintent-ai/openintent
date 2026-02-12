@@ -294,6 +294,7 @@ class GeminiAdapter(BaseAdapter):
         content_parts: list[str] = []
         finish_reason: Optional[str] = None
         function_calls: list[dict[str, Any]] = []
+        usage_metadata: Any = None
 
         try:
             for chunk in stream:
@@ -313,6 +314,9 @@ class GeminiAdapter(BaseAdapter):
                         self._handle_error(
                             e, {"phase": "stream_chunk", "stream_id": stream_id}
                         )
+
+                if getattr(chunk, "usage_metadata", None) is not None:
+                    usage_metadata = chunk.usage_metadata
 
                 if chunk.candidates:
                     candidate = chunk.candidates[0]
@@ -336,6 +340,22 @@ class GeminiAdapter(BaseAdapter):
 
             duration_ms = int((time.time() - start_time) * 1000)
 
+            prompt_tokens = (
+                getattr(usage_metadata, "prompt_token_count", None)
+                if usage_metadata
+                else None
+            )
+            completion_tokens = (
+                getattr(usage_metadata, "candidates_token_count", None)
+                if usage_metadata
+                else None
+            )
+            total_tokens = (
+                getattr(usage_metadata, "total_token_count", None)
+                if usage_metadata
+                else None
+            )
+
             if self._config.log_streams:
                 try:
                     self._client.complete_stream(
@@ -344,7 +364,9 @@ class GeminiAdapter(BaseAdapter):
                         provider="google",
                         model=model,
                         chunks_received=chunk_count,
-                        tokens_streamed=len("".join(content_parts)),
+                        tokens_streamed=completion_tokens
+                        if completion_tokens is not None
+                        else len("".join(content_parts)),
                     )
                 except Exception as e:
                     self._handle_error(
@@ -365,6 +387,9 @@ class GeminiAdapter(BaseAdapter):
                             "".join(content_parts) if content_parts else None
                         ),
                         finish_reason=finish_reason,
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        total_tokens=total_tokens,
                         duration_ms=duration_ms,
                     )
                 except Exception as e:

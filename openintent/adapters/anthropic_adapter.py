@@ -320,6 +320,37 @@ class AnthropicStreamContext:
         messages = self._kwargs.get("messages", [])
         duration_ms = int((time.time() - self._start_time) * 1000)
 
+        if self._usage is None and self._stream and exc_type is None:
+            try:
+                inner_stream = (
+                    self._stream._MessageStreamManager__stream
+                    if hasattr(self._stream, "_MessageStreamManager__stream")
+                    else None
+                )
+                if inner_stream is None:
+                    inner_stream = getattr(self._stream, "_stream", None)
+                if inner_stream is not None:
+                    snapshot = getattr(
+                        inner_stream, "current_message_snapshot", None
+                    )
+                    if snapshot is not None:
+                        usage = getattr(snapshot, "usage", None)
+                        if usage:
+                            self._usage = {
+                                "input_tokens": getattr(
+                                    usage, "input_tokens", 0
+                                ),
+                                "output_tokens": getattr(
+                                    usage, "output_tokens", 0
+                                ),
+                            }
+                        if self._stop_reason is None:
+                            self._stop_reason = getattr(
+                                snapshot, "stop_reason", None
+                            )
+            except Exception:
+                pass
+
         if self._stream:
             try:
                 self._stream.__exit__(exc_type, exc_val, exc_tb)
@@ -352,13 +383,18 @@ class AnthropicStreamContext:
 
         if self._adapter._config.log_streams and stream_id:
             try:
+                completion_tokens = (
+                    self._usage.get("output_tokens") if self._usage else None
+                )
                 self._adapter._client.complete_stream(
                     self._adapter._intent_id,
                     stream_id=stream_id,
                     provider="anthropic",
                     model=model,
                     chunks_received=self._chunk_count,
-                    tokens_streamed=len("".join(self._content_parts)),
+                    tokens_streamed=completion_tokens
+                    if completion_tokens is not None
+                    else len("".join(self._content_parts)),
                 )
             except Exception as e:
                 self._adapter._handle_error(

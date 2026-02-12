@@ -5,6 +5,18 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-02-12
+
+### Fixed
+
+- **Streaming token usage capture** — All 7 LLM provider adapters (OpenAI, DeepSeek, Gemini, Anthropic, Azure OpenAI, OpenRouter, Grok) now capture actual `prompt_tokens`, `completion_tokens`, and `total_tokens` during streaming responses.
+- **OpenAI-compatible adapters** — OpenAI, DeepSeek, Azure OpenAI, OpenRouter, and Grok adapters inject `stream_options={"include_usage": True}` to receive usage data in the final stream chunk.
+- **Gemini adapter** — Captures `usage_metadata` from stream chunks and maps to standard token count fields.
+- **Anthropic adapter** — Extracts usage from the stream's internal message snapshot automatically.
+- **`tokens_streamed` field** — Reports actual completion token counts, falling back to character count only when unavailable.
+
+---
+
 ## [0.9.0] - 2026-02-11
 
 ### Added

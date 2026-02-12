@@ -271,6 +271,11 @@ class OpenRouterAdapter(BaseAdapter):
 
         self._invoke_stream_start(stream_id, model, "openrouter")
 
+        if "stream_options" not in kwargs:
+            kwargs["stream_options"] = {"include_usage": True}
+        elif isinstance(kwargs["stream_options"], dict):
+            kwargs["stream_options"].setdefault("include_usage", True)
+
         stream = self._openrouter.chat.completions.create(**kwargs)
         return self._stream_wrapper(
             stream,
@@ -295,6 +300,7 @@ class OpenRouterAdapter(BaseAdapter):
         content_parts: list[str] = []
         finish_reason: Optional[str] = None
         tool_calls_accumulated: list[dict[str, Any]] = []
+        usage: Any = None
 
         try:
             for chunk in stream:
@@ -314,6 +320,9 @@ class OpenRouterAdapter(BaseAdapter):
                         self._handle_error(
                             e, {"phase": "stream_chunk", "stream_id": stream_id}
                         )
+
+                if getattr(chunk, "usage", None) is not None:
+                    usage = chunk.usage
 
                 if chunk.choices:
                     delta = chunk.choices[0].delta
@@ -342,6 +351,16 @@ class OpenRouterAdapter(BaseAdapter):
 
             duration_ms = int((time.time() - start_time) * 1000)
 
+            prompt_tokens = (
+                getattr(usage, "prompt_tokens", None) if usage else None
+            )
+            completion_tokens = (
+                getattr(usage, "completion_tokens", None) if usage else None
+            )
+            total_tokens = (
+                getattr(usage, "total_tokens", None) if usage else None
+            )
+
             if self._config.log_streams:
                 try:
                     self._client.complete_stream(
@@ -350,7 +369,9 @@ class OpenRouterAdapter(BaseAdapter):
                         provider="openrouter",
                         model=model,
                         chunks_received=chunk_count,
-                        tokens_streamed=len("".join(content_parts)),
+                        tokens_streamed=completion_tokens
+                        if completion_tokens is not None
+                        else len("".join(content_parts)),
                     )
                 except Exception as e:
                     self._handle_error(
@@ -371,6 +392,9 @@ class OpenRouterAdapter(BaseAdapter):
                             "".join(content_parts) if content_parts else None
                         ),
                         finish_reason=finish_reason,
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        total_tokens=total_tokens,
                         duration_ms=duration_ms,
                     )
                 except Exception as e:
