@@ -296,7 +296,9 @@ class OpenIntentClient:
             "parent_intent_id": parent_id,
             "depends_on": depends_on or [],
         }
-        response = self._client.post(f"/api/v1/intents/{parent_id}/children", json=payload)
+        response = self._client.post(
+            f"/api/v1/intents/{parent_id}/children", json=payload
+        )
         data = self._handle_response(response)
         return Intent.from_dict(data)
 
@@ -839,7 +841,9 @@ class OpenIntentClient:
         data = self._handle_response(response)
         return IntentPortfolio.from_dict(data)
 
-    def list_portfolios(self, created_by: Optional[str] = None) -> list[IntentPortfolio]:
+    def list_portfolios(
+        self, created_by: Optional[str] = None
+    ) -> list[IntentPortfolio]:
         """
         List portfolios, optionally filtered by creator.
 
@@ -914,11 +918,15 @@ class OpenIntentClient:
             portfolio_id: The portfolio ID.
             intent_id: The intent to remove.
         """
-        response = self._client.delete(f"/api/v1/portfolios/{portfolio_id}/intents/{intent_id}")
+        response = self._client.delete(
+            f"/api/v1/portfolios/{portfolio_id}/intents/{intent_id}"
+        )
         if response.status_code != 204:
             self._handle_response(response)
 
-    def get_portfolio_intents(self, portfolio_id: str) -> tuple[list[Intent], AggregateStatus]:
+    def get_portfolio_intents(
+        self, portfolio_id: str
+    ) -> tuple[list[Intent], AggregateStatus]:
         """
         Get all intents in a portfolio with aggregate status.
 
@@ -1007,7 +1015,9 @@ class OpenIntentClient:
             intent_id: The intent ID.
             attachment_id: The attachment ID to delete.
         """
-        response = self._client.delete(f"/api/v1/intents/{intent_id}/attachments/{attachment_id}")
+        response = self._client.delete(
+            f"/api/v1/intents/{intent_id}/attachments/{attachment_id}"
+        )
         if response.status_code != 204:
             self._handle_response(response)
 
@@ -1334,7 +1344,9 @@ class OpenIntentClient:
             intent_id: The intent ID.
             entry_id: The ACL entry ID to revoke.
         """
-        response = self._client.delete(f"/api/v1/intents/{intent_id}/acl/entries/{entry_id}")
+        response = self._client.delete(
+            f"/api/v1/intents/{intent_id}/acl/entries/{entry_id}"
+        )
         if response.status_code != 204:
             self._handle_response(response)
 
@@ -1529,7 +1541,9 @@ class OpenIntentClient:
             provider=provider,
             model=model,
         )
-        return self.log_event(intent_id, EventType.TOOL_CALL_COMPLETED, payload.to_dict())
+        return self.log_event(
+            intent_id, EventType.TOOL_CALL_COMPLETED, payload.to_dict()
+        )
 
     def log_tool_call_failed(
         self,
@@ -1610,7 +1624,9 @@ class OpenIntentClient:
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return self.log_event(intent_id, EventType.LLM_REQUEST_STARTED, payload.to_dict())
+        return self.log_event(
+            intent_id, EventType.LLM_REQUEST_STARTED, payload.to_dict()
+        )
 
     def log_llm_request_completed(
         self,
@@ -1660,7 +1676,9 @@ class OpenIntentClient:
             total_tokens=total_tokens,
             duration_ms=duration_ms,
         )
-        return self.log_event(intent_id, EventType.LLM_REQUEST_COMPLETED, payload.to_dict())
+        return self.log_event(
+            intent_id, EventType.LLM_REQUEST_COMPLETED, payload.to_dict()
+        )
 
     def log_llm_request_failed(
         self,
@@ -1695,7 +1713,9 @@ class OpenIntentClient:
             error=error,
             duration_ms=duration_ms,
         )
-        return self.log_event(intent_id, EventType.LLM_REQUEST_FAILED, payload.to_dict())
+        return self.log_event(
+            intent_id, EventType.LLM_REQUEST_FAILED, payload.to_dict()
+        )
 
     # ==================== Stream Coordination ====================
 
@@ -2074,7 +2094,9 @@ class OpenIntentClient:
         data = self._handle_response(response)
         return CoordinatorLease.from_dict(data)
 
-    def list_coordinator_leases(self, intent_id: Optional[str] = None) -> list[CoordinatorLease]:
+    def list_coordinator_leases(
+        self, intent_id: Optional[str] = None
+    ) -> list[CoordinatorLease]:
         """List coordinator leases (RFC-0013)."""
         if intent_id:
             response = self._client.get(f"/api/v1/intents/{intent_id}/coordinators")
@@ -2120,7 +2142,9 @@ class OpenIntentClient:
 
     def create_vault(self, owner_id: str, name: str) -> dict:
         """Create a credential vault (RFC-0014)."""
-        response = self._client.post("/api/v1/vaults", json={"owner_id": owner_id, "name": name})
+        response = self._client.post(
+            "/api/v1/vaults", json={"owner_id": owner_id, "name": name}
+        )
         return self._handle_response(response)
 
     def get_vault(self, vault_id: str) -> dict:
@@ -2344,12 +2368,16 @@ class OpenIntentClient:
             "current_load": current_load,
             "tasks_in_progress": tasks_in_progress or [],
         }  # noqa: E501
-        response = self._client.post(f"/api/v1/agents/{agent_id}/heartbeat", json=payload)
+        response = self._client.post(
+            f"/api/v1/agents/{agent_id}/heartbeat", json=payload
+        )
         return self._handle_response(response)
 
     def update_agent_status(self, agent_id: str, status: str) -> dict:
         """Update agent status (RFC-0016)."""
-        response = self._client.patch(f"/api/v1/agents/{agent_id}/status", json={"status": status})
+        response = self._client.patch(
+            f"/api/v1/agents/{agent_id}/status", json={"status": status}
+        )
         return self._handle_response(response)
 
     # ==================== Triggers & Reactive Scheduling (RFC-0017) ====================
@@ -2628,7 +2656,9 @@ class AsyncOpenIntentClient:
 
     async def release_lease(self, intent_id: str, lease_id: str) -> None:
         """Release a previously acquired lease."""
-        response = await self._client.delete(f"/api/v1/intents/{intent_id}/leases/{lease_id}")
+        response = await self._client.delete(
+            f"/api/v1/intents/{intent_id}/leases/{lease_id}"
+        )
         self._handle_response(response)
 
     async def get_leases(self, intent_id: str) -> list[IntentLease]:
@@ -2679,7 +2709,9 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return [Decision.from_dict(item) for item in data.get("decisions", data)]
 
-    async def assign_agent(self, intent_id: str, agent_id: Optional[str] = None) -> dict:
+    async def assign_agent(
+        self, intent_id: str, agent_id: Optional[str] = None
+    ) -> dict:
         """Assign an agent to work on an intent."""
         response = await self._client.post(
             f"/api/v1/intents/{intent_id}/agents",
@@ -2687,10 +2719,14 @@ class AsyncOpenIntentClient:
         )
         return self._handle_response(response)
 
-    async def unassign_agent(self, intent_id: str, agent_id: Optional[str] = None) -> None:
+    async def unassign_agent(
+        self, intent_id: str, agent_id: Optional[str] = None
+    ) -> None:
         """Remove an agent from an intent."""
         aid = agent_id or self.agent_id
-        response = await self._client.delete(f"/api/v1/intents/{intent_id}/agents/{aid}")
+        response = await self._client.delete(
+            f"/api/v1/intents/{intent_id}/agents/{aid}"
+        )
         self._handle_response(response)
 
     async def create_portfolio(
@@ -2720,7 +2756,9 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return IntentPortfolio.from_dict(data)
 
-    async def list_portfolios(self, created_by: Optional[str] = None) -> list[IntentPortfolio]:
+    async def list_portfolios(
+        self, created_by: Optional[str] = None
+    ) -> list[IntentPortfolio]:
         """List portfolios, optionally filtered by creator."""
         params = {}
         if created_by:
@@ -2759,7 +2797,9 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return PortfolioMembership.from_dict(data)
 
-    async def remove_intent_from_portfolio(self, portfolio_id: str, intent_id: str) -> None:
+    async def remove_intent_from_portfolio(
+        self, portfolio_id: str, intent_id: str
+    ) -> None:
         """Remove an intent from a portfolio."""
         response = await self._client.delete(
             f"/api/v1/portfolios/{portfolio_id}/intents/{intent_id}"
@@ -2932,7 +2972,9 @@ class AsyncOpenIntentClient:
                 "subscriber_id": self.agent_id,
                 "webhook_url": webhook_url,
                 "event_types": event_types or [],
-                "expires_at": (datetime.now() + timedelta(hours=expires_in_hours)).isoformat(),
+                "expires_at": (
+                    datetime.now() + timedelta(hours=expires_in_hours)
+                ).isoformat(),
             },
         )
         data = self._handle_response(response)
@@ -3067,7 +3109,9 @@ class AsyncOpenIntentClient:
             intent_id: The intent ID.
             entry_id: The ACL entry ID to revoke.
         """
-        response = await self._client.delete(f"/api/v1/intents/{intent_id}/acl/entries/{entry_id}")
+        response = await self._client.delete(
+            f"/api/v1/intents/{intent_id}/acl/entries/{entry_id}"
+        )
         if response.status_code != 204:
             self._handle_response(response)
 
@@ -3120,7 +3164,9 @@ class AsyncOpenIntentClient:
         Returns:
             List of access requests.
         """
-        response = await self._client.get(f"/api/v1/intents/{intent_id}/access-requests")
+        response = await self._client.get(
+            f"/api/v1/intents/{intent_id}/access-requests"
+        )
         data = self._handle_response(response)
         items = data.get("access_requests", data) if isinstance(data, dict) else data
         return [AccessRequest.from_dict(r) for r in items]
@@ -3210,7 +3256,9 @@ class AsyncOpenIntentClient:
             model=model,
             parent_request_id=parent_request_id,
         )
-        return await self.log_event(intent_id, EventType.TOOL_CALL_STARTED, payload.to_dict())
+        return await self.log_event(
+            intent_id, EventType.TOOL_CALL_STARTED, payload.to_dict()
+        )
 
     async def log_tool_call_completed(
         self,
@@ -3233,7 +3281,9 @@ class AsyncOpenIntentClient:
             provider=provider,
             model=model,
         )
-        return await self.log_event(intent_id, EventType.TOOL_CALL_COMPLETED, payload.to_dict())
+        return await self.log_event(
+            intent_id, EventType.TOOL_CALL_COMPLETED, payload.to_dict()
+        )
 
     async def log_tool_call_failed(
         self,
@@ -3256,7 +3306,9 @@ class AsyncOpenIntentClient:
             provider=provider,
             model=model,
         )
-        return await self.log_event(intent_id, EventType.TOOL_CALL_FAILED, payload.to_dict())
+        return await self.log_event(
+            intent_id, EventType.TOOL_CALL_FAILED, payload.to_dict()
+        )
 
     # ==================== LLM Request Logging ====================
 
@@ -3283,7 +3335,9 @@ class AsyncOpenIntentClient:
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return await self.log_event(intent_id, EventType.LLM_REQUEST_STARTED, payload.to_dict())
+        return await self.log_event(
+            intent_id, EventType.LLM_REQUEST_STARTED, payload.to_dict()
+        )
 
     async def log_llm_request_completed(
         self,
@@ -3314,7 +3368,9 @@ class AsyncOpenIntentClient:
             total_tokens=total_tokens,
             duration_ms=duration_ms,
         )
-        return await self.log_event(intent_id, EventType.LLM_REQUEST_COMPLETED, payload.to_dict())
+        return await self.log_event(
+            intent_id, EventType.LLM_REQUEST_COMPLETED, payload.to_dict()
+        )
 
     async def log_llm_request_failed(
         self,
@@ -3335,7 +3391,9 @@ class AsyncOpenIntentClient:
             error=error,
             duration_ms=duration_ms,
         )
-        return await self.log_event(intent_id, EventType.LLM_REQUEST_FAILED, payload.to_dict())
+        return await self.log_event(
+            intent_id, EventType.LLM_REQUEST_FAILED, payload.to_dict()
+        )
 
     # ==================== Stream Coordination ====================
 
@@ -3356,7 +3414,9 @@ class AsyncOpenIntentClient:
             model=model,
             started_at=datetime.now(),
         )
-        return await self.log_event(intent_id, EventType.STREAM_STARTED, payload.to_dict())
+        return await self.log_event(
+            intent_id, EventType.STREAM_STARTED, payload.to_dict()
+        )
 
     async def log_stream_chunk(
         self,
@@ -3397,7 +3457,9 @@ class AsyncOpenIntentClient:
             tokens_streamed=tokens_streamed,
             completed_at=datetime.now(),
         )
-        return await self.log_event(intent_id, EventType.STREAM_COMPLETED, payload.to_dict())
+        return await self.log_event(
+            intent_id, EventType.STREAM_COMPLETED, payload.to_dict()
+        )
 
     async def cancel_stream(
         self,
@@ -3422,7 +3484,9 @@ class AsyncOpenIntentClient:
             cancelled_at=datetime.now(),
             cancel_reason=reason,
         )
-        return await self.log_event(intent_id, EventType.STREAM_CANCELLED, payload.to_dict())
+        return await self.log_event(
+            intent_id, EventType.STREAM_CANCELLED, payload.to_dict()
+        )
 
     # ==================== Task Decomposition & Planning (RFC-0012) ====================
 
@@ -3450,7 +3514,9 @@ class AsyncOpenIntentClient:
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         if status:
             params["status"] = status.value
-        response = await self._client.get(f"/api/v1/intents/{intent_id}/tasks", params=params)
+        response = await self._client.get(
+            f"/api/v1/intents/{intent_id}/tasks", params=params
+        )
         data = self._handle_response(response)
         return [Task.from_dict(t) for t in data]
 
@@ -3525,7 +3591,9 @@ class AsyncOpenIntentClient:
     ) -> list[CoordinatorLease]:  # noqa: E501
         """List coordinator leases (RFC-0013)."""
         if intent_id:
-            response = await self._client.get(f"/api/v1/intents/{intent_id}/coordinators")
+            response = await self._client.get(
+                f"/api/v1/intents/{intent_id}/coordinators"
+            )
             data = self._handle_response(response)
             return [CoordinatorLease.from_dict(c) for c in data]
         return []
@@ -3556,7 +3624,9 @@ class AsyncOpenIntentClient:
         response = await self._client.post("/api/v1/decisions", json=payload)
         return self._handle_response(response)
 
-    async def list_decision_records(self, intent_id: str, limit: int = 50) -> list[dict]:
+    async def list_decision_records(
+        self, intent_id: str, limit: int = 50
+    ) -> list[dict]:
         """List decision records for an intent (RFC-0013)."""
         response = await self._client.get(
             f"/api/v1/intents/{intent_id}/coordinator-decisions",
@@ -3728,11 +3798,15 @@ class AsyncOpenIntentClient:
             params["memory_type"] = memory_type
         if tags:
             params["tags"] = ",".join(tags)
-        response = await self._client.get(f"/api/v1/agents/{agent_id}/memory", params=params)
+        response = await self._client.get(
+            f"/api/v1/agents/{agent_id}/memory", params=params
+        )
         data = self._handle_response(response)
         return [MemoryEntry.from_dict(m) for m in data]
 
-    async def update_memory(self, entry_id: str, version: int, **kwargs: Any) -> MemoryEntry:
+    async def update_memory(
+        self, entry_id: str, version: int, **kwargs: Any
+    ) -> MemoryEntry:
         """Update a memory entry with optimistic concurrency (RFC-0015)."""
         response = await self._client.patch(
             f"/api/v1/memory/{entry_id}",
@@ -3794,7 +3868,9 @@ class AsyncOpenIntentClient:
             "current_load": current_load,
             "tasks_in_progress": tasks_in_progress or [],
         }  # noqa: E501
-        response = await self._client.post(f"/api/v1/agents/{agent_id}/heartbeat", json=payload)
+        response = await self._client.post(
+            f"/api/v1/agents/{agent_id}/heartbeat", json=payload
+        )
         return self._handle_response(response)
 
     async def update_agent_status(self, agent_id: str, status: str) -> dict:
@@ -3806,7 +3882,9 @@ class AsyncOpenIntentClient:
 
     # ==================== Triggers & Reactive Scheduling (RFC-0017) ====================
 
-    async def create_trigger(self, name: str, trigger_type: str, **kwargs: Any) -> Trigger:
+    async def create_trigger(
+        self, name: str, trigger_type: str, **kwargs: Any
+    ) -> Trigger:
         """Create a trigger (RFC-0017)."""
         payload: dict[str, Any] = {"name": name, "type": trigger_type}
         payload.update(kwargs)
@@ -3833,7 +3911,9 @@ class AsyncOpenIntentClient:
         data = self._handle_response(response)
         return [Trigger.from_dict(t) for t in data]
 
-    async def update_trigger(self, trigger_id: str, version: int, **kwargs: Any) -> Trigger:
+    async def update_trigger(
+        self, trigger_id: str, version: int, **kwargs: Any
+    ) -> Trigger:
         """Update a trigger with optimistic concurrency (RFC-0017)."""
         response = await self._client.patch(
             f"/api/v1/triggers/{trigger_id}",

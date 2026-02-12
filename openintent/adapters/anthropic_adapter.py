@@ -136,12 +136,16 @@ class AnthropicAdapter(BaseAdapter):
                     provider="anthropic",
                     model=model,
                     messages_count=len(messages),
-                    tools_available=([t.get("name", "") for t in tools] if tools else None),
+                    tools_available=(
+                        [t.get("name", "") for t in tools] if tools else None
+                    ),
                     stream=False,
                     temperature=temperature,
                 )
             except Exception as e:
-                self._handle_error(e, {"phase": "request_started", "request_id": request_id})
+                self._handle_error(
+                    e, {"phase": "request_started", "request_id": request_id}
+                )
 
         start_time = time.time()
 
@@ -166,7 +170,9 @@ class AnthropicAdapter(BaseAdapter):
                         messages_count=len(messages),
                         response_content=text_content if text_content else None,
                         finish_reason=getattr(response, "stop_reason", None),
-                        prompt_tokens=(getattr(usage, "input_tokens", None) if usage else None),
+                        prompt_tokens=(
+                            getattr(usage, "input_tokens", None) if usage else None
+                        ),
                         completion_tokens=(
                             getattr(usage, "output_tokens", None) if usage else None
                         ),
@@ -181,7 +187,9 @@ class AnthropicAdapter(BaseAdapter):
                         duration_ms=duration_ms,
                     )
                 except Exception as e:
-                    self._handle_error(e, {"phase": "request_completed", "request_id": request_id})
+                    self._handle_error(
+                        e, {"phase": "request_completed", "request_id": request_id}
+                    )
 
             if self._config.log_tool_calls:
                 self._log_tool_use(response, model)
@@ -229,13 +237,17 @@ class AnthropicAdapter(BaseAdapter):
                     tool_name=name,
                     tool_id=tool_id,
                     arguments=(
-                        input_data if isinstance(input_data, dict) else {"raw": str(input_data)}
+                        input_data
+                        if isinstance(input_data, dict)
+                        else {"raw": str(input_data)}
                     ),
                     provider="anthropic",
                     model=model,
                 )
             except Exception as e:
-                self._handle_error(e, {"phase": "tool_call_started", "tool_id": tool_id})
+                self._handle_error(
+                    e, {"phase": "tool_call_started", "tool_id": tool_id}
+                )
 
 
 class AnthropicStreamContext:
@@ -272,7 +284,9 @@ class AnthropicStreamContext:
                     provider="anthropic",
                     model=model,
                     messages_count=len(messages),
-                    tools_available=([t.get("name", "") for t in tools] if tools else None),
+                    tools_available=(
+                        [t.get("name", "") for t in tools] if tools else None
+                    ),
                     stream=True,
                     temperature=temperature,
                 )
@@ -361,16 +375,20 @@ class AnthropicStreamContext:
 
         if self._adapter._config.log_streams and stream_id:
             try:
-                completion_tokens = self._usage.get("output_tokens") if self._usage else None
+                completion_tokens = (
+                    self._usage.get("output_tokens") if self._usage else None
+                )
                 self._adapter._client.complete_stream(
                     self._adapter._intent_id,
                     stream_id=stream_id,
                     provider="anthropic",
                     model=model,
                     chunks_received=self._chunk_count,
-                    tokens_streamed=completion_tokens
-                    if completion_tokens is not None
-                    else len("".join(self._content_parts)),
+                    tokens_streamed=(
+                        completion_tokens
+                        if completion_tokens is not None
+                        else len("".join(self._content_parts))
+                    ),
                 )
             except Exception as e:
                 self._adapter._handle_error(
@@ -399,8 +417,12 @@ class AnthropicStreamContext:
                         "".join(self._content_parts) if self._content_parts else None
                     ),
                     finish_reason=self._stop_reason,
-                    prompt_tokens=(self._usage.get("input_tokens") if self._usage else None),
-                    completion_tokens=(self._usage.get("output_tokens") if self._usage else None),
+                    prompt_tokens=(
+                        self._usage.get("input_tokens") if self._usage else None
+                    ),
+                    completion_tokens=(
+                        self._usage.get("output_tokens") if self._usage else None
+                    ),
                     total_tokens=total_tokens,
                     duration_ms=duration_ms,
                 )
@@ -439,13 +461,16 @@ class AnthropicStreamWrapper:
         for text in self._stream.text_stream:
             self._context._chunk_count += 1
             self._context._content_parts.append(text)
-            self._context._adapter._invoke_on_token(text, self._context._stream_id or "")
+            self._context._adapter._invoke_on_token(
+                text, self._context._stream_id or ""
+            )
 
             stream_id = self._context._stream_id
             if (
                 self._context._adapter._config.log_stream_chunks
                 and stream_id
-                and self._context._chunk_count % self._context._adapter._config.chunk_log_interval
+                and self._context._chunk_count
+                % self._context._adapter._config.chunk_log_interval
                 == 0
             ):
                 try:

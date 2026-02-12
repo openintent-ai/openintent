@@ -222,7 +222,9 @@ class TestDatabaseRFC0013:
             lease = db.create_coordinator_lease(
                 session, agent_id="coordinator-1", intent_id=intent_id
             )
-            updated = db.update_coordinator_heartbeat(session, lease.id, "coordinator-1")
+            updated = db.update_coordinator_heartbeat(
+                session, lease.id, "coordinator-1"
+            )
             assert updated is not None
             assert updated.last_heartbeat is not None
         finally:
@@ -566,7 +568,9 @@ class TestDatabaseRFC0015:
                 value={"old": True},
                 memory_type="working",
             )
-            updated = db.update_memory_entry(session, entry.id, entry.version, value={"new": True})
+            updated = db.update_memory_entry(
+                session, entry.id, entry.version, value={"new": True}
+            )
             assert updated is not None
             assert updated.value == {"new": True}
             assert updated.version == 2
@@ -769,7 +773,9 @@ class TestDatabaseRFC0017:
         session = db.get_session()
         try:
             trigger = db.create_trigger(session, name="T1", type="schedule")
-            db.update_trigger(session, trigger.trigger_id, trigger.version, enabled=False)
+            db.update_trigger(
+                session, trigger.trigger_id, trigger.version, enabled=False
+            )
             result = db.update_trigger(session, trigger.trigger_id, 1, enabled=True)
             assert result is None
         finally:

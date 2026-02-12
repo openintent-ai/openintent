@@ -29,7 +29,9 @@ class NotFoundError(OpenIntentError):
 class ConflictError(OpenIntentError):
     """Raised when there's a version conflict during optimistic concurrency control."""
 
-    def __init__(self, message: str, current_version: Optional[int] = None, **kwargs: Any) -> None:
+    def __init__(
+        self, message: str, current_version: Optional[int] = None, **kwargs: Any
+    ) -> None:
         super().__init__(message, **kwargs)
         self.current_version = current_version
 
@@ -50,7 +52,9 @@ class LeaseConflictError(OpenIntentError):
 class ValidationError(OpenIntentError):
     """Raised when request validation fails."""
 
-    def __init__(self, message: str, errors: Optional[list[Any]] = None, **kwargs: Any) -> None:
+    def __init__(
+        self, message: str, errors: Optional[list[Any]] = None, **kwargs: Any
+    ) -> None:
         super().__init__(message, **kwargs)
         self.errors = errors or []
 

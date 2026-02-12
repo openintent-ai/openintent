@@ -34,7 +34,9 @@ class ServerConfig:
 
     def __post_init__(self):
         if self.database_url is None:
-            self.database_url = os.environ.get("DATABASE_URL", "sqlite:///./openintent.db")
+            self.database_url = os.environ.get(
+                "DATABASE_URL", "sqlite:///./openintent.db"
+            )
 
         env_keys = os.environ.get("OPENINTENT_API_KEYS")
         if env_keys:

@@ -325,7 +325,9 @@ class WorkflowSpec:
         return spec
 
     @classmethod
-    def from_string(cls, yaml_content: str, source_name: str = "<string>") -> "WorkflowSpec":
+    def from_string(
+        cls, yaml_content: str, source_name: str = "<string>"
+    ) -> "WorkflowSpec":
         """
         Load and validate a workflow from a YAML string.
 
@@ -426,7 +428,9 @@ class WorkflowSpec:
                     merged: dict[str, Any] = {}
                     if legacy_access:
                         merged["policy"] = legacy_access.get("policy", "open")
-                        merged["default"] = legacy_access.get("default_permission", "read")
+                        merged["default"] = legacy_access.get(
+                            "default_permission", "read"
+                        )
                         acl = legacy_access.get("acl", [])
                         merged["allow"] = [
                             {
@@ -520,7 +524,9 @@ class WorkflowSpec:
             for dep in phase.depends_on:
                 if dep not in phase_names:
                     # Try matching by title
-                    title_match = next((p.name for p in self.phases if p.title == dep), None)
+                    title_match = next(
+                        (p.name for p in self.phases if p.title == dep), None
+                    )
                     if title_match:
                         # Allow title references
                         continue
@@ -650,7 +656,9 @@ class WorkflowSpec:
             if self.governance.access_review:
                 governance_policy["access_review"] = self.governance.access_review
             if self.governance.audit_access_events is not True:
-                governance_policy["audit_access_events"] = self.governance.audit_access_events
+                governance_policy["audit_access_events"] = (
+                    self.governance.audit_access_events
+                )
 
         return PortfolioSpec(
             name=self.name,
@@ -685,7 +693,11 @@ class WorkflowSpec:
             print(f"Server: {server_url}")
             print(f"Phases: {len(self.phases)}")
             for i, phase in enumerate(self.phases, 1):
-                deps = f" (after: {', '.join(phase.depends_on)})" if phase.depends_on else ""
+                deps = (
+                    f" (after: {', '.join(phase.depends_on)})"
+                    if phase.depends_on
+                    else ""
+                )
                 print(f"  {i}. {phase.title} -> {phase.assign}{deps}")
             print()
 

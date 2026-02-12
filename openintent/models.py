@@ -568,10 +568,14 @@ class Intent:
             parent_intent_id=data.get("parent_intent_id") or data.get("parentIntentId"),
             depends_on=data.get("depends_on") or data.get("dependsOn") or [],
             created_at=(
-                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
+                datetime.fromisoformat(data["created_at"])
+                if data.get("created_at")
+                else None
             ),
             updated_at=(
-                datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else None
+                datetime.fromisoformat(data["updated_at"])
+                if data.get("updated_at")
+                else None
             ),
             created_by=data.get("created_by"),
             confidence=data.get("confidence", 0),
@@ -856,12 +860,18 @@ class IntentPortfolio:
             created_by=data.get("created_by", data.get("createdBy", "")),
             status=PortfolioStatus(data.get("status", "active")),
             metadata=data.get("metadata", {}),
-            governance_policy=data.get("governance_policy", data.get("governancePolicy", {})),
+            governance_policy=data.get(
+                "governance_policy", data.get("governancePolicy", {})
+            ),
             created_at=(
-                datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+                datetime.fromisoformat(data["createdAt"])
+                if data.get("createdAt")
+                else None
             ),
             updated_at=(
-                datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
+                datetime.fromisoformat(data["updatedAt"])
+                if data.get("updatedAt")
+                else None
             ),
             intents=intents,
             aggregate_status=aggregate,
@@ -909,7 +919,9 @@ class IntentAttachment:
             metadata=data.get("metadata", {}),
             uploaded_by=data.get("uploaded_by", data.get("uploadedBy", "")),
             created_at=(
-                datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+                datetime.fromisoformat(data["createdAt"])
+                if data.get("createdAt")
+                else None
             ),
         )
 
@@ -955,7 +967,9 @@ class IntentCost:
             provider=data.get("provider"),
             metadata=data.get("metadata", {}),
             recorded_at=(
-                datetime.fromisoformat(data["recordedAt"]) if data.get("recordedAt") else None
+                datetime.fromisoformat(data["recordedAt"])
+                if data.get("recordedAt")
+                else None
             ),
         )
 
@@ -1024,13 +1038,21 @@ class RetryPolicy:
             max_retries=data.get("max_retries", data.get("maxRetries", 3)),
             base_delay_ms=data.get("base_delay_ms", data.get("baseDelayMs", 1000)),
             max_delay_ms=data.get("max_delay_ms", data.get("maxDelayMs", 60000)),
-            fallback_agent_id=data.get("fallback_agent_id", data.get("fallbackAgentId")),
-            failure_threshold=data.get("failure_threshold", data.get("failureThreshold", 3)),
+            fallback_agent_id=data.get(
+                "fallback_agent_id", data.get("fallbackAgentId")
+            ),
+            failure_threshold=data.get(
+                "failure_threshold", data.get("failureThreshold", 3)
+            ),
             created_at=(
-                datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+                datetime.fromisoformat(data["createdAt"])
+                if data.get("createdAt")
+                else None
             ),
             updated_at=(
-                datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
+                datetime.fromisoformat(data["updatedAt"])
+                if data.get("updatedAt")
+                else None
             ),
         )
 
@@ -1082,11 +1104,15 @@ class IntentFailure:
                 else None
             ),
             resolved_at=(
-                datetime.fromisoformat(data["resolvedAt"]) if data.get("resolvedAt") else None
+                datetime.fromisoformat(data["resolvedAt"])
+                if data.get("resolvedAt")
+                else None
             ),
             metadata=data.get("metadata", {}),
             created_at=(
-                datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+                datetime.fromisoformat(data["createdAt"])
+                if data.get("createdAt")
+                else None
             ),
         )
 
@@ -1130,10 +1156,14 @@ class IntentSubscription:
             webhook_url=data.get("webhook_url", data.get("webhookUrl")),
             active=bool(data.get("active", 1)),
             expires_at=(
-                datetime.fromisoformat(data["expiresAt"]) if data.get("expiresAt") else None
+                datetime.fromisoformat(data["expiresAt"])
+                if data.get("expiresAt")
+                else None
             ),
             created_at=(
-                datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+                datetime.fromisoformat(data["createdAt"])
+                if data.get("createdAt")
+                else None
             ),
         )
 
@@ -1328,13 +1358,19 @@ class StreamState:
             chunks_received=data.get("chunks_received", 0),
             tokens_streamed=data.get("tokens_streamed", 0),
             started_at=(
-                datetime.fromisoformat(data["started_at"]) if data.get("started_at") else None
+                datetime.fromisoformat(data["started_at"])
+                if data.get("started_at")
+                else None
             ),
             completed_at=(
-                datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None
+                datetime.fromisoformat(data["completed_at"])
+                if data.get("completed_at")
+                else None
             ),
             cancelled_at=(
-                datetime.fromisoformat(data["cancelled_at"]) if data.get("cancelled_at") else None
+                datetime.fromisoformat(data["cancelled_at"])
+                if data.get("cancelled_at")
+                else None
             ),
             cancel_reason=data.get("cancel_reason"),
             error=data.get("error"),
@@ -1375,10 +1411,14 @@ class ACLEntry:
             permission=Permission(data.get("permission", "read")),
             granted_by=data.get("granted_by", ""),
             granted_at=(
-                datetime.fromisoformat(data["granted_at"]) if data.get("granted_at") else None
+                datetime.fromisoformat(data["granted_at"])
+                if data.get("granted_at")
+                else None
             ),
             expires_at=(
-                datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None
+                datetime.fromisoformat(data["expires_at"])
+                if data.get("expires_at")
+                else None
             ),
             reason=data.get("reason"),
         )
@@ -1454,11 +1494,15 @@ class AccessRequest:
             capabilities=data.get("capabilities", []),
             decided_by=data.get("decided_by"),
             decided_at=(
-                datetime.fromisoformat(data["decided_at"]) if data.get("decided_at") else None
+                datetime.fromisoformat(data["decided_at"])
+                if data.get("decided_at")
+                else None
             ),
             decision_reason=data.get("decision_reason"),
             created_at=(
-                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
+                datetime.fromisoformat(data["created_at"])
+                if data.get("created_at")
+                else None
             ),
         )
 
@@ -1485,7 +1529,9 @@ class PeerInfo:
         return cls(
             principal_id=data["principal_id"],
             principal_type=data.get("principal_type", "agent"),
-            permission=(Permission(data["permission"]) if data.get("permission") else None),
+            permission=(
+                Permission(data["permission"]) if data.get("permission") else None
+            ),
         )
 
 
@@ -1529,7 +1575,9 @@ class IntentContext:
         parent = Intent.from_dict(data["parent"]) if data.get("parent") else None
         acl = IntentACL.from_dict(data["acl"]) if data.get("acl") else None
         events = [IntentEvent.from_dict(e) for e in data.get("events", [])]
-        attachments = [IntentAttachment.from_dict(a) for a in data.get("attachments", [])]
+        attachments = [
+            IntentAttachment.from_dict(a) for a in data.get("attachments", [])
+        ]
         peers = [PeerInfo.from_dict(p) for p in data.get("peers", [])]
         perm = Permission(data["my_permission"]) if data.get("my_permission") else None
         return cls(
@@ -1595,7 +1643,9 @@ class Checkpoint:
             status=data.get("status", "pending"),
             approved_by=data.get("approved_by"),
             approved_at=(
-                datetime.fromisoformat(data["approved_at"]) if data.get("approved_at") else None
+                datetime.fromisoformat(data["approved_at"])
+                if data.get("approved_at")
+                else None
             ),
         )
 
@@ -1771,7 +1821,9 @@ class Task:
         memory_policy = None
         if data.get("memory_policy"):
             memory_policy = MemoryPolicy.from_dict(data["memory_policy"])
-        requires_tools = [ToolRequirement.from_dict(t) for t in data.get("requires_tools", [])]
+        requires_tools = [
+            ToolRequirement.from_dict(t) for t in data.get("requires_tools", [])
+        ]
         return cls(
             id=data["id"],
             intent_id=data.get("intent_id", ""),
@@ -1801,13 +1853,19 @@ class Task:
             error=data.get("error"),
             metadata=data.get("metadata", {}),
             created_at=(
-                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
+                datetime.fromisoformat(data["created_at"])
+                if data.get("created_at")
+                else None
             ),
             started_at=(
-                datetime.fromisoformat(data["started_at"]) if data.get("started_at") else None
+                datetime.fromisoformat(data["started_at"])
+                if data.get("started_at")
+                else None
             ),
             completed_at=(
-                datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None
+                datetime.fromisoformat(data["completed_at"])
+                if data.get("completed_at")
+                else None
             ),
         )
 
@@ -1862,10 +1920,14 @@ class Plan:
             on_complete=data.get("on_complete", "notify"),
             metadata=data.get("metadata", {}),
             created_at=(
-                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
+                datetime.fromisoformat(data["created_at"])
+                if data.get("created_at")
+                else None
             ),
             updated_at=(
-                datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else None
+                datetime.fromisoformat(data["updated_at"])
+                if data.get("updated_at")
+                else None
             ),
         )
 
@@ -1925,7 +1987,9 @@ class Guardrails:
         if self.max_task_wait_hours is not None:
             result["max_task_wait_hours"] = self.max_task_wait_hours
         if self.require_progress_every_minutes is not None:
-            result["require_progress_every_minutes"] = self.require_progress_every_minutes
+            result["require_progress_every_minutes"] = (
+                self.require_progress_every_minutes
+            )
         if self.max_working_memory_per_task is not None:
             result["max_working_memory_per_task"] = self.max_working_memory_per_task
         if self.max_episodic_memory_per_agent is not None:
@@ -1941,7 +2005,9 @@ class Guardrails:
         return cls(
             max_budget_usd=data.get("max_budget_usd"),
             warn_at_percentage=data.get("warn_at_percentage", 80),
-            on_exceed=GuardrailExceedAction(data.get("on_exceed", "pause_and_escalate")),
+            on_exceed=GuardrailExceedAction(
+                data.get("on_exceed", "pause_and_escalate")
+            ),
             max_tasks_per_plan=data.get("max_tasks_per_plan", 20),
             max_delegation_depth=data.get("max_delegation_depth", 3),
             max_concurrent_tasks=data.get("max_concurrent_tasks", 10),
@@ -1954,7 +2020,9 @@ class Guardrails:
             requires_plan_review=data.get("requires_plan_review", False),
             requires_replan_review=data.get("requires_replan_review", False),
             auto_escalate_after_failures=data.get("auto_escalate_after_failures", 3),
-            require_human_for_capabilities=data.get("require_human_for_capabilities", []),
+            require_human_for_capabilities=data.get(
+                "require_human_for_capabilities", []
+            ),
             max_working_memory_per_task=data.get("max_working_memory_per_task"),
             max_episodic_memory_per_agent=data.get("max_episodic_memory_per_agent"),
             allowed_semantic_namespaces=data.get("allowed_semantic_namespaces"),
@@ -2037,10 +2105,14 @@ class CoordinatorLease:
                 else None
             ),
             granted_at=(
-                datetime.fromisoformat(data["granted_at"]) if data.get("granted_at") else None
+                datetime.fromisoformat(data["granted_at"])
+                if data.get("granted_at")
+                else None
             ),
             expires_at=(
-                datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None
+                datetime.fromisoformat(data["expires_at"])
+                if data.get("expires_at")
+                else None
             ),
             version=data.get("version", 1),
             metadata=data.get("metadata", {}),
@@ -2090,7 +2162,9 @@ class DecisionRecord:
             alternatives_considered=data.get("alternatives_considered", []),
             confidence=data.get("confidence"),
             timestamp=(
-                datetime.fromisoformat(data["timestamp"]) if data.get("timestamp") else None
+                datetime.fromisoformat(data["timestamp"])
+                if data.get("timestamp")
+                else None
             ),
         )
 
@@ -2129,7 +2203,9 @@ class CredentialVault:
             name=data.get("name", ""),
             credentials=data.get("credentials", []),
             created_at=(
-                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
+                datetime.fromisoformat(data["created_at"])
+                if data.get("created_at")
+                else None
             ),
         )
 
@@ -2181,13 +2257,19 @@ class Credential:
             status=CredentialStatus(data.get("status", "active")),
             metadata=data.get("metadata", {}),
             created_at=(
-                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
+                datetime.fromisoformat(data["created_at"])
+                if data.get("created_at")
+                else None
             ),
             rotated_at=(
-                datetime.fromisoformat(data["rotated_at"]) if data.get("rotated_at") else None
+                datetime.fromisoformat(data["rotated_at"])
+                if data.get("rotated_at")
+                else None
             ),
             expires_at=(
-                datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None
+                datetime.fromisoformat(data["expires_at"])
+                if data.get("expires_at")
+                else None
             ),
         )
 
@@ -2291,13 +2373,19 @@ class ToolGrant:
             context=data.get("context", {}),
             status=GrantStatus(data.get("status", "active")),
             expires_at=(
-                datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None
+                datetime.fromisoformat(data["expires_at"])
+                if data.get("expires_at")
+                else None
             ),
             created_at=(
-                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
+                datetime.fromisoformat(data["created_at"])
+                if data.get("created_at")
+                else None
             ),
             revoked_at=(
-                datetime.fromisoformat(data["revoked_at"]) if data.get("revoked_at") else None
+                datetime.fromisoformat(data["revoked_at"])
+                if data.get("revoked_at")
+                else None
             ),
         )
 
@@ -2362,7 +2450,9 @@ class ToolInvocation:
             idempotency_key=data.get("idempotency_key"),
             context=data.get("context", {}),
             timestamp=(
-                datetime.fromisoformat(data["timestamp"]) if data.get("timestamp") else None
+                datetime.fromisoformat(data["timestamp"])
+                if data.get("timestamp")
+                else None
             ),
         )
 
@@ -2465,17 +2555,25 @@ class MemoryEntry:
             pinned=data.get("pinned", False),
             priority=MemoryPriority(data.get("priority", "normal")),
             sensitivity=(
-                MemorySensitivity(data["sensitivity"]) if data.get("sensitivity") else None
+                MemorySensitivity(data["sensitivity"])
+                if data.get("sensitivity")
+                else None
             ),
             curated_by=data.get("curated_by"),
             created_at=(
-                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
+                datetime.fromisoformat(data["created_at"])
+                if data.get("created_at")
+                else None
             ),
             updated_at=(
-                datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else None
+                datetime.fromisoformat(data["updated_at"])
+                if data.get("updated_at")
+                else None
             ),
             expires_at=(
-                datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None
+                datetime.fromisoformat(data["expires_at"])
+                if data.get("expires_at")
+                else None
             ),
         )
 
@@ -2758,9 +2856,13 @@ class TriggerCondition:
             cron=data.get("cron"),
             timezone=data.get("timezone", "UTC"),
             starts_at=(
-                datetime.fromisoformat(data["starts_at"]) if data.get("starts_at") else None
+                datetime.fromisoformat(data["starts_at"])
+                if data.get("starts_at")
+                else None
             ),
-            ends_at=(datetime.fromisoformat(data["ends_at"]) if data.get("ends_at") else None),
+            ends_at=(
+                datetime.fromisoformat(data["ends_at"]) if data.get("ends_at") else None
+            ),
             at=(datetime.fromisoformat(data["at"]) if data.get("at") else None),
             event=data.get("event"),
             filter=data.get("filter"),
@@ -2863,10 +2965,14 @@ class Trigger:
             fire_count=data.get("fire_count", 0),
             version=data.get("version", 1),
             created_at=(
-                datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None
+                datetime.fromisoformat(data["created_at"])
+                if data.get("created_at")
+                else None
             ),
             updated_at=(
-                datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else None
+                datetime.fromisoformat(data["updated_at"])
+                if data.get("updated_at")
+                else None
             ),
             last_fired_at=(
                 datetime.fromisoformat(data["last_fired_at"])

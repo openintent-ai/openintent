@@ -591,7 +591,9 @@ class BaseAgent(ABC):
         if final_state:
             await self.async_client.update_state(intent_id, intent.version, final_state)
             intent = await self.async_client.get_intent(intent_id)
-        await self.async_client.set_status(intent_id, IntentStatus.COMPLETED, intent.version)
+        await self.async_client.set_status(
+            intent_id, IntentStatus.COMPLETED, intent.version
+        )
 
     async def log(self, intent_id: str, message: str, **data: Any) -> None:
         """Log a comment event to an intent."""
@@ -726,15 +728,30 @@ class BaseAgent(ABC):
     async def _handle_event(self, event: SSEEvent) -> None:
         """Route SSE events to appropriate handlers."""
         try:
-            if event.type == SSEEventType.AGENT_ASSIGNED or event.type == "AGENT_ASSIGNED":
+            if (
+                event.type == SSEEventType.AGENT_ASSIGNED
+                or event.type == "AGENT_ASSIGNED"
+            ):
                 await self._on_assignment(event)
-            elif event.type == SSEEventType.STATUS_CHANGED or event.type == "STATUS_CHANGED":
+            elif (
+                event.type == SSEEventType.STATUS_CHANGED
+                or event.type == "STATUS_CHANGED"
+            ):
                 await self._on_status_change(event)
-            elif event.type == SSEEventType.LEASE_RELEASED or event.type == "LEASE_RELEASED":
+            elif (
+                event.type == SSEEventType.LEASE_RELEASED
+                or event.type == "LEASE_RELEASED"
+            ):
                 await self._on_lease_released(event)
-            elif event.type == SSEEventType.STATE_CHANGED or event.type == "STATE_CHANGED":
+            elif (
+                event.type == SSEEventType.STATE_CHANGED
+                or event.type == "STATE_CHANGED"
+            ):
                 await self._on_state_change(event)
-            elif event.type == SSEEventType.INTENT_COMPLETED or event.type == "INTENT_COMPLETED":
+            elif (
+                event.type == SSEEventType.INTENT_COMPLETED
+                or event.type == "INTENT_COMPLETED"
+            ):
                 await self._on_intent_complete(event)
             elif (
                 event.type == SSEEventType.ACCESS_REQUESTED
@@ -767,8 +784,14 @@ class BaseAgent(ABC):
         if retry_attempt and self._handlers["retry"]:
             for handler in self._handlers["retry"]:
                 try:
-                    result = await self._call_handler(handler, intent, retry_attempt, last_error)
-                    if result and isinstance(result, dict) and self._config.auto_complete:
+                    result = await self._call_handler(
+                        handler, intent, retry_attempt, last_error
+                    )
+                    if (
+                        result
+                        and isinstance(result, dict)
+                        and self._config.auto_complete
+                    ):
                         await self.patch_state(intent_id, result)
                 except Exception as e:
                     logger.exception(f"Retry handler error: {e}")
@@ -778,7 +801,11 @@ class BaseAgent(ABC):
             for handler in self._handlers["handoff"]:
                 try:
                     result = await self._call_handler(handler, intent, delegated_by)
-                    if result and isinstance(result, dict) and self._config.auto_complete:
+                    if (
+                        result
+                        and isinstance(result, dict)
+                        and self._config.auto_complete
+                    ):
                         await self.patch_state(intent_id, result)
                 except Exception as e:
                     logger.exception(f"Handoff handler error: {e}")
@@ -805,7 +832,9 @@ class BaseAgent(ABC):
                         try:
                             check = await self._call_handler(guardrail, intent, result)
                             if check is False:
-                                logger.warning(f"Output guardrail rejected result for {intent_id}")
+                                logger.warning(
+                                    f"Output guardrail rejected result for {intent_id}"
+                                )
                                 result = None
                                 break
                         except GuardrailError as e:
@@ -998,7 +1027,9 @@ class _MemoryProxy:
         self._memory_type = memory_type
         self._namespace = namespace
 
-    async def store(self, key: str, value: Any, tags: Optional[list[str]] = None) -> Any:
+    async def store(
+        self, key: str, value: Any, tags: Optional[list[str]] = None
+    ) -> Any:
         """Store a memory entry."""
         return await self._client_ref.memory.store(
             agent_id=self._agent_id,
@@ -1009,7 +1040,9 @@ class _MemoryProxy:
             namespace=self._namespace,
         )
 
-    async def recall(self, key: Optional[str] = None, tags: Optional[list[str]] = None) -> Any:
+    async def recall(
+        self, key: Optional[str] = None, tags: Optional[list[str]] = None
+    ) -> Any:
         """Recall memories by key or tags."""
         return await self._client_ref.memory.query(
             agent_id=self._agent_id,
@@ -1051,7 +1084,9 @@ class _TasksProxy:
 
     async def fail(self, task_id: str, error: Optional[str] = None) -> Any:
         """Mark a task as failed."""
-        return await self._client_ref.tasks.update_status(task_id, status="failed", error=error)
+        return await self._client_ref.tasks.update_status(
+            task_id, status="failed", error=error
+        )
 
     async def list(self, intent_id: str, status: Optional[str] = None) -> list:
         """List tasks for an intent, optionally filtered by status."""
@@ -1128,10 +1163,14 @@ def _setup_llm_engine(
     agent_instance._llm_adapter = None
 
     async def think(prompt, intent=None, stream=None, on_token=None, **kw):
-        return await engine.think(prompt, intent=intent, stream=stream, on_token=on_token, **kw)
+        return await engine.think(
+            prompt, intent=intent, stream=stream, on_token=on_token, **kw
+        )
 
     async def think_stream(prompt, intent=None, on_token=None, **kw):
-        return await engine.think(prompt, intent=intent, stream=True, on_token=on_token, **kw)
+        return await engine.think(
+            prompt, intent=intent, stream=True, on_token=on_token, **kw
+        )
 
     agent_instance.think = think
     agent_instance.think_stream = think_stream
@@ -1201,7 +1240,9 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
     def decorator(cls: type) -> type:
         original_init = cls.__init__ if hasattr(cls, "__init__") else None
 
-        def new_init(self, base_url: Optional[str] = None, api_key: Optional[str] = None):
+        def new_init(
+            self, base_url: Optional[str] = None, api_key: Optional[str] = None
+        ):
             BaseAgent.__init__(self, base_url, api_key, config)
             self._agent_id = agent_id
             if capabilities:
@@ -1248,7 +1289,9 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
                 setattr(cls, prop_name, getattr(BaseAgent, prop_name))
 
         @classmethod
-        def run_agent(cls_self, base_url: Optional[str] = None, api_key: Optional[str] = None):
+        def run_agent(
+            cls_self, base_url: Optional[str] = None, api_key: Optional[str] = None
+        ):
             instance = cls_self(base_url, api_key)
             instance.run()
 
@@ -1302,10 +1345,14 @@ def _install_builtin_guardrails(agent_instance, guardrail_names: list[str]) -> N
         elif name == "agent_allowlist":
 
             async def _allowlist_guardrail(intent, result):
-                delegated_to = result.get("delegated_to") if isinstance(result, dict) else None
+                delegated_to = (
+                    result.get("delegated_to") if isinstance(result, dict) else None
+                )
                 if delegated_to and hasattr(agent_instance, "_agents_list"):
                     if delegated_to not in agent_instance._agents_list:
-                        raise GuardrailError(f"Agent '{delegated_to}' not in managed agent list")
+                        raise GuardrailError(
+                            f"Agent '{delegated_to}' not in managed agent list"
+                        )
 
             _allowlist_guardrail._openintent_handler = "output_guardrail"
             agent_instance._handlers["output_guardrail"].append(_allowlist_guardrail)
@@ -1384,7 +1431,9 @@ def Coordinator(  # noqa: N802
     def decorator(cls: type) -> type:
         original_init = cls.__init__ if hasattr(cls, "__init__") else None
 
-        def new_init(self, base_url: Optional[str] = None, api_key: Optional[str] = None):
+        def new_init(
+            self, base_url: Optional[str] = None, api_key: Optional[str] = None
+        ):
             BaseAgent.__init__(self, base_url, api_key, config)
             self._agent_id = coordinator_id
             if capabilities:
@@ -1411,7 +1460,11 @@ def Coordinator(  # noqa: N802
                 if attr_name.startswith("_"):
                     continue
                 method = getattr(self, attr_name, None)
-                if method and callable(method) and hasattr(method, "_openintent_handler"):
+                if (
+                    method
+                    and callable(method)
+                    and hasattr(method, "_openintent_handler")
+                ):
                     handler_type = method._openintent_handler
                     func = getattr(method, "__func__", method)
                     if handler_type in self._handlers and func not in registered_funcs:
@@ -1465,7 +1518,9 @@ def Coordinator(  # noqa: N802
             ordered = self._topological_sort(spec.intents)
 
             for intent_spec in ordered:
-                wait_for = [intent_id_map[dep] for dep in (intent_spec.depends_on or [])]
+                wait_for = [
+                    intent_id_map[dep] for dep in (intent_spec.depends_on or [])
+                ]
                 initial_state = dict(intent_spec.initial_state)
 
                 intent = await self.async_client.create_intent(
@@ -1522,18 +1577,24 @@ def Coordinator(  # noqa: N802
             await self._subscribe_portfolio(portfolio.id)
 
             while True:
-                portfolio_with_intents = await self.async_client.get_portfolio(portfolio.id)
+                portfolio_with_intents = await self.async_client.get_portfolio(
+                    portfolio.id
+                )
                 intents_list, aggregate = await self.async_client.get_portfolio_intents(
                     portfolio.id
                 )
                 portfolio_with_intents.intents = intents_list
                 portfolio_with_intents.aggregate_status = aggregate
 
-                all_complete = all(i.status == IntentStatus.COMPLETED for i in intents_list)
+                all_complete = all(
+                    i.status == IntentStatus.COMPLETED for i in intents_list
+                )
 
                 if all_complete:
                     for handler in self._handlers["all_complete"]:
-                        result = await self._call_handler(handler, portfolio_with_intents)
+                        result = await self._call_handler(
+                            handler, portfolio_with_intents
+                        )
                         if result:
                             return result
                     return self._merge_results(portfolio_with_intents)
@@ -1621,7 +1682,9 @@ def Coordinator(  # noqa: N802
         cls.agents = agents_prop
 
         @classmethod
-        def run_agent(cls_self, base_url: Optional[str] = None, api_key: Optional[str] = None):
+        def run_agent(
+            cls_self, base_url: Optional[str] = None, api_key: Optional[str] = None
+        ):
             instance = cls_self(base_url, api_key)
             instance.run()
 
@@ -1798,7 +1861,9 @@ class Worker:
                             await client.update_state(intent_id, intent.version, result)
                             intent = await client.get_intent(intent_id)
 
-                        await client.set_status(intent_id, IntentStatus.COMPLETED, intent.version)
+                        await client.set_status(
+                            intent_id, IntentStatus.COMPLETED, intent.version
+                        )
                     except Exception as e:
                         logger.exception(f"Worker error: {e}")
 

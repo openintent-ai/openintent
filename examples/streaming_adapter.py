@@ -100,7 +100,9 @@ class StreamingAdapter:
         self._openintent_url = openintent_url or os.getenv(
             "OPENINTENT_API_URL", "http://localhost:8000"
         )
-        self._openintent_key = openintent_key or os.getenv("OPENINTENT_API_KEY", "dev-user-key")
+        self._openintent_key = openintent_key or os.getenv(
+            "OPENINTENT_API_KEY", "dev-user-key"
+        )
 
     async def connect(self):
         """Initialize connection to OpenIntent server."""
@@ -398,7 +400,9 @@ async def demo_streaming():
 
         # Complete the intent
         final = await adapter.intent_client.get_intent(intent.id)
-        await adapter.intent_client.set_status(intent.id, final.version, IntentStatus.COMPLETED)
+        await adapter.intent_client.set_status(
+            intent.id, final.version, IntentStatus.COMPLETED
+        )
 
         # Show recorded costs
         costs = await adapter.intent_client.get_costs(intent.id)

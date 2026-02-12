@@ -417,7 +417,9 @@ class ContextAssembler:
         if custom_prompt:
             parts.append(custom_prompt)
 
-        parts.append(f"\nYou are operating as an OpenIntent {role} with ID '{agent_id}'.")
+        parts.append(
+            f"\nYou are operating as an OpenIntent {role} with ID '{agent_id}'."
+        )
 
         if role == "coordinator" and managed_agents:
             parts.append(
@@ -804,7 +806,9 @@ class LLMEngine:
             if not tool_calls:
                 content = self._extract_content(response)
                 self._conversation_history.append({"role": "user", "content": prompt})
-                self._conversation_history.append({"role": "assistant", "content": content})
+                self._conversation_history.append(
+                    {"role": "assistant", "content": content}
+                )
 
                 if self._config.auto_memory and intent:
                     try:
@@ -839,7 +843,10 @@ class LLMEngine:
                     intent,
                 )
 
-                if tool_name == "clarify" and result.get("status") == "awaiting_response":
+                if (
+                    tool_name == "clarify"
+                    and result.get("status") == "awaiting_response"
+                ):
                     return json.dumps(result)
 
                 messages.append(self._build_tool_result_message(tc, result))
@@ -901,7 +908,10 @@ class LLMEngine:
                     intent,
                 )
 
-                if tool_name == "clarify" and result.get("status") == "awaiting_response":
+                if (
+                    tool_name == "clarify"
+                    and result.get("status") == "awaiting_response"
+                ):
                     yield json.dumps(result)
                     return
 
@@ -1064,7 +1074,9 @@ class LLMEngine:
                 call_kwargs.pop("system", None)
                 return client.chat.completions.create(**call_kwargs)
             except ImportError:
-                raise ImportError("openai package required. Install with: pip install openai")
+                raise ImportError(
+                    "openai package required. Install with: pip install openai"
+                )
 
         elif self._provider in ANTHROPIC_STYLE_PROVIDERS:
             try:
@@ -1166,7 +1178,10 @@ class LLMEngine:
                         yield text
                 else:
                     for event in s:
-                        if hasattr(event, "type") and event.type == "content_block_delta":
+                        if (
+                            hasattr(event, "type")
+                            and event.type == "content_block_delta"
+                        ):
                             if hasattr(event, "delta") and hasattr(event.delta, "text"):
                                 yield event.delta.text
         else:
@@ -1204,7 +1219,9 @@ class LLMEngine:
             content = response.content
             if isinstance(content, list):
                 return " ".join(
-                    getattr(b, "text", "") for b in content if getattr(b, "type", "") == "text"
+                    getattr(b, "text", "")
+                    for b in content
+                    if getattr(b, "type", "") == "text"
                 )
             if isinstance(content, str):
                 return content
