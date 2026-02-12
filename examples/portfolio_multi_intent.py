@@ -282,10 +282,7 @@ async def main():
 
         portfolio = await monitor_portfolio_progress(coordinator.client, portfolio_id)
 
-        if (
-            portfolio.aggregate_status
-            and portfolio.aggregate_status.completion_percentage == 100
-        ):
+        if portfolio.aggregate_status and portfolio.aggregate_status.completion_percentage == 100:
             print("\nAll intents completed! Marking portfolio as completed...")
             await coordinator.client.update_portfolio_status(
                 portfolio_id,
@@ -338,9 +335,7 @@ async def demo_portfolio_queries():
             if p.id:
                 full = await client.get_portfolio(p.id)
                 if full.aggregate_status:
-                    print(
-                        f"  Completion: {full.aggregate_status.completion_percentage}%"
-                    )
+                    print(f"  Completion: {full.aggregate_status.completion_percentage}%")
                 print(f"  Intent count: {len(full.intents)}")
 
     finally:

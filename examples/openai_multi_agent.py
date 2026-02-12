@@ -137,9 +137,7 @@ Respond with JSON containing: {"findings": [...], "key_points": [...], "sources_
             )
             print(f"[{self.role}] Lease acquired: {lease.id}")
 
-            await self.log_activity(
-                intent_id, "Starting research phase", {"topic": topic}
-            )
+            await self.log_activity(intent_id, "Starting research phase", {"topic": topic})
 
             intent = await self.intent_client.get_intent(intent_id)
 
@@ -453,9 +451,7 @@ async def run_pipeline(topic: str):
 
         intent_id = await coordinator.create_research_intent(topic)
 
-        research_task = asyncio.create_task(
-            research_agent.conduct_research(intent_id, topic)
-        )
+        research_task = asyncio.create_task(research_agent.conduct_research(intent_id, topic))
 
         await asyncio.sleep(1)
 
@@ -489,9 +485,7 @@ async def run_pipeline(topic: str):
 
         events = await coordinator.get_audit_trail(intent_id)
         for event in events[-10:]:
-            print(
-                f"  [{event['event_type']}] {event.get('payload', {}).get('message', 'N/A')}"
-            )
+            print(f"  [{event['event_type']}] {event.get('payload', {}).get('message', 'N/A')}")
 
         return intent_id
 
@@ -540,9 +534,7 @@ async def demo_conflict_handling():
         )
 
         print("[Agent 1] Acquiring lease on 'shared-scope'...")
-        lease1 = await client1.acquire_lease(
-            intent.id, "shared-scope", duration_seconds=60
-        )
+        lease1 = await client1.acquire_lease(intent.id, "shared-scope", duration_seconds=60)
         print(f"[Agent 1] Lease acquired: {lease1.id}")
 
         print("[Agent 2] Attempting to acquire same scope...")
@@ -566,9 +558,7 @@ async def demo_conflict_handling():
         await client1.release_lease(intent.id, lease1.id)
 
         print("[Agent 2] Retrying lease acquisition...")
-        lease2 = await client2.acquire_lease(
-            intent.id, "shared-scope", duration_seconds=60
-        )
+        lease2 = await client2.acquire_lease(intent.id, "shared-scope", duration_seconds=60)
         print(f"[Agent 2] Lease acquired: {lease2.id}")
 
         await client2.release_lease(intent.id, lease2.id)

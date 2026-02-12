@@ -19,9 +19,7 @@ import sys
 from datetime import datetime
 
 # Add parent to path for imports
-sys.path.insert(
-    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
 from openintent import Agent, Intent, on_assignment, on_complete
 
@@ -48,11 +46,7 @@ class ReportAgent:
         print(f"\n[REPORT] Processing: {intent.title}")
 
         # Gather all phase data
-        state = (
-            intent.state.to_dict()
-            if hasattr(intent.state, "to_dict")
-            else intent.state or {}
-        )
+        state = intent.state.to_dict() if hasattr(intent.state, "to_dict") else intent.state or {}
         ocr_data = state.get("ocr", {})
         analysis_data = state.get("analysis", {})
         risk_data = state.get("risk", {})
@@ -120,8 +114,7 @@ class ReportAgent:
                 "agent": self.agent_id,
                 "summary": report["summary"],
                 "attachments": ["compliance_report.json", "compliance_summary.md"],
-                "requires_approval": report["summary"]["risk_category"]
-                in ["HIGH", "MEDIUM"],
+                "requires_approval": report["summary"]["risk_category"] in ["HIGH", "MEDIUM"],
             }
         }
 
@@ -139,9 +132,7 @@ class ReportAgent:
                 "sections": len(ocr.get("extracted", {}).get("sections", [])),
             },
             "analysis": {
-                "sections_analyzed": analysis.get("summary", {}).get(
-                    "total_sections", 0
-                ),
+                "sections_analyzed": analysis.get("summary", {}).get("total_sections", 0),
                 "issues_found": analysis.get("summary", {}).get("issues_found", 0),
                 "sections": analysis.get("sections", []),
             },
@@ -149,9 +140,7 @@ class ReportAgent:
                 "category": risk.get("category", "UNKNOWN"),
                 "score": risk.get("average_score", 0),
                 "recommendation": risk.get("recommendation", ""),
-                "high_risk_sections": risk.get("summary", {}).get(
-                    "high_risk_sections", 0
-                ),
+                "high_risk_sections": risk.get("summary", {}).get("high_risk_sections", 0),
             },
             "costs": {
                 "total_usd": risk.get("summary", {}).get("total_cost_usd", 0),

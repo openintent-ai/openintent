@@ -224,9 +224,7 @@ class TestOpenAIAdapter:
         mock_openai.chat.completions.create.return_value = mock_response
 
         config = AdapterConfig(log_requests=False, log_tool_calls=False)
-        adapter = OpenAIAdapter(
-            mock_openai, mock_client, intent_id="test-intent", config=config
-        )
+        adapter = OpenAIAdapter(mock_openai, mock_client, intent_id="test-intent", config=config)
         adapter.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": "Hello"}],

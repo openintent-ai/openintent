@@ -43,11 +43,7 @@ class WritingAgent:
         print(f"   Description: {intent.description}")
 
         # Get research input from state (passed from research phase)
-        state = (
-            intent.state.to_dict()
-            if hasattr(intent.state, "to_dict")
-            else intent.state or {}
-        )
+        state = intent.state.to_dict() if hasattr(intent.state, "to_dict") else intent.state or {}
         research = state.get("research", {})
         research_findings = research.get("findings", "No research provided.")
 

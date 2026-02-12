@@ -245,18 +245,10 @@ class TestNewEventTypes:
         assert EventType.COORDINATOR_UNRESPONSIVE.value == "coordinator.unresponsive"
         assert EventType.COORDINATOR_FAILED_OVER.value == "coordinator.failed_over"
         assert EventType.COORDINATOR_HANDOFF.value == "coordinator.handoff"
-        assert (
-            EventType.COORDINATOR_PLAN_OVERRIDDEN.value == "coordinator.plan_overridden"
-        )
-        assert (
-            EventType.COORDINATOR_GUARDRAILS_UPDATED.value
-            == "coordinator.guardrails_updated"
-        )
+        assert EventType.COORDINATOR_PLAN_OVERRIDDEN.value == "coordinator.plan_overridden"
+        assert EventType.COORDINATOR_GUARDRAILS_UPDATED.value == "coordinator.guardrails_updated"
         assert EventType.COORDINATOR_STALLED.value == "coordinator.stalled"
-        assert (
-            EventType.COORDINATOR_ESCALATION_RESOLVED.value
-            == "coordinator.escalation_resolved"
-        )
+        assert EventType.COORDINATOR_ESCALATION_RESOLVED.value == "coordinator.escalation_resolved"
 
     def test_tool_and_grant_event_types(self):
         assert EventType.TOOL_INVOKED.value == "tool.invoked"
@@ -625,9 +617,7 @@ class TestPlanCondition:
         assert cond.otherwise == "skip"
 
     def test_to_dict(self):
-        cond = PlanCondition(
-            id="c-1", task_id="t-2", when="score > 0.5", otherwise="fail"
-        )
+        cond = PlanCondition(id="c-1", task_id="t-2", when="score > 0.5", otherwise="fail")
         d = cond.to_dict()
         assert d["id"] == "c-1"
         assert d["task_id"] == "t-2"
@@ -706,9 +696,7 @@ class TestToolRequirement:
         assert tr.required is True
 
     def test_to_dict(self):
-        tr = ToolRequirement(
-            service="slack", scopes=["chat:write", "chat:read"], required=False
-        )
+        tr = ToolRequirement(service="slack", scopes=["chat:write", "chat:read"], required=False)
         d = tr.to_dict()
         assert d["service"] == "slack"
         assert d["scopes"] == ["chat:write", "chat:read"]

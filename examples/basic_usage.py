@@ -29,9 +29,7 @@ def main():
     api_key = os.getenv("OPENINTENT_API_KEY", "dev-user-key")
 
     # Initialize client
-    with OpenIntentClient(
-        base_url=base_url, api_key=api_key, agent_id="example-agent"
-    ) as client:
+    with OpenIntentClient(base_url=base_url, api_key=api_key, agent_id="example-agent") as client:
         # 1. Discover protocol capabilities
         print("1. Discovering protocol...")
         try:

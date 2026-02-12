@@ -16,9 +16,7 @@ import os
 import sys
 
 # Add parent to path for imports
-sys.path.insert(
-    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
 from openintent import Agent, Intent, on_assignment
 
@@ -45,11 +43,7 @@ class RiskAgent:
         print(f"\n[RISK] Processing: {intent.title}")
 
         # Get analysis from previous phase
-        state = (
-            intent.state.to_dict()
-            if hasattr(intent.state, "to_dict")
-            else intent.state or {}
-        )
+        state = intent.state.to_dict() if hasattr(intent.state, "to_dict") else intent.state or {}
         analysis = state.get("analysis", {})
         sections = analysis.get("sections", [])
 
@@ -74,9 +68,7 @@ class RiskAgent:
 
         # Simulate risk model API cost
         api_cost = 0.01  # $0.01 per API call
-        await self._record_cost(
-            intent.id, "api", api_cost, "Risk model inference API call"
-        )
+        await self._record_cost(intent.id, "api", api_cost, "Risk model inference API call")
         total_cost += api_cost
 
         # Perform risk assessment
@@ -101,17 +93,13 @@ class RiskAgent:
                     "title": section.get("title"),
                     "risk_score": risk_score,
                     "issue_count": len(issues),
-                    "high_severity": sum(
-                        1 for i in issues if i.get("severity") == "high"
-                    ),
+                    "high_severity": sum(1 for i in issues if i.get("severity") == "high"),
                 }
             )
 
         # Calculate overall risk
         avg_risk = (
-            sum(r["risk_score"] for r in risk_scores) / len(risk_scores)
-            if risk_scores
-            else 0
+            sum(r["risk_score"] for r in risk_scores) / len(risk_scores) if risk_scores else 0
         )
 
         # Determine risk category
@@ -146,9 +134,7 @@ class RiskAgent:
             }
         }
 
-    async def _record_cost(
-        self, intent_id: str, cost_type: str, amount: float, description: str
-    ):
+    async def _record_cost(self, intent_id: str, cost_type: str, amount: float, description: str):
         """Record a cost entry for the intent."""
         try:
             await self.client.record_cost(

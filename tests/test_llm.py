@@ -1177,9 +1177,7 @@ class TestToolExecution:
         executor = ProtocolToolExecutor(agent)
         local_handlers = engine._local_tool_handlers
 
-        result = await engine._execute_tool(
-            "add", {"a": 3, "b": 4}, executor, local_handlers
-        )
+        result = await engine._execute_tool("add", {"a": 3, "b": 4}, executor, local_handlers)
         assert result == {"sum": 7}
 
     @pytest.mark.asyncio
@@ -1230,9 +1228,7 @@ class TestToolExecution:
         executor = ProtocolToolExecutor(agent)
         local_handlers = engine._local_tool_handlers
 
-        result = await engine._execute_tool(
-            "greet", {"name": "Alice"}, executor, local_handlers
-        )
+        result = await engine._execute_tool("greet", {"name": "Alice"}, executor, local_handlers)
         assert result == {"result": "Hello, Alice!"}
 
     @pytest.mark.asyncio
@@ -1246,9 +1242,7 @@ class TestToolExecution:
         executor = ProtocolToolExecutor(agent)
         local_handlers = engine._local_tool_handlers
 
-        result = await engine._execute_tool(
-            "broken", {"x": 1}, executor, local_handlers
-        )
+        result = await engine._execute_tool("broken", {"x": 1}, executor, local_handlers)
         assert "error" in result
         assert "something broke" in result["error"]
 
@@ -1403,9 +1397,7 @@ class TestToolTracing:
         executor = ProtocolToolExecutor(agent)
         local_handlers = engine._local_tool_handlers
 
-        result = await engine._execute_tool(
-            "echo", {"msg": "hi"}, executor, local_handlers
-        )
+        result = await engine._execute_tool("echo", {"msg": "hi"}, executor, local_handlers)
         assert result == {"echo": "hi"}
         agent.async_client.log_event.assert_not_called()
 
@@ -1432,9 +1424,7 @@ class TestToolTracing:
         intent = MagicMock()
         intent.id = "intent-002"
 
-        await engine._execute_tool(
-            "slow", {"x": 42}, executor, local_handlers, intent=intent
-        )
+        await engine._execute_tool("slow", {"x": 42}, executor, local_handlers, intent=intent)
         call_args = agent.async_client.log_event.call_args
         payload = call_args[0][2]
         assert "duration_ms" in payload
@@ -1457,9 +1447,7 @@ class TestToolTracing:
         )
 
         engine, agent = self._make_engine_with_tools([greet_tool])
-        agent.async_client.log_event = AsyncMock(
-            side_effect=RuntimeError("server down")
-        )
+        agent.async_client.log_event = AsyncMock(side_effect=RuntimeError("server down"))
         executor = ProtocolToolExecutor(agent)
         local_handlers = engine._local_tool_handlers
 
@@ -1652,16 +1640,12 @@ class TestMixedToolThinkLoop:
 
         final_response = MagicMock()
         final_response.choices = [MagicMock()]
-        final_response.choices[0].message.content = (
-            "Calculator says 5, search found results."
-        )
+        final_response.choices[0].message.content = "Calculator says 5, search found results."
         final_response.choices[0].message.tool_calls = None
 
         with patch.object(engine, "_call_llm", new_callable=AsyncMock) as mock_call:
             mock_call.side_effect = [first_response, second_response, final_response]
-            result = await engine._think_complete(
-                "Calculate 2+3 and search for openintent"
-            )
+            result = await engine._think_complete("Calculate 2+3 and search for openintent")
 
         assert result == "Calculator says 5, search found results."
         assert mock_call.call_count == 3
