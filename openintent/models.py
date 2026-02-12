@@ -155,6 +155,17 @@ class EventType(str, Enum):
     TRIGGER_CASCADE_LIMIT = "trigger.cascade_limit"
     TRIGGER_NAMESPACE_BLOCKED = "trigger.namespace_blocked"
 
+    # Identity events (RFC-0018)
+    IDENTITY_REGISTERED = "agent.identity.registered"
+    IDENTITY_ROTATED = "agent.identity.rotated"
+    IDENTITY_REVOKED = "agent.identity.revoked"
+    IDENTITY_CHALLENGE_ISSUED = "agent.identity.challenge_issued"
+    IDENTITY_VERIFIED = "agent.identity.verified"
+
+    # Verifiable log events (RFC-0019)
+    LOG_CHECKPOINT_CREATED = "log.checkpoint.created"
+    LOG_CHECKPOINT_ANCHORED = "log.checkpoint.anchored"
+
     # Legacy aliases for backward compatibility
     CREATED = "intent_created"
     STATE_UPDATED = "state_patched"
@@ -583,9 +594,84 @@ class Intent:
 
 
 @dataclass
+class TracingContext:
+    """Propagated tracing state for distributed call chain visibility (RFC-0020).
+
+    Carries a correlation identifier and parent event reference through
+    agent -> tool -> agent call chains, enabling end-to-end observability.
+    """
+
+    trace_id: str
+    parent_event_id: Optional[str] = None
+
+    def child(self, new_parent_event_id: str) -> "TracingContext":
+        """Create a child context with the same trace_id but a new parent."""
+        return TracingContext(
+            trace_id=self.trace_id, parent_event_id=new_parent_event_id
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {"trace_id": self.trace_id}
+        if self.parent_event_id:
+            result["parent_event_id"] = self.parent_event_id
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Optional["TracingContext"]:
+        """Deserialize a TracingContext from a dict. Returns None if trace_id is missing."""
+        trace_id = data.get("trace_id")
+        if not trace_id:
+            return None
+        return cls(
+            trace_id=trace_id,
+            parent_event_id=data.get("parent_event_id"),
+        )
+
+    @classmethod
+    def new_root(cls) -> "TracingContext":
+        """Generate a fresh tracing context with a new 128-bit trace ID."""
+        import uuid
+
+        return cls(trace_id=uuid.uuid4().hex)
+
+
+@dataclass
+class EventProof:
+    """Cryptographic proof attached to a signed event (RFC-0018)."""
+
+    type: str = "Ed25519Signature2026"
+    created: Optional[str] = None
+    verification_method: Optional[str] = None
+    signature: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {"type": self.type}
+        if self.created:
+            result["created"] = self.created
+        if self.verification_method:
+            result["verification_method"] = self.verification_method
+        if self.signature:
+            result["signature"] = self.signature
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EventProof":
+        return cls(
+            type=data.get("type", "Ed25519Signature2026"),
+            created=data.get("created"),
+            verification_method=data.get("verification_method"),
+            signature=data.get("signature"),
+        )
+
+
+@dataclass
 class IntentEvent:
     """
     Immutable event in the intent's audit log.
+
+    RFC-0018: Optional `proof` field for signed events.
+    RFC-0019: Optional `event_hash`, `previous_event_hash`, `sequence` for verifiable logs.
+    RFC-0020: Optional `trace_id`, `parent_event_id` for distributed tracing.
     """
 
     id: str
@@ -594,9 +680,15 @@ class IntentEvent:
     actor: Optional[str]
     payload: dict[str, Any]
     created_at: datetime
+    proof: Optional[EventProof] = None
+    event_hash: Optional[str] = None
+    previous_event_hash: Optional[str] = None
+    sequence: Optional[int] = None
+    trace_id: Optional[str] = None
+    parent_event_id: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
-        result = {
+        result: dict[str, Any] = {
             "id": self.id,
             "intent_id": self.intent_id,
             "event_type": self.event_type.value,
@@ -605,10 +697,25 @@ class IntentEvent:
         }
         if self.actor:
             result["actor"] = self.actor
+        if self.proof:
+            result["proof"] = self.proof.to_dict()
+        if self.event_hash:
+            result["event_hash"] = self.event_hash
+        if self.previous_event_hash:
+            result["previous_event_hash"] = self.previous_event_hash
+        if self.sequence is not None:
+            result["sequence"] = self.sequence
+        if self.trace_id:
+            result["trace_id"] = self.trace_id
+        if self.parent_event_id:
+            result["parent_event_id"] = self.parent_event_id
         return result
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "IntentEvent":
+        proof = None
+        if data.get("proof"):
+            proof = EventProof.from_dict(data["proof"])
         return cls(
             id=data.get("id", ""),
             intent_id=data.get("intent_id", ""),
@@ -620,6 +727,12 @@ class IntentEvent:
                 if "created_at" in data
                 else datetime.now()
             ),
+            proof=proof,
+            event_hash=data.get("event_hash"),
+            previous_event_hash=data.get("previous_event_hash"),
+            sequence=data.get("sequence"),
+            trace_id=data.get("trace_id"),
+            parent_event_id=data.get("parent_event_id"),
         )
 
 
@@ -2657,7 +2770,7 @@ class AgentCapacity:
 
 @dataclass
 class AgentRecord:
-    """Protocol-level representation of a participating agent (RFC-0016)."""
+    """Protocol-level representation of a participating agent (RFC-0016, RFC-0018)."""
 
     agent_id: str
     status: AgentStatus = AgentStatus.ACTIVE
@@ -2672,6 +2785,12 @@ class AgentRecord:
     last_heartbeat_at: Optional[datetime] = None
     drain_timeout_seconds: Optional[int] = None
     version: int = 1
+    public_key: Optional[str] = None
+    did: Optional[str] = None
+    key_algorithm: Optional[str] = None
+    key_registered_at: Optional[datetime] = None
+    key_expires_at: Optional[datetime] = None
+    previous_keys: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
@@ -2697,6 +2816,18 @@ class AgentRecord:
             result["last_heartbeat_at"] = self.last_heartbeat_at.isoformat()
         if self.drain_timeout_seconds is not None:
             result["drain_timeout_seconds"] = self.drain_timeout_seconds
+        if self.public_key:
+            result["public_key"] = self.public_key
+        if self.did:
+            result["did"] = self.did
+        if self.key_algorithm:
+            result["key_algorithm"] = self.key_algorithm
+        if self.key_registered_at:
+            result["key_registered_at"] = self.key_registered_at.isoformat()
+        if self.key_expires_at:
+            result["key_expires_at"] = self.key_expires_at.isoformat()
+        if self.previous_keys:
+            result["previous_keys"] = self.previous_keys
         return result
 
     @classmethod
@@ -2729,6 +2860,20 @@ class AgentRecord:
             ),
             drain_timeout_seconds=data.get("drain_timeout_seconds"),
             version=data.get("version", 1),
+            public_key=data.get("public_key"),
+            did=data.get("did"),
+            key_algorithm=data.get("key_algorithm"),
+            key_registered_at=(
+                datetime.fromisoformat(data["key_registered_at"])
+                if data.get("key_registered_at")
+                else None
+            ),
+            key_expires_at=(
+                datetime.fromisoformat(data["key_expires_at"])
+                if data.get("key_expires_at")
+                else None
+            ),
+            previous_keys=data.get("previous_keys", []),
         )
 
 
@@ -3011,4 +3156,364 @@ class TriggerPolicy:
             allowed_trigger_types=data.get("allowed_trigger_types"),
             blocked_triggers=data.get("blocked_triggers", []),
             context_injection=data.get("context_injection", {}),
+        )
+
+
+# ===========================================================================
+# RFC-0018: Cryptographic Agent Identity — Dataclasses
+# ===========================================================================
+
+
+@dataclass
+class AgentIdentity:
+    """Cryptographic identity record for an agent (RFC-0018)."""
+
+    agent_id: str
+    public_key: str
+    did: str
+    key_algorithm: str = "Ed25519"
+    registered_at: Optional[datetime] = None
+    key_expires_at: Optional[datetime] = None
+    previous_keys: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "agent_id": self.agent_id,
+            "public_key": self.public_key,
+            "did": self.did,
+            "key_algorithm": self.key_algorithm,
+            "previous_keys": self.previous_keys,
+            "metadata": self.metadata,
+        }
+        if self.registered_at:
+            result["registered_at"] = self.registered_at.isoformat()
+        if self.key_expires_at:
+            result["key_expires_at"] = self.key_expires_at.isoformat()
+        else:
+            result["key_expires_at"] = None
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "AgentIdentity":
+        return cls(
+            agent_id=data.get("agent_id", ""),
+            public_key=data.get("public_key", ""),
+            did=data.get("did", ""),
+            key_algorithm=data.get("key_algorithm", "Ed25519"),
+            registered_at=(
+                datetime.fromisoformat(data["registered_at"])
+                if data.get("registered_at")
+                else None
+            ),
+            key_expires_at=(
+                datetime.fromisoformat(data["key_expires_at"])
+                if data.get("key_expires_at")
+                else None
+            ),
+            previous_keys=data.get("previous_keys", []),
+            metadata=data.get("metadata", {}),
+        )
+
+
+@dataclass
+class IdentityChallenge:
+    """Challenge issued during key registration (RFC-0018)."""
+
+    challenge: str
+    challenge_expires_at: Optional[datetime] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {"challenge": self.challenge}
+        if self.challenge_expires_at:
+            result["challenge_expires_at"] = self.challenge_expires_at.isoformat()
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "IdentityChallenge":
+        return cls(
+            challenge=data.get("challenge", ""),
+            challenge_expires_at=(
+                datetime.fromisoformat(data["challenge_expires_at"])
+                if data.get("challenge_expires_at")
+                else None
+            ),
+        )
+
+
+@dataclass
+class IdentityVerification:
+    """Result of verifying a signed payload (RFC-0018)."""
+
+    valid: bool
+    agent_id: str = ""
+    did: str = ""
+    verified_at: Optional[datetime] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "valid": self.valid,
+            "agent_id": self.agent_id,
+            "did": self.did,
+        }
+        if self.verified_at:
+            result["verified_at"] = self.verified_at.isoformat()
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "IdentityVerification":
+        return cls(
+            valid=data.get("valid", False),
+            agent_id=data.get("agent_id", ""),
+            did=data.get("did", ""),
+            verified_at=(
+                datetime.fromisoformat(data["verified_at"])
+                if data.get("verified_at")
+                else None
+            ),
+        )
+
+
+# ===========================================================================
+# RFC-0019: Verifiable Event Logs — Dataclasses
+# ===========================================================================
+
+
+@dataclass
+class TimestampAnchor:
+    """External timestamp anchor for a log checkpoint (RFC-0019)."""
+
+    type: str = "external-timestamp"
+    provider: str = ""
+    reference: str = ""
+    timestamp_proof: str = ""
+    anchored_at: Optional[datetime] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "type": self.type,
+            "provider": self.provider,
+            "reference": self.reference,
+            "timestamp_proof": self.timestamp_proof,
+        }
+        if self.anchored_at:
+            result["anchored_at"] = self.anchored_at.isoformat()
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "TimestampAnchor":
+        return cls(
+            type=data.get("type", "external-timestamp"),
+            provider=data.get("provider", ""),
+            reference=data.get("reference", ""),
+            timestamp_proof=data.get("timestamp_proof", ""),
+            anchored_at=(
+                datetime.fromisoformat(data["anchored_at"])
+                if data.get("anchored_at")
+                else None
+            ),
+        )
+
+
+@dataclass
+class LogCheckpoint:
+    """Signed checkpoint over a batch of event hashes (RFC-0019)."""
+
+    checkpoint_id: str
+    intent_id: Optional[str] = None
+    scope: str = "intent"
+    merkle_root: str = ""
+    event_count: int = 0
+    first_sequence: int = 0
+    last_sequence: int = 0
+    created_at: Optional[datetime] = None
+    signed_by: Optional[str] = None
+    signature: Optional[str] = None
+    anchor: Optional[TimestampAnchor] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "checkpoint_id": self.checkpoint_id,
+            "intent_id": self.intent_id,
+            "scope": self.scope,
+            "merkle_root": self.merkle_root,
+            "event_count": self.event_count,
+            "first_sequence": self.first_sequence,
+            "last_sequence": self.last_sequence,
+        }
+        if self.created_at:
+            result["created_at"] = self.created_at.isoformat()
+        if self.signed_by:
+            result["signed_by"] = self.signed_by
+        if self.signature:
+            result["signature"] = self.signature
+        if self.anchor:
+            result["anchor"] = self.anchor.to_dict()
+        else:
+            result["anchor"] = None
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "LogCheckpoint":
+        anchor = None
+        if data.get("anchor"):
+            anchor = TimestampAnchor.from_dict(data["anchor"])
+        return cls(
+            checkpoint_id=data.get("checkpoint_id", ""),
+            intent_id=data.get("intent_id"),
+            scope=data.get("scope", "intent"),
+            merkle_root=data.get("merkle_root", ""),
+            event_count=data.get("event_count", 0),
+            first_sequence=data.get("first_sequence", 0),
+            last_sequence=data.get("last_sequence", 0),
+            created_at=(
+                datetime.fromisoformat(data["created_at"])
+                if data.get("created_at")
+                else None
+            ),
+            signed_by=data.get("signed_by"),
+            signature=data.get("signature"),
+            anchor=anchor,
+        )
+
+
+@dataclass
+class MerkleProofEntry:
+    """Single entry in a Merkle proof path (RFC-0019)."""
+
+    hash: str
+    position: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"hash": self.hash, "position": self.position}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "MerkleProofEntry":
+        return cls(hash=data.get("hash", ""), position=data.get("position", "left"))
+
+
+@dataclass
+class MerkleProof:
+    """Proof that an event is included in a checkpoint's Merkle tree (RFC-0019)."""
+
+    event_id: str
+    event_hash: str
+    checkpoint_id: str
+    merkle_root: str
+    proof_hashes: list[MerkleProofEntry] = field(default_factory=list)
+    leaf_index: int = 0
+
+    def verify(self) -> bool:
+        """Recompute root from proof hashes and compare to merkle_root."""
+        import base64
+        import hashlib
+
+        raw = self.event_hash
+        if raw.startswith("sha256:"):
+            raw = raw[7:]
+        try:
+            current = base64.urlsafe_b64decode(raw + "==")
+        except Exception:
+            return False
+        for entry in self.proof_hashes:
+            sibling_raw = entry.hash
+            if sibling_raw.startswith("sha256:"):
+                sibling_raw = sibling_raw[7:]
+            try:
+                sibling = base64.urlsafe_b64decode(sibling_raw + "==")
+            except Exception:
+                return False
+            if entry.position == "left":
+                current = hashlib.sha256(sibling + current).digest()
+            else:
+                current = hashlib.sha256(current + sibling).digest()
+        computed_root = (
+            "sha256:" + base64.urlsafe_b64encode(current).rstrip(b"=").decode()
+        )
+        return computed_root == self.merkle_root
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "event_id": self.event_id,
+            "event_hash": self.event_hash,
+            "checkpoint_id": self.checkpoint_id,
+            "merkle_root": self.merkle_root,
+            "proof_hashes": [e.to_dict() for e in self.proof_hashes],
+            "leaf_index": self.leaf_index,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "MerkleProof":
+        return cls(
+            event_id=data.get("event_id", ""),
+            event_hash=data.get("event_hash", ""),
+            checkpoint_id=data.get("checkpoint_id", ""),
+            merkle_root=data.get("merkle_root", ""),
+            proof_hashes=[
+                MerkleProofEntry.from_dict(e) for e in data.get("proof_hashes", [])
+            ],
+            leaf_index=data.get("leaf_index", 0),
+        )
+
+
+@dataclass
+class ChainVerification:
+    """Result of verifying an intent's event hash chain (RFC-0019)."""
+
+    intent_id: str
+    valid: bool
+    event_count: int = 0
+    first_sequence: int = 0
+    last_sequence: int = 0
+    breaks: list[dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "intent_id": self.intent_id,
+            "valid": self.valid,
+            "event_count": self.event_count,
+            "first_sequence": self.first_sequence,
+            "last_sequence": self.last_sequence,
+            "chain_valid": self.valid,
+            "breaks": self.breaks,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ChainVerification":
+        return cls(
+            intent_id=data.get("intent_id", ""),
+            valid=data.get("valid", data.get("chain_valid", False)),
+            event_count=data.get("event_count", 0),
+            first_sequence=data.get("first_sequence", 0),
+            last_sequence=data.get("last_sequence", 0),
+            breaks=data.get("breaks", []),
+        )
+
+
+@dataclass
+class ConsistencyProof:
+    """Result of verifying consistency between two checkpoints (RFC-0019)."""
+
+    from_checkpoint: str
+    to_checkpoint: str
+    consistent: bool
+    boundary_event: Optional[dict[str, Any]] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "from_checkpoint": self.from_checkpoint,
+            "to_checkpoint": self.to_checkpoint,
+            "consistent": self.consistent,
+        }
+        if self.boundary_event:
+            result["boundary_event"] = self.boundary_event
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ConsistencyProof":
+        return cls(
+            from_checkpoint=data.get("from_checkpoint", ""),
+            to_checkpoint=data.get("to_checkpoint", ""),
+            consistent=data.get("consistent", False),
+            boundary_event=data.get("boundary_event"),
         )

@@ -54,7 +54,7 @@ def get_llm_client(provider: str = "auto") -> tuple[Any, str, str]:
             from openai import OpenAI
 
             client = OpenAI()
-            return client, "gpt-4o", "openai"
+            return client, "gpt-5.2", "openai"
         except ImportError:
             raise ImportError("Install openai: pip install openai")
 

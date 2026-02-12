@@ -5,6 +5,46 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-02-12
+
+### Added
+
+- **Tool Execution Adapters** — Pluggable adapter system for real external API execution through `POST /api/v1/tools/invoke`. Three built-in adapters: `RestToolAdapter` (API key, Bearer, Basic Auth), `OAuth2ToolAdapter` (automatic token refresh on 401), `WebhookToolAdapter` (HMAC-SHA256 signed dispatch).
+- **Adapter Registry** — Resolves adapters from credential metadata via explicit `adapter` key, `auth_type` mapping, or placeholder fallback.
+- **Security Controls** — URL validation (blocks private IPs, metadata endpoints, non-HTTP schemes), timeout bounds (1–120s), response size limits (1 MB), secret sanitization, request fingerprinting, redirect blocking.
+- **Custom Adapter Registration** — `register_adapter(name, adapter)` for non-standard protocols.
+- **OAuth2 Integration Guide** — Documentation for integrating OAuth2 services: platform handles authorization code flow, stores tokens in vault, SDK manages refresh and execution. Templates for Salesforce, Google APIs, Microsoft Graph, HubSpot.
+
+### Changed
+
+- Credential `metadata` supports execution config (`base_url`, `endpoints`, `auth`) for real API calls. Backward compatible — credentials without execution config return placeholder responses.
+- 57 new tests covering security utilities, all three adapters, and the registry.
+- Documentation updated across guide, RFC-0014, examples, API reference, and website.
+
+---
+
+## [0.10.0] - 2026-02-12
+
+### Added
+
+- **RFC-0018: Cryptographic Agent Identity** — Ed25519 key pairs, `did:key` decentralized identifiers, challenge-response registration, signed events with non-repudiation, key rotation, and portable identity across servers.
+- **RFC-0019: Verifiable Event Logs** — SHA-256 hash chains linking every event to its predecessor, Merkle tree checkpoints with compact inclusion proofs, consistency verification between checkpoints, and optional external timestamp anchoring.
+- **RFC-0020: Distributed Tracing** — `trace_id` and `parent_event_id` fields on IntentEvent, `TracingContext` dataclass for automatic propagation through agent-tool-agent call chains, W3C-aligned 128-bit trace identifiers.
+- **`@Identity` decorator** — Declarative cryptographic identity with `auto_sign=True` and `auto_register=True`.
+- **`TracingContext`** — New dataclass with `new_root()`, `child()`, `to_dict()`, `from_dict()` for trace propagation.
+- **11 new client methods** — `register_identity()`, `complete_identity_challenge()`, `verify_signature()`, `rotate_key()`, `get_agent_keys()`, `revoke_key()`, `resolve_did()`, `verify_event_chain()`, `list_checkpoints()`, `get_merkle_proof()`, `verify_consistency()`.
+- **13 new server endpoint stubs** — Identity key management, challenge-response, DID resolution, hash chain verification, checkpoint management, Merkle proofs, consistency verification.
+- **Automatic tracing in `_emit_tool_event`** — Tool invocation events include `trace_id` and `parent_event_id` from the agent's active `TracingContext`.
+- **Tracing injection in `_execute_tool`** — Tool handlers that accept a `tracing` keyword argument receive the current `TracingContext` automatically.
+
+### Changed
+
+- All documentation, READMEs, and examples updated from 17 to 20 RFCs.
+- `log_event()` on both sync and async clients now accepts optional `trace_id` and `parent_event_id` parameters.
+- 690+ tests passing across all 20 RFCs (104 model tests + 26 server tests for RFC-0018/0019/0020).
+
+---
+
 ## [0.9.1] - 2026-02-12
 
 ### Fixed

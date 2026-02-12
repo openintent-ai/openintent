@@ -5,6 +5,79 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-02-12
+
+### Added
+
+- **Tool Execution Adapters** — Pluggable adapter system for real external API execution through the Tool Proxy (`POST /api/v1/tools/invoke`). Three built-in adapters:
+  - `RestToolAdapter` — API key (header/query), Bearer token, and Basic Auth for standard REST APIs.
+  - `OAuth2ToolAdapter` — OAuth2 with automatic token refresh on 401 responses using `refresh_token` + `token_url`.
+  - `WebhookToolAdapter` — HMAC-SHA256 signed dispatch for webhook receivers.
+- **Adapter Registry** — `AdapterRegistry` resolves the correct adapter from credential metadata: explicit `adapter` key, `auth_type` mapping, or placeholder fallback for backward compatibility.
+- **Security Controls** — All outbound tool execution requests enforce:
+  - URL validation blocking private IPs (RFC-1918, loopback, link-local), cloud metadata endpoints (`169.254.169.254`), and non-HTTP schemes.
+  - Timeout bounds clamped to 1–120 seconds (default 30s).
+  - Response size limit of 1 MB.
+  - Secret sanitization replacing API keys, tokens, and passwords with `[REDACTED]` in all outputs.
+  - Request fingerprinting via SHA-256 hash stored per invocation for audit correlation.
+  - HTTP redirect blocking to prevent SSRF via redirect chains.
+- **Custom Adapter Registration** — `register_adapter(name, adapter)` to add adapters for services with non-standard protocols (e.g., GraphQL).
+- **OAuth2 Integration Guide** — Comprehensive documentation for integrating OAuth2 services: platform handles the authorization code flow, stores tokens in the vault, SDK manages refresh and execution. Includes ready-to-use metadata templates for Salesforce, Google APIs, Microsoft Graph, and HubSpot.
+
+### Changed
+
+- Credential `metadata` field now supports execution config (`base_url`, `endpoints`, `auth`) to enable real API calls. Credentials without execution config continue to return placeholder responses (backward compatible).
+- 57 new tests covering security utilities, all three adapters, and the adapter registry.
+- Documentation updated across guide, RFC-0014, examples, API reference, and website.
+
+---
+
+## [0.10.0] - 2026-02-12
+
+### Added
+
+- **RFC-0018: Cryptographic Agent Identity**
+  - `AgentIdentity`, `IdentityChallenge`, `IdentityVerification` data models for key-based agent identity.
+  - Ed25519 key pairs with `did:key:z6Mk...` decentralized identifiers.
+  - Challenge-response identity registration via `register_identity()` and `complete_identity_challenge()`.
+  - Key rotation with `rotate_key()` preserving previous key history.
+  - Signature verification with `verify_signature()`.
+  - `@Identity` decorator for zero-boilerplate identity setup on agents.
+  - `@on_identity_registered` lifecycle hook.
+  - `IdentityConfig` for YAML workflow configuration.
+  - `AgentRecord` extended with `public_key`, `did`, `key_algorithm`, `key_registered_at`, `key_expires_at`, `previous_keys` fields (all optional for backward compatibility).
+  - 5 new server endpoints: `POST /api/v1/agents/{id}/identity`, `POST .../identity/challenge`, `GET .../identity`, `POST .../identity/verify`, `POST .../identity/rotate`.
+
+- **RFC-0019: Verifiable Event Logs**
+  - `LogCheckpoint`, `MerkleProof`, `MerkleProofEntry`, `ChainVerification`, `ConsistencyProof`, `TimestampAnchor` data models.
+  - SHA-256 hash chains linking each event to its predecessor.
+  - Merkle tree checkpoints with `MerkleProof.verify()` for client-side inclusion verification.
+  - `verify_event_chain()` to validate an intent's full hash chain integrity.
+  - `list_checkpoints()`, `get_checkpoint()`, `get_merkle_proof()`, `verify_consistency()` client methods.
+  - `VerificationConfig` for YAML workflow configuration.
+  - `IntentEvent` extended with optional `proof`, `event_hash`, `previous_event_hash`, `sequence` fields.
+  - 8 new server endpoints for checkpoints, Merkle proofs, chain verification, and optional external anchoring.
+
+- **RFC-0020: Distributed Tracing**
+  - `TracingContext` dataclass for propagating trace state through agent → tool → agent call chains.
+  - `IntentEvent` extended with optional `trace_id` (128-bit hex) and `parent_event_id` fields.
+  - `log_event()` on both sync and async clients accepts `trace_id` and `parent_event_id` parameters.
+  - `_emit_tool_event()` automatically includes tracing context in tool invocation events.
+  - `_execute_tool()` passes `tracing` keyword argument to local tool handlers that accept it.
+  - `TracingContext.new_root()` generates fresh 128-bit trace IDs (W3C-aligned format).
+  - `TracingContext.child()` creates child contexts with updated parent references.
+  - Cross-intent tracing via `trace_id` in event payloads.
+
+- **Sync & Async Client Parity** — All new RFC-0018/0019/0020 methods available on both `OpenIntentClient` and `AsyncOpenIntentClient`.
+
+### Changed
+
+- Version bumped to 0.10.0.
+- `__all__` exports updated with all new public symbols including `TracingContext`.
+- 690+ tests passing across all 20 RFCs (104 model tests + 26 server tests for RFC-0018/0019/0020).
+
+---
+
 ## [0.9.1] - 2026-02-12
 
 ### Fixed

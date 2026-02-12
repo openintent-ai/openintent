@@ -320,29 +320,6 @@ class AnthropicStreamContext:
         messages = self._kwargs.get("messages", [])
         duration_ms = int((time.time() - self._start_time) * 1000)
 
-        if self._usage is None and self._stream and exc_type is None:
-            try:
-                inner_stream = (
-                    self._stream._MessageStreamManager__stream
-                    if hasattr(self._stream, "_MessageStreamManager__stream")
-                    else None
-                )
-                if inner_stream is None:
-                    inner_stream = getattr(self._stream, "_stream", None)
-                if inner_stream is not None:
-                    snapshot = getattr(inner_stream, "current_message_snapshot", None)
-                    if snapshot is not None:
-                        usage = getattr(snapshot, "usage", None)
-                        if usage:
-                            self._usage = {
-                                "input_tokens": getattr(usage, "input_tokens", 0),
-                                "output_tokens": getattr(usage, "output_tokens", 0),
-                            }
-                        if self._stop_reason is None:
-                            self._stop_reason = getattr(snapshot, "stop_reason", None)
-            except Exception:
-                pass
-
         if self._stream:
             try:
                 self._stream.__exit__(exc_type, exc_val, exc_tb)
@@ -454,11 +431,62 @@ class AnthropicStreamWrapper:
     def __init__(self, context: AnthropicStreamContext, stream: Any):
         self._context = context
         self._stream = stream
+        self._events_consumed = False
+
+    def _consume_events(self) -> Iterator[str]:
+        """Iterate raw stream events, capture usage, and yield text deltas."""
+        input_tokens: Optional[int] = None
+        output_tokens: Optional[int] = None
+
+        for event in self._stream:
+            event_type = getattr(event, "type", None)
+
+            if event_type == "message_start":
+                msg = getattr(event, "message", None)
+                if msg:
+                    usage = getattr(msg, "usage", None)
+                    if usage:
+                        input_tokens = getattr(usage, "input_tokens", None)
+
+            elif event_type == "content_block_delta":
+                delta = getattr(event, "delta", None)
+                if delta and getattr(delta, "type", None) == "text_delta":
+                    text = getattr(delta, "text", "")
+                    if text:
+                        yield text
+
+            elif event_type == "message_delta":
+                delta = getattr(event, "delta", None)
+                if delta:
+                    stop = getattr(delta, "stop_reason", None)
+                    if stop:
+                        self._context._stop_reason = stop
+                usage = getattr(event, "usage", None)
+                if usage:
+                    output_tokens = getattr(usage, "output_tokens", None)
+
+            elif event_type == "content_block_start":
+                cb = getattr(event, "content_block", None)
+                if cb and getattr(cb, "type", None) == "tool_use":
+                    self._context._tool_use_blocks.append(
+                        {
+                            "id": getattr(cb, "id", None),
+                            "name": getattr(cb, "name", None),
+                            "input": getattr(cb, "input", {}),
+                        }
+                    )
+
+        if input_tokens is not None or output_tokens is not None:
+            self._context._usage = {
+                "input_tokens": input_tokens or 0,
+                "output_tokens": output_tokens or 0,
+            }
 
     @property
     def text_stream(self) -> Iterator[str]:
         """Iterate over text chunks from the stream."""
-        for text in self._stream.text_stream:
+        self._events_consumed = True
+        for text in self._consume_events():
             self._context._chunk_count += 1
             self._context._content_parts.append(text)
             self._context._adapter._invoke_on_token(

@@ -116,7 +116,7 @@ agents:
 
 llm:
   provider: openai
-  model: gpt-4o
+  model: gpt-5.2
 
 workflow:
   research:
@@ -480,7 +480,7 @@ Configure the default LLM provider:
 ```yaml
 llm:
   provider: openai              # openai, anthropic, env
-  model: gpt-4o
+  model: gpt-5.2
   temperature: 0.7
   max_tokens: 4096
   system_prompt: "You are a helpful research assistant."

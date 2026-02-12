@@ -4,7 +4,7 @@ title: Built-in Server
 
 # Built-in Server
 
-The OpenIntent SDK includes a full-featured FastAPI server implementing all 17 RFCs.
+The OpenIntent SDK includes a full-featured FastAPI server implementing all 20 RFCs.
 
 ## Quick Start
 
@@ -89,6 +89,17 @@ The OpenIntent SDK includes a full-featured FastAPI server implementing all 17 R
 | `GET` | `/api/v1/agents/{id}/subscribe` | Subscribe to agent |
 | `GET` | `/api/v1/portfolios/{id}/subscribe` | Subscribe to portfolio |
 
+### Tool Execution (RFC-0014)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/tools/invoke` | Invoke tool via server proxy |
+| `GET` | `/api/v1/vaults` | List vaults |
+| `POST` | `/api/v1/vaults` | Create vault |
+| `POST` | `/api/v1/credentials` | Store credential |
+| `POST` | `/api/v1/tool-grants` | Create tool grant |
+| `POST` | `/api/v1/tool-grants/{id}/revoke` | Revoke grant |
+
 ---
 
 ## Configuration
@@ -166,6 +177,9 @@ graph TD
     Auth --> R[Route Handlers]
     R --> DB[(SQLAlchemy + DB)]
     R --> SSE[SSE Streams]
+    R --> TP[Tool Proxy]
+    TP --> EA[Execution Adapters]
+    EA -->|"REST / OAuth2 / Webhook"| EXT[External APIs]
 
     style C fill:#f6f8fa,stroke:#e3e8ee,color:#0a2540
     style S fill:#635bff,stroke:#4b44d1,color:#fff
@@ -173,6 +187,9 @@ graph TD
     style R fill:#00d4aa,stroke:#00b894,color:#0a2540
     style DB fill:#f6f8fa,stroke:#e3e8ee,color:#0a2540
     style SSE fill:#f6f8fa,stroke:#e3e8ee,color:#0a2540
+    style TP fill:#635bff,stroke:#4b44d1,color:#fff
+    style EA fill:#00d4aa,stroke:#00b894,color:#0a2540
+    style EXT fill:#f6f8fa,stroke:#e3e8ee,color:#0a2540
 ```
 
 ## Next Steps

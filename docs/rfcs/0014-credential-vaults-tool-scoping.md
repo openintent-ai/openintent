@@ -961,6 +961,66 @@ LLM receives: result (no credential exposure)
 
 The grant system provides what MCP does not: per-agent scoping, delegation hierarchies, rate limiting, audit trails, and cascading revocation. MCP provides the transport; OpenIntent provides the governance.
 
+## Reference Implementation: Execution Adapters
+
+The reference implementation provides a pluggable adapter system for real external API execution through the Tool Proxy. This section describes the implementation architecture.
+
+### Adapter Interface
+
+All adapters implement `ToolExecutionAdapter`, which provides:
+
+- URL validation and SSRF protection
+- Timeout enforcement (1–120 seconds)
+- Response size limiting (1 MB)
+- Secret sanitization in all outputs
+- Request fingerprinting for audit correlation
+
+```python
+class ToolExecutionAdapter:
+    async def execute(self, tool_name, parameters, credential_metadata, 
+                      credential_secret, grant_constraints=None):
+        # 1. Validate URL (blocks private IPs, metadata endpoints)
+        # 2. Enforce timeout bounds
+        # 3. Execute request
+        # 4. Sanitize secrets from response
+        # 5. Generate request fingerprint
+        return ToolExecutionResult(status, result, duration_ms, request_fingerprint)
+```
+
+### Built-in Adapters
+
+| Adapter | Auth Types | Resolution |
+|---------|-----------|------------|
+| `RestToolAdapter` | API key (header/query), Bearer token, Basic Auth | `auth_type` in `["api_key", "bearer_token", "basic_auth"]` |
+| `OAuth2ToolAdapter` | OAuth2 with automatic token refresh on 401 | `auth_type == "oauth2_token"` |
+| `WebhookToolAdapter` | HMAC-SHA256 signed dispatch | `adapter == "webhook"` or `auth_type == "webhook"` |
+
+### Adapter Registry
+
+The `AdapterRegistry` resolves adapters using credential metadata:
+
+1. **Explicit selection**: `metadata.adapter` key selects adapter by name
+2. **Auth-type mapping**: `metadata.auth_type` maps to the appropriate adapter
+3. **Fallback**: No execution config → placeholder response (backward compatible)
+
+### Security Controls
+
+| Control | Implementation |
+|---------|---------------|
+| URL validation | `validate_url()` blocks RFC-1918 ranges, loopback, link-local, cloud metadata endpoints, non-HTTP schemes |
+| Timeout clamping | `sanitize_timeout()` clamps to [1, 120] seconds |
+| Response limiting | Responses truncated at 1 MB |
+| Secret sanitization | `sanitize_secrets()` replaces API keys, tokens, passwords with `[REDACTED]` in all output paths |
+| Request fingerprinting | SHA-256 hash of method + URL + sorted parameters stored per invocation |
+| Redirect blocking | `allow_redirects=False` prevents SSRF via redirect chains |
+
+### Open Questions (Execution)
+
+The implementation resolves some of the open questions from this RFC:
+
+1. **OAuth flow management** — The `OAuth2ToolAdapter` handles token refresh automatically using `refresh_token` + `token_url` stored in credential metadata. Initial authorization (consent screens) remains out of scope.
+2. **Tool versioning** — Endpoint paths are stored in credential metadata, so different API versions can coexist by storing different `base_url` values per credential.
+
 ## Open Questions
 
 1. **OAuth flow management.** For services using OAuth2, should the protocol define a standard flow for initial authorization (redirects, consent screens), or is that out of scope?

@@ -122,7 +122,7 @@ class StreamingAdapter:
         intent_id: str,
         prompt: str,
         system_prompt: str = "You are a helpful assistant.",
-        model: str = "gpt-4o",
+        model: str = "gpt-5.2",
         on_token: Callable[[str], None] = None,
     ) -> tuple[str, StreamMetrics]:
         """
@@ -296,7 +296,7 @@ class StreamingAdapter:
         intent_id: str,
         prompt: str,
         system_prompt: str = "You are a helpful assistant.",
-        model: str = "gpt-4o",
+        model: str = "gpt-5.2",
     ) -> AsyncIterator[str]:
         """
         Alternative API: Yield tokens as async generator.

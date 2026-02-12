@@ -41,7 +41,7 @@ from openintent.models import Intent, IntentState, IntentStatus
 
 class TestProviderResolution:
     def test_openai_default(self):
-        assert _resolve_provider("gpt-4o") == "openai"
+        assert _resolve_provider("gpt-5.2") == "openai"
         assert _resolve_provider("gpt-3.5-turbo") == "openai"
 
     def test_anthropic(self):
@@ -84,14 +84,14 @@ class TestLLMConfig:
 
     def test_custom_values(self):
         config = LLMConfig(
-            model="gpt-4o",
+            model="gpt-5.2",
             provider="openai",
             temperature=0.3,
             max_tokens=8192,
             planning=True,
             stream_by_default=True,
         )
-        assert config.model == "gpt-4o"
+        assert config.model == "gpt-5.2"
         assert config.temperature == 0.3
         assert config.max_tokens == 8192
         assert config.planning is True
@@ -408,7 +408,7 @@ class TestLLMEngineResponseParsing:
         agent = MagicMock()
         agent._agent_id = "test"
         agent._config = AgentConfig()
-        config = LLMConfig(model="gpt-4o", provider="openai")
+        config = LLMConfig(model="gpt-5.2", provider="openai")
         return LLMEngine(agent, config)
 
     def test_extract_content_openai(self):
@@ -516,7 +516,7 @@ class TestLLMEngineMessageBuilding:
         agent = MagicMock()
         agent._agent_id = "test"
         agent._config = AgentConfig()
-        config = LLMConfig(model="gpt-4o", provider=provider)
+        config = LLMConfig(model="gpt-5.2", provider=provider)
         return LLMEngine(agent, config)
 
     def test_build_tool_result_openai(self):
@@ -554,7 +554,7 @@ class TestLLMEngineToolLoop:
         agent.memory.store = AsyncMock(return_value=None)
         agent._agents_list = None
 
-        config = LLMConfig(model="gpt-4o", provider="openai")
+        config = LLMConfig(model="gpt-5.2", provider="openai")
         engine = LLMEngine(agent, config)
         return engine, agent
 
@@ -640,20 +640,20 @@ class TestLLMEngineToolLoop:
 class TestLLMEngineProperties:
     def test_is_coordinator_false(self):
         agent = MagicMock(spec=[])
-        config = LLMConfig(model="gpt-4o")
+        config = LLMConfig(model="gpt-5.2")
         engine = LLMEngine(agent, config)
         assert engine._is_coordinator is False
 
     def test_is_coordinator_true(self):
         agent = MagicMock()
         agent._agents_list = ["a", "b"]
-        config = LLMConfig(model="gpt-4o")
+        config = LLMConfig(model="gpt-5.2")
         engine = LLMEngine(agent, config)
         assert engine._is_coordinator is True
 
     def test_protocol_tools_agent(self):
         agent = MagicMock(spec=[])
-        config = LLMConfig(model="gpt-4o")
+        config = LLMConfig(model="gpt-5.2")
         engine = LLMEngine(agent, config)
         names = {t["name"] for t in engine._protocol_tools}
         assert "remember" in names
@@ -662,7 +662,7 @@ class TestLLMEngineProperties:
     def test_protocol_tools_coordinator(self):
         agent = MagicMock()
         agent._agents_list = ["a"]
-        config = LLMConfig(model="gpt-4o")
+        config = LLMConfig(model="gpt-5.2")
         engine = LLMEngine(agent, config)
         names = {t["name"] for t in engine._protocol_tools}
         assert "delegate" in names
@@ -671,7 +671,7 @@ class TestLLMEngineProperties:
     def test_external_tools(self):
         agent = MagicMock()
         agent._config = AgentConfig(tools=["web_search", "code_exec"])
-        config = LLMConfig(model="gpt-4o")
+        config = LLMConfig(model="gpt-5.2")
         engine = LLMEngine(agent, config)
         ext = engine._external_tools
         assert len(ext) == 2
@@ -680,7 +680,7 @@ class TestLLMEngineProperties:
     def test_format_tools_openai(self):
         agent = MagicMock(spec=[])
         agent._config = AgentConfig()
-        config = LLMConfig(model="gpt-4o", provider="openai")
+        config = LLMConfig(model="gpt-5.2", provider="openai")
         engine = LLMEngine(agent, config)
         formatted = engine._format_tools_for_provider()
         assert all(t["type"] == "function" for t in formatted)
@@ -695,7 +695,7 @@ class TestLLMEngineProperties:
 
     def test_reset_history(self):
         agent = MagicMock()
-        config = LLMConfig(model="gpt-4o")
+        config = LLMConfig(model="gpt-5.2")
         engine = LLMEngine(agent, config)
         engine._conversation_history.append({"role": "user", "content": "hi"})
         engine.reset_history()
@@ -709,7 +709,7 @@ class TestLLMEngineProperties:
 
 class TestAgentWithModel:
     def test_agent_with_model_has_think(self):
-        @Agent("test-bot", model="gpt-4o", memory="episodic")
+        @Agent("test-bot", model="gpt-5.2", memory="episodic")
         class TestBot:
             pass
 
@@ -732,7 +732,7 @@ class TestAgentWithModel:
     def test_agent_model_config(self):
         @Agent(
             "configured-bot",
-            model="gpt-4o-mini",
+            model="gpt-5.2-mini",
             temperature=0.3,
             max_tokens=2048,
             system_prompt="You are a helper.",
@@ -741,7 +741,7 @@ class TestAgentWithModel:
             pass
 
         bot = ConfigBot()
-        assert bot._llm_config.model == "gpt-4o-mini"
+        assert bot._llm_config.model == "gpt-5.2-mini"
         assert bot._llm_config.temperature == 0.3
         assert bot._llm_config.max_tokens == 2048
         assert bot._llm_config.system_prompt == "You are a helper."
@@ -755,7 +755,7 @@ class TestAgentWithModel:
         assert bot._llm_config.provider == "anthropic"
 
     def test_agent_with_model_keeps_base_features(self):
-        @Agent("full-bot", model="gpt-4o", memory="episodic", tools=["search"])
+        @Agent("full-bot", model="gpt-5.2", memory="episodic", tools=["search"])
         class FullBot:
             @on_assignment
             async def work(self, intent):
@@ -779,7 +779,7 @@ class TestCoordinatorWithModel:
     def test_coordinator_with_model_has_think(self):
         @Coordinator(
             "test-lead",
-            model="gpt-4o",
+            model="gpt-5.2",
             agents=["agent-a", "agent-b"],
         )
         class TestLead:
@@ -814,7 +814,7 @@ class TestCoordinatorWithModel:
         assert "create_plan" in coord_tools
 
     def test_coordinator_planning_default_true(self):
-        @Coordinator("planner", model="gpt-4o", agents=["a"])
+        @Coordinator("planner", model="gpt-5.2", agents=["a"])
         class PlanCoord:
             pass
 
@@ -824,7 +824,7 @@ class TestCoordinatorWithModel:
     def test_coordinator_keeps_governance_features(self):
         @Coordinator(
             "governed",
-            model="gpt-4o",
+            model="gpt-5.2",
             agents=["a", "b"],
             strategy="parallel",
         )
@@ -845,7 +845,7 @@ class TestCoordinatorWithModel:
 
 class TestStreaming:
     def test_stream_by_default_config(self):
-        @Agent("stream-bot", model="gpt-4o", stream_by_default=True)
+        @Agent("stream-bot", model="gpt-5.2", stream_by_default=True)
         class StreamBot:
             pass
 
@@ -854,7 +854,7 @@ class TestStreaming:
 
     @pytest.mark.asyncio
     async def test_think_stream_returns_async_iterator(self):
-        @Agent("stream-test", model="gpt-4o")
+        @Agent("stream-test", model="gpt-5.2")
         class StreamTest:
             pass
 
@@ -876,7 +876,7 @@ class TestStreaming:
 
     @pytest.mark.asyncio
     async def test_think_with_stream_flag(self):
-        @Agent("stream-flag-test", model="gpt-4o")
+        @Agent("stream-flag-test", model="gpt-5.2")
         class StreamFlagTest:
             pass
 
@@ -1056,7 +1056,7 @@ class TestAgentWithToolObjects:
             handler=lambda query, max_results=5: {"results": [f"result for {query}"]},
         )
 
-        @Agent("tool-agent", model="gpt-4o", tools=[search_tool])
+        @Agent("tool-agent", model="gpt-5.2", tools=[search_tool])
         class ToolAgent:
             pass
 
@@ -1072,7 +1072,7 @@ class TestAgentWithToolObjects:
             handler=lambda expression: eval(expression),
         )
 
-        @Agent("mix-agent", model="gpt-4o", tools=[calc, "legacy_tool"])
+        @Agent("mix-agent", model="gpt-5.2", tools=[calc, "legacy_tool"])
         class MixAgent:
             pass
 
@@ -1094,7 +1094,7 @@ class TestAgentWithToolObjects:
             },
         )
 
-        @Agent("schema-agent", model="gpt-4o", tools=[search_tool])
+        @Agent("schema-agent", model="gpt-5.2", tools=[search_tool])
         class SchemaAgent:
             pass
 
@@ -1106,7 +1106,7 @@ class TestAgentWithToolObjects:
         assert "query" in ext_tools[0]["parameters"]["properties"]
 
     def test_string_tools_get_generic_description(self):
-        @Agent("string-tools", model="gpt-4o", tools=["legacy_api"])
+        @Agent("string-tools", model="gpt-5.2", tools=["legacy_api"])
         class StringAgent:
             pass
 
@@ -1125,7 +1125,7 @@ class TestAgentWithToolObjects:
 
         @Agent(
             "handler-agent",
-            model="gpt-4o",
+            model="gpt-5.2",
             tools=[calc_tool, no_handler_tool, "string_tool"],
         )
         class HandlerAgent:
@@ -1153,7 +1153,7 @@ class TestToolExecution:
         agent.memory.store = AsyncMock(return_value=None)
         agent._agents_list = None
 
-        config = LLMConfig(model="gpt-4o", provider="openai")
+        config = LLMConfig(model="gpt-5.2", provider="openai")
         engine = LLMEngine(agent, config)
         return engine, agent
 
@@ -1303,7 +1303,7 @@ class TestToolExecution:
         def doubler(n: int) -> dict:
             return {"result": n * 2}
 
-        @Agent("deco-agent", model="gpt-4o", tools=[doubler])
+        @Agent("deco-agent", model="gpt-5.2", tools=[doubler])
         class DecoAgent:
             pass
 
@@ -1317,7 +1317,7 @@ class TestToolExecution:
     def test_all_tools_includes_protocol_and_external(self):
         calc = ToolDef(name="calc", description="Calculator.")
 
-        @Agent("all-tools", model="gpt-4o", tools=[calc, "api_tool"])
+        @Agent("all-tools", model="gpt-5.2", tools=[calc, "api_tool"])
         class AllToolsAgent:
             pass
 
@@ -1347,7 +1347,7 @@ class TestToolTracing:
         agent.async_client = MagicMock()
         agent.async_client.log_event = AsyncMock(return_value=None)
 
-        config = LLMConfig(model="gpt-4o", provider="openai")
+        config = LLMConfig(model="gpt-5.2", provider="openai")
         engine = LLMEngine(agent, config)
         return engine, agent
 
@@ -1537,7 +1537,7 @@ class TestRemoteToolWithFullArguments:
         agent.async_client = MagicMock()
         agent.async_client.log_event = AsyncMock(return_value=None)
 
-        config = LLMConfig(model="gpt-4o", provider="openai")
+        config = LLMConfig(model="gpt-5.2", provider="openai")
         engine = LLMEngine(agent, config)
         return engine, agent
 
@@ -1622,7 +1622,7 @@ class TestMixedToolThinkLoop:
         agent.tools = MagicMock()
         agent.tools.invoke = AsyncMock(return_value={"results": ["search result"]})
 
-        config = LLMConfig(model="gpt-4o", provider="openai")
+        config = LLMConfig(model="gpt-5.2", provider="openai")
         engine = LLMEngine(agent, config)
         return engine, agent
 

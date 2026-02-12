@@ -31,7 +31,7 @@ Example:
 
     # Streaming - automatically logs stream events
     stream = adapter.chat.completions.create(
-        model="openai/gpt-4o",
+        model="openai/gpt-5.2",
         messages=[{"role": "user", "content": "Hello"}],
         stream=True
     )

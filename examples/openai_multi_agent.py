@@ -79,7 +79,7 @@ class BaseAgent:
         messages.append({"role": "user", "content": prompt})
 
         response = await self.openai.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.2",
             messages=messages,
             temperature=0.7,
         )

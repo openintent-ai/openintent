@@ -15,7 +15,7 @@ The simplest LLM-powered agent --- one decorator, one handler:
 ```python
 from openintent import Agent, on_assignment
 
-@Agent("helper", model="gpt-4o")
+@Agent("helper", model="gpt-5.2")
 class Helper:
     @on_assignment
     async def work(self, intent):
@@ -31,7 +31,7 @@ Helper.run()
 Store and recall information across tasks:
 
 ```python
-@Agent("researcher", model="gpt-4o", memory="episodic")
+@Agent("researcher", model="gpt-5.2", memory="episodic")
 class Researcher:
     @on_assignment
     async def work(self, intent):
@@ -52,7 +52,7 @@ The LLM will autonomously call `remember` and `recall` tools, which map to RFC-0
 ### Async Generator
 
 ```python
-@Agent("narrator", model="gpt-4o")
+@Agent("narrator", model="gpt-5.2")
 class Narrator:
     @on_assignment
     async def work(self, intent):
@@ -66,7 +66,7 @@ class Narrator:
 ### Callback Style
 
 ```python
-@Agent("narrator", model="gpt-4o")
+@Agent("narrator", model="gpt-5.2")
 class Narrator:
     @on_assignment
     async def work(self, intent):
@@ -85,7 +85,7 @@ class Narrator:
 The `clarify` tool creates an arbitration request and pauses the intent:
 
 ```python
-@Agent("careful-agent", model="gpt-4o")
+@Agent("careful-agent", model="gpt-5.2")
 class CarefulAgent:
     @on_assignment
     async def work(self, intent):
@@ -109,7 +109,7 @@ When the LLM calls `clarify`:
 ## Multi-Provider Setup
 
 ```python
-@Agent("openai-agent", model="gpt-4o")
+@Agent("openai-agent", model="gpt-5.2")
 class OpenAIAgent:
     @on_assignment
     async def work(self, intent):
@@ -141,7 +141,7 @@ from openintent import Coordinator, on_assignment, on_all_complete
 
 @Coordinator(
     "project-lead",
-    model="gpt-4o",
+    model="gpt-5.2",
     agents=["researcher", "writer", "reviewer"],
     memory="episodic",
 )
@@ -205,7 +205,7 @@ calculator = ToolDef(
     handler=lambda expression: {"result": eval(expression)},
 )
 
-@Agent("research-analyst", model="gpt-4o", memory="episodic",
+@Agent("research-analyst", model="gpt-5.2", memory="episodic",
        tools=[web_search, calculator])
 class ResearchAnalyst:
     @on_assignment
@@ -225,7 +225,7 @@ The LLM sees full descriptions and parameter schemas for each tool, and calls th
 Mix `self.think()` with direct protocol operations:
 
 ```python
-@Agent("analyst", model="gpt-4o", memory="episodic")
+@Agent("analyst", model="gpt-5.2", memory="episodic")
 class Analyst:
     @on_assignment
     async def work(self, intent):
@@ -259,7 +259,7 @@ Override the auto-generated system prompt:
 ```python
 @Agent(
     "specialist",
-    model="gpt-4o",
+    model="gpt-5.2",
     system_prompt=(
         "You are a financial analyst specializing in risk assessment. "
         "Always quantify risks on a 1-10 scale. Use the remember tool "
@@ -279,7 +279,7 @@ class RiskAnalyst:
 ## Error Handling
 
 ```python
-@Agent("resilient", model="gpt-4o")
+@Agent("resilient", model="gpt-5.2")
 class ResilientAgent:
     @on_assignment
     async def work(self, intent):

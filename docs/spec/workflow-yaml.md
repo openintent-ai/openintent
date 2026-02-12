@@ -37,7 +37,7 @@ agents:                     # Optional: Agent declarations
 
 llm:                        # Optional: LLM provider config
   provider: "openai"
-  model: "gpt-4o"
+  model: "gpt-5.2"
 
 workflow:                   # Required: Workflow phases
   phase_name:
@@ -224,7 +224,7 @@ Configure the LLM provider for AI-powered agents.
 ```yaml
 llm:
   provider: "openai"      # openai, anthropic, or env
-  model: "gpt-4o"         # Model name (optional)
+  model: "gpt-5.2"         # Model name (optional)
   temperature: 0.7        # Sampling temperature
   max_tokens: 4096        # Max response tokens
   system_prompt: "..."    # Global system prompt
@@ -242,9 +242,9 @@ llm:
 
 | Provider | Default Model | Environment Variable |
 |----------|---------------|---------------------|
-| `openai` | `gpt-4o` | `OPENAI_API_KEY` |
+| `openai` | `gpt-5.2` | `OPENAI_API_KEY` |
 | `anthropic` | `claude-sonnet-4-20250514` | `ANTHROPIC_API_KEY` |
-| `env` | `gpt-4o` | Auto-detect from env |
+| `env` | `gpt-5.2` | Auto-detect from env |
 
 ## Retry Configuration
 
@@ -614,7 +614,7 @@ agents:
 
 llm:
   provider: openai
-  model: gpt-4o
+  model: gpt-5.2
   temperature: 0.7
 
 workflow:

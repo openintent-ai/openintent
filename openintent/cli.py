@@ -327,7 +327,7 @@ def llm_call_with_adapter(prompt: str, oi_client, intent_id: str) -> str:
             from openintent.adapters import OpenAIAdapter
             adapter = OpenAIAdapter(LLM_CLIENT, oi_client, intent_id)
             r = adapter.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5.2-mini",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=500
             )

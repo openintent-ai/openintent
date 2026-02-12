@@ -167,6 +167,129 @@ class Researcher:
         return {"results": results, "summary": summary}
 ```
 
+## Real External API Execution
+
+When credentials include execution config, the server makes real API calls instead of returning placeholder responses.
+
+### REST API with API Key (SerpAPI)
+
+```python
+from openintent import OpenIntentClient
+
+client = OpenIntentClient(base_url="http://localhost:8000", agent_id="admin")
+
+# 1. Create a vault
+vault = client.create_vault(owner_id="admin", name="Search APIs")
+
+# 2. Store credential with execution config
+cred = client.create_credential(
+    vault_id=vault["id"],
+    service="serpapi",
+    label="SerpAPI Production",
+    auth_type="api_key",
+    metadata={
+        "base_url": "https://serpapi.com",
+        "endpoints": {
+            "web_search": {
+                "path": "/search",
+                "method": "GET",
+                "param_mapping": "query"
+            }
+        },
+        "auth": {"location": "query", "query_param": "api_key"},
+        "api_key": "your-serpapi-key"
+    }
+)
+
+# 3. Grant the tool to an agent
+client.create_tool_grant(
+    credential_id=cred["id"],
+    agent_id="researcher",
+    granted_by="admin",
+    scopes=["web_search"]
+)
+
+# 4. Agent invokes — server calls SerpAPI directly
+result = client.invoke_tool(
+    tool_name="web_search",
+    agent_id="researcher",
+    parameters={"query": "OpenIntent protocol", "num": 5}
+)
+# result contains real search results from SerpAPI
+```
+
+### OAuth2 API (Salesforce)
+
+```python
+cred = client.create_credential(
+    vault_id=vault["id"],
+    service="salesforce",
+    label="Salesforce CRM",
+    auth_type="oauth2_token",
+    metadata={
+        "base_url": "https://yourinstance.salesforce.com",
+        "endpoints": {
+            "query": {
+                "path": "/services/data/v58.0/query",
+                "method": "GET",
+                "param_mapping": "query"
+            }
+        },
+        "token_url": "https://login.salesforce.com/services/oauth2/token",
+        "token_grant_type": "refresh_token",
+        "access_token": "eyJ...",
+        "refresh_token": "dGhp...",
+        "client_id": "your-client-id",
+        "client_secret": "your-client-secret"
+    }
+)
+
+# If the access token expires, the adapter automatically refreshes it
+result = client.invoke_tool(
+    tool_name="query",
+    agent_id="researcher",
+    parameters={"q": "SELECT Id, Name FROM Account LIMIT 10"}
+)
+```
+
+### Webhook Dispatch (Slack)
+
+```python
+cred = client.create_credential(
+    vault_id=vault["id"],
+    service="slack-notify",
+    label="Slack Alerts",
+    auth_type="webhook",
+    metadata={
+        "base_url": "https://hooks.slack.com/services/T.../B.../xxx",
+        "signing_secret": "whsec_..."
+    }
+)
+
+# Dispatch sends HMAC-signed POST to the webhook URL
+result = client.invoke_tool(
+    tool_name="slack-notify",
+    agent_id="notifier",
+    parameters={"text": "Deployment complete", "channel": "#ops"}
+)
+```
+
+### Security: What Gets Blocked
+
+```python
+# These URLs are automatically blocked by the execution layer:
+
+# Private IPs
+# "http://192.168.1.1/admin"     → SecurityError: private IP blocked
+# "http://10.0.0.1/internal"     → SecurityError: private IP blocked
+
+# Cloud metadata endpoints
+# "http://169.254.169.254/latest" → SecurityError: metadata endpoint blocked
+
+# Non-HTTP schemes
+# "ftp://files.example.com"      → SecurityError: non-HTTP scheme blocked
+```
+
 ## Revoking Grants
 
 ```python

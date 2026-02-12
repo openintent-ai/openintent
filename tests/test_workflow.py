@@ -171,7 +171,7 @@ info:
 
 llm:
   provider: openai
-  model: gpt-4o
+  model: gpt-5.2
   temperature: 0.5
 
 workflow:
@@ -186,7 +186,7 @@ workflow:
 
         assert spec.llm is not None
         assert spec.llm.provider == "openai"
-        assert spec.llm.model == "gpt-4o"
+        assert spec.llm.model == "gpt-5.2"
         assert spec.llm.temperature == 0.5
 
     def test_agents_from_phases(self, tmp_path):
@@ -269,7 +269,7 @@ class TestLLMConfig:
     def test_get_default_model_openai(self):
         """Test default model for OpenAI."""
         config = LLMConfig(provider="openai")
-        assert config.get_default_model() == "gpt-4o"
+        assert config.get_default_model() == "gpt-5.2"
 
     def test_get_default_model_anthropic(self):
         """Test default model for Anthropic."""
@@ -281,7 +281,7 @@ class TestLLMConfig:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         config = LLMConfig(provider="auto")
-        assert config.get_default_model() == "gpt-4o"
+        assert config.get_default_model() == "gpt-5.2"
 
     def test_get_default_model_explicit_anthropic(self):
         """Test explicit Anthropic model default."""

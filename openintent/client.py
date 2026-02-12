@@ -26,11 +26,14 @@ from .models import (
     AccessRequestStatus,  # noqa: F401
     ACLEntry,
     AgentCapacity,  # noqa: F401
+    AgentIdentity,
     AgentRecord,
     AgentStatus,  # noqa: F401
     AggregateStatus,
     ArbitrationRequest,
+    ChainVerification,
     Checkpoint,  # noqa: F401
+    ConsistencyProof,
     CoordinatorLease,
     CoordinatorStatus,  # noqa: F401
     CoordinatorType,  # noqa: F401
@@ -40,11 +43,14 @@ from .models import (
     Decision,
     DecisionRecord,  # noqa: F401
     DecisionType,
+    EventProof,  # noqa: F401
     EventType,
     GrantConstraints,  # noqa: F401
     Guardrails,  # noqa: F401
     Heartbeat,  # noqa: F401
     HeartbeatConfig,  # noqa: F401
+    IdentityChallenge,
+    IdentityVerification,
     Intent,
     IntentACL,
     IntentAttachment,
@@ -57,11 +63,14 @@ from .models import (
     IntentSubscription,
     IntentTemplate,  # noqa: F401
     LLMRequestPayload,
+    LogCheckpoint,
     MembershipRole,
     MemoryEntry,
     MemoryPolicy,  # noqa: F401
     MemoryScope,  # noqa: F401
     MemoryType,  # noqa: F401
+    MerkleProof,
+    MerkleProofEntry,  # noqa: F401
     Permission,
     Plan,
     PlanCondition,  # noqa: F401
@@ -74,6 +83,7 @@ from .models import (
     StreamStatus,
     Task,
     TaskStatus,
+    TimestampAnchor,  # noqa: F401
     ToolCallPayload,
     ToolGrant,
     ToolInvocation,  # noqa: F401
@@ -529,6 +539,8 @@ class OpenIntentClient:
         intent_id: str,
         event_type: EventType,
         payload: Optional[dict[str, Any]] = None,
+        trace_id: Optional[str] = None,
+        parent_event_id: Optional[str] = None,
     ) -> IntentEvent:
         """
         Append an event to the intent's audit log.
@@ -537,17 +549,24 @@ class OpenIntentClient:
             intent_id: The intent to log against.
             event_type: Type of event.
             payload: Event-specific data.
+            trace_id: RFC-0020 correlation ID for distributed tracing.
+            parent_event_id: RFC-0020 ID of the event that caused this one.
 
         Returns:
             The created IntentEvent object.
         """
+        body: dict[str, Any] = {
+            "event_type": event_type.value,
+            "actor": self.agent_id,
+            "payload": payload or {},
+        }
+        if trace_id:
+            body["trace_id"] = trace_id
+        if parent_event_id:
+            body["parent_event_id"] = parent_event_id
         response = self._client.post(
             f"/api/v1/intents/{intent_id}/events",
-            json={
-                "event_type": event_type.value,
-                "actor": self.agent_id,
-                "payload": payload or {},
-            },
+            json=body,
         )
         data = self._handle_response(response)
         return IntentEvent.from_dict(data)
@@ -2430,6 +2449,132 @@ class OpenIntentClient:
         if response.status_code != 200:
             self._handle_response(response)
 
+    # ==================== Cryptographic Agent Identity (RFC-0018) ====================
+
+    def register_identity(
+        self,
+        agent_id: str,
+        public_key: str,
+        key_algorithm: str = "Ed25519",
+        key_expires_at: Optional[str] = None,
+    ) -> IdentityChallenge:
+        """Initiate identity registration with a public key (RFC-0018)."""
+        payload: dict[str, Any] = {
+            "public_key": public_key,
+            "key_algorithm": key_algorithm,
+        }
+        if key_expires_at:
+            payload["key_expires_at"] = key_expires_at
+        response = self._client.post(
+            f"/api/v1/agents/{agent_id}/identity", json=payload
+        )
+        data = self._handle_response(response)
+        return IdentityChallenge.from_dict(data)
+
+    def complete_identity_challenge(
+        self,
+        agent_id: str,
+        challenge: str,
+        signature: str,
+    ) -> AgentIdentity:
+        """Submit signed challenge to complete identity registration (RFC-0018)."""
+        response = self._client.post(
+            f"/api/v1/agents/{agent_id}/identity/challenge",
+            json={"challenge": challenge, "signature": signature},
+        )
+        data = self._handle_response(response)
+        return AgentIdentity.from_dict(data)
+
+    def get_identity(self, agent_id: str) -> AgentIdentity:
+        """Retrieve an agent's cryptographic identity (RFC-0018)."""
+        response = self._client.get(f"/api/v1/agents/{agent_id}/identity")
+        data = self._handle_response(response)
+        return AgentIdentity.from_dict(data)
+
+    def verify_signature(
+        self,
+        agent_id: str,
+        payload: dict[str, Any],
+        signature: str,
+    ) -> IdentityVerification:
+        """Verify a signed payload against an agent's registered key (RFC-0018)."""
+        response = self._client.post(
+            f"/api/v1/agents/{agent_id}/identity/verify",
+            json={"payload": payload, "signature": signature},
+        )
+        data = self._handle_response(response)
+        return IdentityVerification.from_dict(data)
+
+    def rotate_key(
+        self,
+        agent_id: str,
+        new_public_key: str,
+        old_public_key: str,
+        signature: str,
+    ) -> AgentIdentity:
+        """Rotate an agent's key pair (RFC-0018)."""
+        response = self._client.post(
+            f"/api/v1/agents/{agent_id}/identity/rotate",
+            json={
+                "action": "rotate",
+                "new_public_key": new_public_key,
+                "old_public_key": old_public_key,
+                "signature": signature,
+            },
+        )
+        data = self._handle_response(response)
+        return AgentIdentity.from_dict(data)
+
+    # ==================== Verifiable Event Logs (RFC-0019) ====================
+
+    def verify_event_chain(self, intent_id: str) -> ChainVerification:
+        """Verify the full hash chain for an intent's event log (RFC-0019)."""
+        response = self._client.get(f"/api/v1/intents/{intent_id}/events/verify")
+        data = self._handle_response(response)
+        return ChainVerification.from_dict(data)
+
+    def list_checkpoints(
+        self,
+        intent_id: Optional[str] = None,
+        scope: Optional[str] = None,
+    ) -> list[LogCheckpoint]:
+        """List log checkpoints (RFC-0019)."""
+        params: dict[str, Any] = {}
+        if intent_id:
+            params["intent_id"] = intent_id
+        if scope:
+            params["scope"] = scope
+        response = self._client.get("/api/v1/checkpoints", params=params)
+        data = self._handle_response(response)
+        return [LogCheckpoint.from_dict(c) for c in data]
+
+    def get_checkpoint(self, checkpoint_id: str) -> LogCheckpoint:
+        """Get a specific checkpoint (RFC-0019)."""
+        response = self._client.get(f"/api/v1/checkpoints/{checkpoint_id}")
+        data = self._handle_response(response)
+        return LogCheckpoint.from_dict(data)
+
+    def get_merkle_proof(self, checkpoint_id: str, event_id: str) -> MerkleProof:
+        """Get a Merkle proof for an event within a checkpoint (RFC-0019)."""
+        response = self._client.get(
+            f"/api/v1/checkpoints/{checkpoint_id}/proof/{event_id}"
+        )
+        data = self._handle_response(response)
+        return MerkleProof.from_dict(data)
+
+    def verify_consistency(
+        self,
+        from_checkpoint: str,
+        to_checkpoint: str,
+    ) -> ConsistencyProof:
+        """Verify consistency between two checkpoints (RFC-0019)."""
+        response = self._client.get(
+            "/api/v1/verify/consistency",
+            params={"from_checkpoint": from_checkpoint, "to_checkpoint": to_checkpoint},
+        )
+        data = self._handle_response(response)
+        return ConsistencyProof.from_dict(data)
+
     def close(self) -> None:
         """Close the HTTP client connection."""
         self._client.close()
@@ -2601,15 +2746,27 @@ class AsyncOpenIntentClient:
         intent_id: str,
         event_type: EventType,
         payload: Optional[dict[str, Any]] = None,
+        trace_id: Optional[str] = None,
+        parent_event_id: Optional[str] = None,
     ) -> IntentEvent:
-        """Append an event to the intent's audit log."""
+        """Append an event to the intent's audit log.
+
+        Args:
+            trace_id: RFC-0020 correlation ID for distributed tracing.
+            parent_event_id: RFC-0020 ID of the event that caused this one.
+        """
+        body: dict[str, Any] = {
+            "event_type": event_type.value,
+            "actor": self.agent_id,
+            "payload": payload or {},
+        }
+        if trace_id:
+            body["trace_id"] = trace_id
+        if parent_event_id:
+            body["parent_event_id"] = parent_event_id
         response = await self._client.post(
             f"/api/v1/intents/{intent_id}/events",
-            json={
-                "event_type": event_type.value,
-                "actor": self.agent_id,
-                "payload": payload or {},
-            },
+            json=body,
         )
         data = self._handle_response(response)
         return IntentEvent.from_dict(data)
@@ -3933,6 +4090,132 @@ class AsyncOpenIntentClient:
         response = await self._client.delete(f"/api/v1/triggers/{trigger_id}")
         if response.status_code != 200:
             self._handle_response(response)
+
+    # ==================== Cryptographic Agent Identity (RFC-0018) ====================
+
+    async def register_identity(
+        self,
+        agent_id: str,
+        public_key: str,
+        key_algorithm: str = "Ed25519",
+        key_expires_at: Optional[str] = None,
+    ) -> IdentityChallenge:
+        """Initiate identity registration with a public key (RFC-0018)."""
+        payload: dict[str, Any] = {
+            "public_key": public_key,
+            "key_algorithm": key_algorithm,
+        }
+        if key_expires_at:
+            payload["key_expires_at"] = key_expires_at
+        response = await self._client.post(
+            f"/api/v1/agents/{agent_id}/identity", json=payload
+        )
+        data = self._handle_response(response)
+        return IdentityChallenge.from_dict(data)
+
+    async def complete_identity_challenge(
+        self,
+        agent_id: str,
+        challenge: str,
+        signature: str,
+    ) -> AgentIdentity:
+        """Submit signed challenge to complete identity registration (RFC-0018)."""
+        response = await self._client.post(
+            f"/api/v1/agents/{agent_id}/identity/challenge",
+            json={"challenge": challenge, "signature": signature},
+        )
+        data = self._handle_response(response)
+        return AgentIdentity.from_dict(data)
+
+    async def get_identity(self, agent_id: str) -> AgentIdentity:
+        """Retrieve an agent's cryptographic identity (RFC-0018)."""
+        response = await self._client.get(f"/api/v1/agents/{agent_id}/identity")
+        data = self._handle_response(response)
+        return AgentIdentity.from_dict(data)
+
+    async def verify_signature(
+        self,
+        agent_id: str,
+        payload: dict[str, Any],
+        signature: str,
+    ) -> IdentityVerification:
+        """Verify a signed payload against an agent's registered key (RFC-0018)."""
+        response = await self._client.post(
+            f"/api/v1/agents/{agent_id}/identity/verify",
+            json={"payload": payload, "signature": signature},
+        )
+        data = self._handle_response(response)
+        return IdentityVerification.from_dict(data)
+
+    async def rotate_key(
+        self,
+        agent_id: str,
+        new_public_key: str,
+        old_public_key: str,
+        signature: str,
+    ) -> AgentIdentity:
+        """Rotate an agent's key pair (RFC-0018)."""
+        response = await self._client.post(
+            f"/api/v1/agents/{agent_id}/identity/rotate",
+            json={
+                "action": "rotate",
+                "new_public_key": new_public_key,
+                "old_public_key": old_public_key,
+                "signature": signature,
+            },
+        )
+        data = self._handle_response(response)
+        return AgentIdentity.from_dict(data)
+
+    # ==================== Verifiable Event Logs (RFC-0019) ====================
+
+    async def verify_event_chain(self, intent_id: str) -> ChainVerification:
+        """Verify the full hash chain for an intent's event log (RFC-0019)."""
+        response = await self._client.get(f"/api/v1/intents/{intent_id}/events/verify")
+        data = self._handle_response(response)
+        return ChainVerification.from_dict(data)
+
+    async def list_checkpoints(
+        self,
+        intent_id: Optional[str] = None,
+        scope: Optional[str] = None,
+    ) -> list[LogCheckpoint]:
+        """List log checkpoints (RFC-0019)."""
+        params: dict[str, Any] = {}
+        if intent_id:
+            params["intent_id"] = intent_id
+        if scope:
+            params["scope"] = scope
+        response = await self._client.get("/api/v1/checkpoints", params=params)
+        data = self._handle_response(response)
+        return [LogCheckpoint.from_dict(c) for c in data]
+
+    async def get_checkpoint(self, checkpoint_id: str) -> LogCheckpoint:
+        """Get a specific checkpoint (RFC-0019)."""
+        response = await self._client.get(f"/api/v1/checkpoints/{checkpoint_id}")
+        data = self._handle_response(response)
+        return LogCheckpoint.from_dict(data)
+
+    async def get_merkle_proof(self, checkpoint_id: str, event_id: str) -> MerkleProof:
+        """Get a Merkle proof for an event within a checkpoint (RFC-0019)."""
+        response = await self._client.get(
+            f"/api/v1/checkpoints/{checkpoint_id}/proof/{event_id}"
+        )
+        data = self._handle_response(response)
+        return MerkleProof.from_dict(data)
+
+    async def verify_consistency(
+        self,
+        from_checkpoint: str,
+        to_checkpoint: str,
+    ) -> ConsistencyProof:
+        """Verify consistency between two checkpoints (RFC-0019)."""
+        response = await self._client.get(
+            "/api/v1/verify/consistency",
+            params={"from_checkpoint": from_checkpoint, "to_checkpoint": to_checkpoint},
+        )
+        data = self._handle_response(response)
+        return ConsistencyProof.from_dict(data)
 
     async def close(self) -> None:
         """Close the HTTP client connection."""

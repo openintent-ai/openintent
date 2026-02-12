@@ -14,7 +14,7 @@ Add `model=` to any `@Agent` or `@Coordinator` decorator and the agent gains an 
 ```python
 from openintent import Agent, on_assignment
 
-@Agent("analyst", model="gpt-4o", memory="episodic")
+@Agent("analyst", model="gpt-5.2", memory="episodic")
 class Analyst:
     @on_assignment
     async def work(self, intent):
@@ -74,7 +74,7 @@ The LLM Engine sits between your handler and the LLM provider. It:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `model` | --- | Model identifier (e.g. `gpt-4o`, `claude-sonnet-4-20250514`) |
+| `model` | --- | Model identifier (e.g. `gpt-5.2`, `claude-sonnet-4-20250514`) |
 | `provider` | auto-detected | Provider name; inferred from model if omitted |
 | `system_prompt` | auto-generated | Custom system instructions |
 | `temperature` | `0.7` | Sampling temperature |
@@ -121,7 +121,7 @@ The engine reads API keys from environment variables by provider:
 Or pass explicitly:
 
 ```python
-@Agent("bot", model="gpt-4o", llm_api_key="sk-...")
+@Agent("bot", model="gpt-5.2", llm_api_key="sk-...")
 class Bot:
     ...
 ```
@@ -157,7 +157,7 @@ Coordinators get the agent tools plus:
 ### How Tools Execute
 
 ```python
-@Agent("researcher", model="gpt-4o", memory="episodic")
+@Agent("researcher", model="gpt-5.2", memory="episodic")
 class Researcher:
     @on_assignment
     async def work(self, intent):
@@ -203,7 +203,7 @@ async def web_search(query: str, max_results: int = 5) -> dict:
     # Your search implementation here
     return {"results": ["result1", "result2"]}
 
-@Agent("researcher", model="gpt-4o", tools=[web_search])
+@Agent("researcher", model="gpt-5.2", tools=[web_search])
 class Researcher:
     @on_assignment
     async def work(self, intent):
@@ -242,7 +242,7 @@ calculator = ToolDef(
     handler=lambda expression: {"result": eval(expression)},
 )
 
-@Agent("math-tutor", model="gpt-4o", tools=[calculator])
+@Agent("math-tutor", model="gpt-5.2", tools=[calculator])
 class MathTutor:
     @on_assignment
     async def work(self, intent):
@@ -254,7 +254,7 @@ class MathTutor:
 You can pass any combination of `ToolDef` objects and plain strings:
 
 ```python
-@Agent("hybrid", model="gpt-4o", tools=[web_search, calculator, "legacy_api"])
+@Agent("hybrid", model="gpt-5.2", tools=[web_search, calculator, "legacy_api"])
 class HybridAgent:
     pass
 ```
@@ -299,7 +299,7 @@ blocks or fails the tool execution, even if the server is unreachable.
 Use `self.think_stream()` to get an async generator that yields tokens:
 
 ```python
-@Agent("writer", model="gpt-4o")
+@Agent("writer", model="gpt-5.2")
 class Writer:
     @on_assignment
     async def work(self, intent):
@@ -315,7 +315,7 @@ class Writer:
 Pass `on_token=` to `self.think()`:
 
 ```python
-@Agent("narrator", model="gpt-4o")
+@Agent("narrator", model="gpt-5.2")
 class Narrator:
     @on_assignment
     async def work(self, intent):
@@ -337,7 +337,7 @@ class Narrator:
 The `clarify` tool enables structured human-in-the-loop flows:
 
 ```python
-@Agent("careful-agent", model="gpt-4o")
+@Agent("careful-agent", model="gpt-5.2")
 class CarefulAgent:
     @on_assignment
     async def work(self, intent):
@@ -370,7 +370,7 @@ from openintent import Coordinator, on_assignment
 
 @Coordinator(
     "project-lead",
-    model="gpt-4o",
+    model="gpt-5.2",
     agents=["researcher", "writer", "reviewer"],
     memory="episodic",
 )
@@ -439,7 +439,7 @@ from openintent import Agent, define_tool, on_assignment
 async def web_search(query: str) -> dict:
     return {"results": ["..."]}
 
-@Agent("hybrid", model="gpt-4o", memory="episodic", tools=[web_search])
+@Agent("hybrid", model="gpt-5.2", memory="episodic", tools=[web_search])
 class HybridAgent:
     @on_assignment
     async def work(self, intent):
@@ -468,7 +468,7 @@ The conversation history carries over between `think()` calls, so the second cal
 ```python
 from openintent import Agent, Coordinator, on_assignment, on_all_complete
 
-@Agent("researcher", model="gpt-4o", memory="episodic")
+@Agent("researcher", model="gpt-5.2", memory="episodic")
 class Researcher:
     @on_assignment
     async def work(self, intent):
@@ -490,7 +490,7 @@ class Writer:
 
 @Coordinator(
     "editor",
-    model="gpt-4o",
+    model="gpt-5.2",
     agents=["researcher", "writer"],
     memory="episodic",
 )
@@ -522,7 +522,7 @@ The engine handles errors gracefully:
 - **Missing API keys** raise clear error messages at initialization
 
 ```python
-@Agent("safe-agent", model="gpt-4o")
+@Agent("safe-agent", model="gpt-5.2")
 class SafeAgent:
     @on_assignment
     async def work(self, intent):

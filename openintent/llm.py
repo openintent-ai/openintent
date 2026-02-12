@@ -14,7 +14,7 @@ Usage:
     async def web_search(query: str) -> dict:
         return {"results": [...]}
 
-    @Agent("analyst", model="gpt-4o", memory="episodic", tools=[web_search])
+    @Agent("analyst", model="gpt-5.2", memory="episodic", tools=[web_search])
     class Analyst:
         @on_assignment
         async def work(self, intent):
@@ -944,22 +944,38 @@ class LLMEngine:
         Automatically called after every local tool handler execution.
         Silently skipped when there is no active intent or the server is
         unreachable — tracing is a best-effort benefit, never a blocker.
+
+        RFC-0020: Includes trace_id and parent_event_id from the agent's
+        active TracingContext for distributed call chain visibility.
         """
         target_intent = intent or getattr(self, "_current_intent", None)
         if not target_intent:
             return
+
+        tracing = getattr(self._agent, "_tracing_context", None)
+
+        payload: dict = {
+            "tool_name": tool_name,
+            "arguments": arguments,
+            "result": result,
+            "duration_ms": round(duration_ms, 2),
+            "agent_id": self._agent._agent_id,
+        }
+        if tracing:
+            payload["trace_id"] = tracing.trace_id
+            if tracing.parent_event_id:
+                payload["parent_event_id"] = tracing.parent_event_id
+
         try:
-            await self._agent.async_client.log_event(
+            event = await self._agent.async_client.log_event(
                 target_intent.id,
                 "tool_invocation",
-                {
-                    "tool_name": tool_name,
-                    "arguments": arguments,
-                    "result": result,
-                    "duration_ms": round(duration_ms, 2),
-                    "agent_id": self._agent._agent_id,
-                },
+                payload,
+                trace_id=tracing.trace_id if tracing else None,
+                parent_event_id=tracing.parent_event_id if tracing else None,
             )
+            if tracing and hasattr(event, "id") and event.id:
+                self._agent._tracing_context = tracing.child(event.id)
         except Exception:
             pass
 
@@ -980,6 +996,9 @@ class LLMEngine:
 
         Local handler invocations are automatically traced as protocol
         events when connected to an OpenIntent server.
+
+        RFC-0020: Passes tracing keyword argument to local handlers that
+        accept it, enabling tool -> agent call chain propagation.
         """
         if tool_name in {t["name"] for t in self._protocol_tools}:
             return await executor.execute(tool_name, arguments)
@@ -988,10 +1007,18 @@ class LLMEngine:
             t0 = time.time()
             try:
                 handler = local_handlers[tool_name]
+                import inspect
+
+                sig = inspect.signature(handler)
+                call_kwargs = dict(arguments)
+                if "tracing" in sig.parameters:
+                    call_kwargs["tracing"] = getattr(
+                        self._agent, "_tracing_context", None
+                    )
                 if asyncio.iscoroutinefunction(handler):
-                    raw = await handler(**arguments)
+                    raw = await handler(**call_kwargs)
                 else:
-                    raw = handler(**arguments)
+                    raw = handler(**call_kwargs)
                 result = raw if isinstance(raw, dict) else {"result": str(raw)}
             except Exception as e:
                 result = {"error": str(e)}

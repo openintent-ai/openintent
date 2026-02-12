@@ -12,6 +12,7 @@ from .agents import (
     BaseAgent,
     Coordinator,
     GuardrailError,
+    Identity,
     IntentSpec,
     PortfolioSpec,
     Worker,
@@ -25,6 +26,7 @@ from .agents import (
     on_escalation,
     on_event,
     on_handoff,
+    on_identity_registered,
     on_lease_available,
     on_quorum,
     on_retry,
@@ -48,12 +50,17 @@ from .models import (
     AccessRequestStatus,
     ACLEntry,
     AgentCapacity,
+    # RFC-0018: Cryptographic Agent Identity
+    AgentIdentity,
     # RFC-0016: Agent Lifecycle & Health
     AgentRecord,
     AgentStatus,
     AggregateStatus,
     ArbitrationRequest,
+    # RFC-0019: Verifiable Event Logs
+    ChainVerification,
     Checkpoint,
+    ConsistencyProof,
     # RFC-0013: Coordinator Governance
     CoordinatorLease,
     CoordinatorStatus,
@@ -66,11 +73,14 @@ from .models import (
     Decision,
     DecisionRecord,
     DecisionType,
+    EventProof,
     EventType,
     GrantConstraints,
     Guardrails,
     Heartbeat,
     HeartbeatConfig,
+    IdentityChallenge,
+    IdentityVerification,
     Intent,
     IntentACL,
     IntentAttachment,
@@ -86,12 +96,15 @@ from .models import (
     IntentTemplate,
     LeaseStatus,
     LLMRequestPayload,
+    LogCheckpoint,
     MembershipRole,
     # RFC-0015: Agent Memory
     MemoryEntry,
     MemoryPolicy,
     MemoryScope,
     MemoryType,
+    MerkleProof,
+    MerkleProofEntry,
     PeerInfo,
     Permission,
     Plan,
@@ -106,10 +119,13 @@ from .models import (
     # RFC-0012: Task Decomposition & Planning
     Task,
     TaskStatus,
+    TimestampAnchor,
     ToolCallPayload,
     ToolGrant,
     ToolInvocation,
     ToolRequirement,
+    # RFC-0020: Distributed Tracing
+    TracingContext,
     # RFC-0017: Triggers & Reactive Scheduling
     Trigger,
     TriggerCondition,
@@ -143,9 +159,11 @@ from .workflow import (
     AllowEntry,  # noqa: F401
     DelegateConfig,  # noqa: F401
     GovernanceConfig,
+    IdentityConfig,
     PermissionLevel,  # noqa: F401
     PermissionsConfig,  # noqa: F401
     PhaseConfig,
+    VerificationConfig,
     WorkflowError,
     WorkflowNotFoundError,
     WorkflowSpec,
@@ -167,7 +185,7 @@ def get_server() -> tuple[Any, Any, Any]:
         )
 
 
-__version__ = "0.9.1"
+__version__ = "0.10.0"
 __all__ = [
     "OpenIntentClient",
     "AsyncOpenIntentClient",
@@ -175,7 +193,17 @@ __all__ = [
     "AccessPolicy",
     "AccessRequest",
     "AccessRequestStatus",
+    "AgentIdentity",
     "AggregateStatus",
+    "EventProof",
+    "ChainVerification",
+    "ConsistencyProof",
+    "IdentityChallenge",
+    "IdentityVerification",
+    "LogCheckpoint",
+    "MerkleProof",
+    "MerkleProofEntry",
+    "TimestampAnchor",
     "Intent",
     "IntentState",
     "IntentStatus",
@@ -237,6 +265,7 @@ __all__ = [
     "TriggerCondition",
     "IntentTemplate",
     "TriggerLineage",
+    "TracingContext",
     "OpenIntentError",
     "ConflictError",
     "NotFoundError",
@@ -265,6 +294,7 @@ __all__ = [
     "Coordinator",
     "Worker",
     "AgentConfig",
+    "Identity",
     "IntentSpec",
     "PortfolioSpec",
     "GuardrailError",
@@ -278,6 +308,7 @@ __all__ = [
     "on_escalation",
     "on_event",
     "on_handoff",
+    "on_identity_registered",
     "on_lease_available",
     "on_quorum",
     "on_retry",
@@ -289,6 +320,8 @@ __all__ = [
     "WorkflowError",
     "WorkflowValidationError",
     "WorkflowNotFoundError",
+    "IdentityConfig",
+    "VerificationConfig",
     "PhaseConfig",
     "GovernanceConfig",
     "validate_workflow",

@@ -223,11 +223,11 @@ class LLMConfig:
         if self.model:
             return self.model
         defaults = {
-            "openai": "gpt-4o",
+            "openai": "gpt-5.2",
             "anthropic": "claude-sonnet-4-20250514",
-            "env": "gpt-4o",
+            "env": "gpt-5.2",
         }
-        return defaults.get(self.provider, "gpt-4o")
+        return defaults.get(self.provider, "gpt-5.2")
 
 
 @dataclass
@@ -240,6 +240,56 @@ class GovernanceConfig:
     escalation: Optional[dict[str, str]] = None
     access_review: Optional[dict[str, Any]] = None
     audit_access_events: bool = True
+
+
+@dataclass
+class IdentityConfig:
+    """Cryptographic identity configuration for YAML workflows (RFC-0018)."""
+
+    enabled: bool = False
+    key_path: Optional[str] = None
+    auto_register: bool = True
+    auto_sign: bool = True
+    key_algorithm: str = "Ed25519"
+    key_expires: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> IdentityConfig:
+        if isinstance(data, bool):
+            return cls(enabled=data)
+        return cls(
+            enabled=data.get("enabled", True),
+            key_path=data.get("key_path"),
+            auto_register=data.get("auto_register", True),
+            auto_sign=data.get("auto_sign", True),
+            key_algorithm=data.get("key_algorithm", "Ed25519"),
+            key_expires=data.get("key_expires"),
+        )
+
+
+@dataclass
+class VerificationConfig:
+    """Verifiable event log configuration for YAML workflows (RFC-0019)."""
+
+    enabled: bool = False
+    require_signed_events: bool = False
+    verify_chain: bool = True
+    checkpoint_interval: int = 100
+    checkpoint_time_minutes: int = 5
+    anchor_provider: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> VerificationConfig:
+        if isinstance(data, bool):
+            return cls(enabled=data)
+        return cls(
+            enabled=data.get("enabled", True),
+            require_signed_events=data.get("require_signed_events", False),
+            verify_chain=data.get("verify_chain", True),
+            checkpoint_interval=data.get("checkpoint_interval", 100),
+            checkpoint_time_minutes=data.get("checkpoint_time_minutes", 5),
+            anchor_provider=data.get("anchor_provider"),
+        )
 
 
 @dataclass
@@ -274,6 +324,10 @@ class WorkflowSpec:
 
     # LLM configuration
     llm: Optional[LLMConfig] = None
+
+    # Identity and verification (RFC-0018, RFC-0019)
+    identity: Optional[IdentityConfig] = None
+    verification: Optional[VerificationConfig] = None
 
     # Types (for validation)
     types: dict[str, Any] = field(default_factory=dict)
@@ -501,6 +555,14 @@ class WorkflowSpec:
         if llm_data:
             llm = LLMConfig.from_dict(llm_data)
 
+        # Identity and verification (RFC-0018, RFC-0019)
+        identity = None
+        if data.get("identity"):
+            identity = IdentityConfig.from_dict(data["identity"])
+        verification = None
+        if data.get("verification"):
+            verification = VerificationConfig.from_dict(data["verification"])
+
         return cls(
             version=str(version),
             name=name,
@@ -510,6 +572,8 @@ class WorkflowSpec:
             phases=phases,
             governance=governance,
             llm=llm,
+            identity=identity,
+            verification=verification,
             types=data.get("types", {}),
             source_path=source_path,
         )

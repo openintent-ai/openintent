@@ -250,6 +250,16 @@ def on_drain(func: Callable) -> Callable:
     return func
 
 
+def on_identity_registered(func: Callable) -> Callable:
+    """
+    Decorator: Called when the agent's cryptographic identity is registered.
+
+    Receives the agent's identity record including public key and DID.
+    """
+    func._openintent_handler = "identity_registered"
+    return func
+
+
 def on_conflict(func: Callable) -> Callable:
     """Decorator: Called when version conflicts occur between agents (RFC-0002).
     Handler receives (self, intent, conflict) with conflict details."""
@@ -361,6 +371,47 @@ def output_guardrail(func: Callable) -> Callable:
     return func
 
 
+def Identity(  # noqa: N802
+    key_path: Optional[str] = None,
+    auto_sign: bool = True,
+    auto_register: bool = True,
+    verify_incoming: bool = False,
+) -> Callable:
+    """
+    Protocol decorator: Configures cryptographic identity for an agent (RFC-0018).
+
+    When applied, the agent generates or loads an Ed25519 key pair,
+    registers it with the server, and automatically signs all emitted events.
+
+    Args:
+        key_path: Path to Ed25519 private key file. If None, generates a new key.
+        auto_sign: Automatically sign all events emitted by this agent.
+        auto_register: Register the key with the server on agent startup.
+        verify_incoming: Verify signatures on incoming events.
+
+    Example:
+        ```python
+        @Agent("secure-bot")
+        @Identity(auto_sign=True)
+        class SecureAgent:
+            @on_assignment
+            async def work(self, intent):
+                return {"result": "signed"}
+        ```
+    """
+
+    def decorator(cls: type) -> type:
+        cls._identity_config = {
+            "key_path": key_path,
+            "auto_sign": auto_sign,
+            "auto_register": auto_register,
+            "verify_incoming": verify_incoming,
+        }
+        return cls
+
+    return decorator
+
+
 class GuardrailError(Exception):
     """Raised by input/output guardrails to reject processing."""
 
@@ -436,6 +487,11 @@ class AgentConfig:
     memory_namespace: Optional[str] = None
     # v0.8.0: Tools (RFC-0014)
     tools: list = field(default_factory=list)
+    # v0.10.0: Cryptographic Identity (RFC-0018)
+    identity_key_path: Optional[str] = None
+    auto_sign: bool = False
+    auto_register_identity: bool = False
+    verify_incoming: bool = False
 
 
 # ==================== Base Agent Class ====================
@@ -498,6 +554,7 @@ class BaseAgent(ABC):
             "retry": [],
             "input_guardrail": [],
             "output_guardrail": [],
+            "identity_registered": [],
         }
 
         for name in dir(self):
@@ -561,6 +618,11 @@ class BaseAgent(ABC):
         if not self._tools_proxy:
             self._tools_proxy = _ToolsProxy(self)
         return self._tools_proxy
+
+    @property
+    def identity_config(self) -> dict:
+        """Get identity configuration (RFC-0018)."""
+        return getattr(self.__class__, "_identity_config", {})
 
     def lease(self, intent_id: str, scope: str, duration_seconds: int = 300):
         """
@@ -1229,7 +1291,7 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
         async def web_search(query: str) -> dict:
             return {"results": [...]}
 
-        @Agent("analyst", model="gpt-4o", tools=[web_search])
+        @Agent("analyst", model="gpt-5.2", tools=[web_search])
         class Analyst:
             @on_assignment
             async def work(self, intent):
