@@ -13,9 +13,7 @@ from .exceptions import ValidationError as SDKValidationError
 class InputValidationError(SDKValidationError):
     """Raised when input validation fails before making an API request."""
 
-    def __init__(
-        self, message: str, field: Optional[str] = None, value: Any = None
-    ) -> None:
+    def __init__(self, message: str, field: Optional[str] = None, value: Any = None) -> None:
         super().__init__(message, status_code=None, response=None)
         self.field = field
         self.value = value
@@ -29,9 +27,7 @@ def validate_required(value: Any, field_name: str) -> None:
     if value is None:
         raise ValidationError(f"{field_name} is required", field=field_name)
     if isinstance(value, str) and not value.strip():
-        raise ValidationError(
-            f"{field_name} cannot be empty", field=field_name, value=value
-        )
+        raise ValidationError(f"{field_name} cannot be empty", field=field_name, value=value)
 
 
 def validate_string_length(
@@ -65,14 +61,10 @@ def validate_positive_int(value: int, field_name: str) -> None:
         return
 
     if not isinstance(value, int) or isinstance(value, bool):
-        raise ValidationError(
-            f"{field_name} must be an integer", field=field_name, value=value
-        )
+        raise ValidationError(f"{field_name} must be an integer", field=field_name, value=value)
 
     if value <= 0:
-        raise ValidationError(
-            f"{field_name} must be positive", field=field_name, value=value
-        )
+        raise ValidationError(f"{field_name} must be positive", field=field_name, value=value)
 
 
 def validate_non_negative(value: float, field_name: str) -> None:
@@ -81,14 +73,10 @@ def validate_non_negative(value: float, field_name: str) -> None:
         return
 
     if not isinstance(value, (int, float)) or isinstance(value, bool):
-        raise ValidationError(
-            f"{field_name} must be a number", field=field_name, value=value
-        )
+        raise ValidationError(f"{field_name} must be a number", field=field_name, value=value)
 
     if value < 0:
-        raise ValidationError(
-            f"{field_name} cannot be negative", field=field_name, value=value
-        )
+        raise ValidationError(f"{field_name} cannot be negative", field=field_name, value=value)
 
 
 def validate_uuid(value: str, field_name: str) -> None:
@@ -101,9 +89,7 @@ def validate_uuid(value: str, field_name: str) -> None:
     )
 
     if not uuid_pattern.match(value):
-        raise ValidationError(
-            f"{field_name} must be a valid UUID", field=field_name, value=value
-        )
+        raise ValidationError(f"{field_name} must be a valid UUID", field=field_name, value=value)
 
 
 def validate_url(value: str, field_name: str) -> None:
@@ -122,9 +108,7 @@ def validate_url(value: str, field_name: str) -> None:
     )
 
     if not url_pattern.match(value):
-        raise ValidationError(
-            f"{field_name} must be a valid URL", field=field_name, value=value
-        )
+        raise ValidationError(f"{field_name} must be a valid URL", field=field_name, value=value)
 
 
 def validate_email(value: str, field_name: str) -> None:
@@ -159,22 +143,16 @@ def validate_dict(value: Any, field_name: str) -> None:
         return
 
     if not isinstance(value, dict):
-        raise ValidationError(
-            f"{field_name} must be a dictionary", field=field_name, value=value
-        )
+        raise ValidationError(f"{field_name} must be a dictionary", field=field_name, value=value)
 
 
-def validate_list(
-    value: Any, field_name: str, item_type: Optional[type] = None
-) -> None:
+def validate_list(value: Any, field_name: str, item_type: Optional[type] = None) -> None:
     """Validate that a value is a list with optional item type checking."""
     if value is None:
         return
 
     if not isinstance(value, list):
-        raise ValidationError(
-            f"{field_name} must be a list", field=field_name, value=value
-        )
+        raise ValidationError(f"{field_name} must be a list", field=field_name, value=value)
 
     if item_type is not None:
         for i, item in enumerate(value):
@@ -224,9 +202,7 @@ def validate_agent_id(value: str, field_name: str = "agent_id") -> None:
         return
 
     if not value.strip():
-        raise ValidationError(
-            f"{field_name} cannot be empty", field=field_name, value=value
-        )
+        raise ValidationError(f"{field_name} cannot be empty", field=field_name, value=value)
 
     if len(value) > 255:
         raise ValidationError(

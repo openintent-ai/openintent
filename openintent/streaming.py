@@ -167,9 +167,7 @@ class SSEStream:
 
                 if not line:
                     if event_data:
-                        event = SSEEvent.from_raw(
-                            event_type, event_data.strip(), event_id
-                        )
+                        event = SSEEvent.from_raw(event_type, event_data.strip(), event_id)
                         if event_id:
                             self._last_event_id = event_id
                         yield event

@@ -58,9 +58,7 @@ class IntentModel(Base):  # type: ignore[misc, valid-type]
     attachments = relationship(
         "IntentAttachmentModel", back_populates="intent", cascade="all, delete-orphan"
     )
-    costs = relationship(
-        "IntentCostModel", back_populates="intent", cascade="all, delete-orphan"
-    )
+    costs = relationship("IntentCostModel", back_populates="intent", cascade="all, delete-orphan")
 
     __table_args__ = (Index("idx_intents_parent_id", "parent_id"),)
 
@@ -185,9 +183,7 @@ class IntentRetryPolicyModel(Base):  # type: ignore[misc, valid-type]
     __tablename__ = "intent_retry_policies"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    intent_id = Column(
-        String(36), ForeignKey("intents.id"), nullable=False, unique=True
-    )
+    intent_id = Column(String(36), ForeignKey("intents.id"), nullable=False, unique=True)
     strategy = Column(String(50), nullable=False)
     max_retries = Column(Integer, default=3)
     base_delay_ms = Column(Integer, default=1000)
@@ -231,9 +227,7 @@ class ACLDefaultPolicyModel(Base):  # type: ignore[misc, valid-type]
     __tablename__ = "acl_default_policies"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    intent_id = Column(
-        String(36), ForeignKey("intents.id"), nullable=False, unique=True
-    )
+    intent_id = Column(String(36), ForeignKey("intents.id"), nullable=False, unique=True)
     default_policy = Column(String(50), default="open")
 
     __table_args__ = (Index("idx_acl_default_policy_intent", "intent_id"),)
@@ -561,20 +555,14 @@ class Database:
 
     def get_children(self, session: Session, parent_id: str) -> List[IntentModel]:
         """Get immediate children of an intent."""
-        return (
-            session.query(IntentModel).filter(IntentModel.parent_id == parent_id).all()
-        )
+        return session.query(IntentModel).filter(IntentModel.parent_id == parent_id).all()
 
     def get_dependencies(self, session: Session, intent_id: str) -> List[IntentModel]:
         """Get intents that this intent depends on."""
         intent = self.get_intent(session, intent_id)
         if not intent or not intent.depends_on:
             return []
-        return (
-            session.query(IntentModel)
-            .filter(IntentModel.id.in_(intent.depends_on))
-            .all()
-        )
+        return session.query(IntentModel).filter(IntentModel.id.in_(intent.depends_on)).all()
 
     def get_dependents(self, session: Session, intent_id: str) -> List[IntentModel]:
         """Get intents that depend on this intent."""
@@ -725,19 +713,11 @@ class Database:
 
     def get_agents(self, session: Session, intent_id: str) -> List[IntentAgentModel]:
         return (
-            session.query(IntentAgentModel)
-            .filter(IntentAgentModel.intent_id == intent_id)
-            .all()
+            session.query(IntentAgentModel).filter(IntentAgentModel.intent_id == intent_id).all()
         )
 
-    def get_agent_assignments(
-        self, session: Session, agent_id: str
-    ) -> List[IntentAgentModel]:
-        return (
-            session.query(IntentAgentModel)
-            .filter(IntentAgentModel.agent_id == agent_id)
-            .all()
-        )
+    def get_agent_assignments(self, session: Session, agent_id: str) -> List[IntentAgentModel]:
+        return session.query(IntentAgentModel).filter(IntentAgentModel.agent_id == agent_id).all()
 
     def acquire_lease(
         self,
@@ -775,19 +755,13 @@ class Database:
 
     def get_leases(self, session: Session, intent_id: str) -> List[IntentLeaseModel]:
         return (
-            session.query(IntentLeaseModel)
-            .filter(IntentLeaseModel.intent_id == intent_id)
-            .all()
+            session.query(IntentLeaseModel).filter(IntentLeaseModel.intent_id == intent_id).all()
         )
 
     def release_lease(
         self, session: Session, lease_id: str, agent_id: str
     ) -> Optional[IntentLeaseModel]:
-        lease = (
-            session.query(IntentLeaseModel)
-            .filter(IntentLeaseModel.id == lease_id)
-            .first()
-        )
+        lease = session.query(IntentLeaseModel).filter(IntentLeaseModel.id == lease_id).first()
         if not lease or lease.agent_id != agent_id:
             return None
 
@@ -799,11 +773,7 @@ class Database:
     def renew_lease(
         self, session: Session, lease_id: str, agent_id: str, duration_seconds: int
     ) -> Optional[IntentLeaseModel]:
-        lease = (
-            session.query(IntentLeaseModel)
-            .filter(IntentLeaseModel.id == lease_id)
-            .first()
-        )
+        lease = session.query(IntentLeaseModel).filter(IntentLeaseModel.id == lease_id).first()
         if not lease or lease.agent_id != agent_id:
             return None
         if lease.released_at is not None:
@@ -821,14 +791,8 @@ class Database:
         session.refresh(portfolio)
         return portfolio
 
-    def get_portfolio(
-        self, session: Session, portfolio_id: str
-    ) -> Optional[PortfolioModel]:
-        return (
-            session.query(PortfolioModel)
-            .filter(PortfolioModel.id == portfolio_id)
-            .first()
-        )
+    def get_portfolio(self, session: Session, portfolio_id: str) -> Optional[PortfolioModel]:
+        return session.query(PortfolioModel).filter(PortfolioModel.id == portfolio_id).first()
 
     def list_portfolios(
         self, session: Session, created_by: Optional[str] = None
@@ -838,9 +802,7 @@ class Database:
             query = query.filter(PortfolioModel.created_by == created_by)
         return query.all()
 
-    def add_intent_to_portfolio(
-        self, session: Session, **kwargs
-    ) -> PortfolioMembershipModel:
+    def add_intent_to_portfolio(self, session: Session, **kwargs) -> PortfolioMembershipModel:
         membership = PortfolioMembershipModel(**kwargs)
         session.add(membership)
         session.commit()
@@ -850,11 +812,7 @@ class Database:
     def update_portfolio_status(
         self, session: Session, portfolio_id: str, status: str
     ) -> Optional[PortfolioModel]:
-        portfolio = (
-            session.query(PortfolioModel)
-            .filter(PortfolioModel.id == portfolio_id)
-            .first()
-        )
+        portfolio = session.query(PortfolioModel).filter(PortfolioModel.id == portfolio_id).first()
         if not portfolio:
             return None
         portfolio.status = status
@@ -862,9 +820,7 @@ class Database:
         session.refresh(portfolio)
         return portfolio
 
-    def get_portfolio_intents(
-        self, session: Session, portfolio_id: str
-    ) -> List[IntentModel]:
+    def get_portfolio_intents(self, session: Session, portfolio_id: str) -> List[IntentModel]:
         memberships = (
             session.query(PortfolioMembershipModel)
             .filter(PortfolioMembershipModel.portfolio_id == portfolio_id)
@@ -882,9 +838,7 @@ class Database:
         session.refresh(attachment)
         return attachment
 
-    def get_attachments(
-        self, session: Session, intent_id: str
-    ) -> List[IntentAttachmentModel]:
+    def get_attachments(self, session: Session, intent_id: str) -> List[IntentAttachmentModel]:
         return (
             session.query(IntentAttachmentModel)
             .filter(IntentAttachmentModel.intent_id == intent_id)
@@ -903,9 +857,7 @@ class Database:
         session.commit()
         return True
 
-    def get_intent_portfolios(
-        self, session: Session, intent_id: str
-    ) -> List[PortfolioModel]:
+    def get_intent_portfolios(self, session: Session, intent_id: str) -> List[PortfolioModel]:
         memberships = (
             session.query(PortfolioMembershipModel)
             .filter(PortfolioMembershipModel.intent_id == intent_id)
@@ -914,11 +866,7 @@ class Database:
         portfolio_ids = [m.portfolio_id for m in memberships]
         if not portfolio_ids:
             return []
-        return (
-            session.query(PortfolioModel)
-            .filter(PortfolioModel.id.in_(portfolio_ids))
-            .all()
-        )
+        return session.query(PortfolioModel).filter(PortfolioModel.id.in_(portfolio_ids)).all()
 
     def remove_intent_from_portfolio(
         self, session: Session, portfolio_id: str, intent_id: str
@@ -945,11 +893,7 @@ class Database:
         return cost
 
     def get_costs(self, session: Session, intent_id: str) -> List[IntentCostModel]:
-        return (
-            session.query(IntentCostModel)
-            .filter(IntentCostModel.intent_id == intent_id)
-            .all()
-        )
+        return session.query(IntentCostModel).filter(IntentCostModel.intent_id == intent_id).all()
 
     def set_retry_policy(self, session: Session, **kwargs) -> IntentRetryPolicyModel:
         existing = (
@@ -986,9 +930,7 @@ class Database:
         session.refresh(failure)
         return failure
 
-    def get_failures(
-        self, session: Session, intent_id: str
-    ) -> List[IntentFailureModel]:
+    def get_failures(self, session: Session, intent_id: str) -> List[IntentFailureModel]:
         return (
             session.query(IntentFailureModel)
             .filter(IntentFailureModel.intent_id == intent_id)
@@ -1004,11 +946,7 @@ class Database:
             .filter(ACLDefaultPolicyModel.intent_id == intent_id)
             .first()
         )
-        entries = (
-            session.query(ACLEntryModel)
-            .filter(ACLEntryModel.intent_id == intent_id)
-            .all()
-        )
+        entries = session.query(ACLEntryModel).filter(ACLEntryModel.intent_id == intent_id).all()
         return {
             "intent_id": intent_id,
             "default_policy": policy.default_policy if policy else "open",
@@ -1040,9 +978,7 @@ class Database:
             )
 
         # Replace all entries
-        session.query(ACLEntryModel).filter(
-            ACLEntryModel.intent_id == intent_id
-        ).delete()
+        session.query(ACLEntryModel).filter(ACLEntryModel.intent_id == intent_id).delete()
 
         new_entries = []
         for entry_data in entries or []:
@@ -1116,9 +1052,7 @@ class Database:
         session.refresh(request)
         return request
 
-    def get_access_requests(
-        self, session: Session, intent_id: str
-    ) -> List[AccessRequestModel]:
+    def get_access_requests(self, session: Session, intent_id: str) -> List[AccessRequestModel]:
         """List access requests for an intent."""
         return (
             session.query(AccessRequestModel)
@@ -1131,9 +1065,7 @@ class Database:
     ) -> Optional[AccessRequestModel]:
         """Get a single access request by ID."""
         return (
-            session.query(AccessRequestModel)
-            .filter(AccessRequestModel.id == request_id)
-            .first()
+            session.query(AccessRequestModel).filter(AccessRequestModel.id == request_id).first()
         )
 
     def approve_access_request(
@@ -1264,9 +1196,7 @@ class Database:
 
     # ==================== Coordinator Leases (RFC-0013) ====================
 
-    def create_coordinator_lease(
-        self, session: Session, **kwargs
-    ) -> CoordinatorLeaseModel:
+    def create_coordinator_lease(self, session: Session, **kwargs) -> CoordinatorLeaseModel:
         lease = CoordinatorLeaseModel(**kwargs)
         session.add(lease)
         session.commit()
@@ -1335,13 +1265,9 @@ class Database:
         session.refresh(vault)
         return vault
 
-    def get_vault(
-        self, session: Session, vault_id: str
-    ) -> Optional[CredentialVaultModel]:
+    def get_vault(self, session: Session, vault_id: str) -> Optional[CredentialVaultModel]:
         return (
-            session.query(CredentialVaultModel)
-            .filter(CredentialVaultModel.id == vault_id)
-            .first()
+            session.query(CredentialVaultModel).filter(CredentialVaultModel.id == vault_id).first()
         )
 
     # ==================== Credentials (RFC-0014) ====================
@@ -1353,14 +1279,8 @@ class Database:
         session.refresh(credential)
         return credential
 
-    def get_credential(
-        self, session: Session, credential_id: str
-    ) -> Optional[CredentialModel]:
-        return (
-            session.query(CredentialModel)
-            .filter(CredentialModel.id == credential_id)
-            .first()
-        )
+    def get_credential(self, session: Session, credential_id: str) -> Optional[CredentialModel]:
+        return session.query(CredentialModel).filter(CredentialModel.id == credential_id).first()
 
     # ==================== Tool Grants (RFC-0014) ====================
 
@@ -1371,21 +1291,11 @@ class Database:
         session.refresh(grant)
         return grant
 
-    def get_tool_grant(
-        self, session: Session, grant_id: str
-    ) -> Optional[ToolGrantModel]:
-        return (
-            session.query(ToolGrantModel).filter(ToolGrantModel.id == grant_id).first()
-        )
+    def get_tool_grant(self, session: Session, grant_id: str) -> Optional[ToolGrantModel]:
+        return session.query(ToolGrantModel).filter(ToolGrantModel.id == grant_id).first()
 
-    def list_agent_grants(
-        self, session: Session, agent_id: str
-    ) -> List[ToolGrantModel]:
-        return (
-            session.query(ToolGrantModel)
-            .filter(ToolGrantModel.agent_id == agent_id)
-            .all()
-        )
+    def list_agent_grants(self, session: Session, agent_id: str) -> List[ToolGrantModel]:
+        return session.query(ToolGrantModel).filter(ToolGrantModel.agent_id == agent_id).all()
 
     def revoke_grant(self, session: Session, grant_id: str) -> Optional[ToolGrantModel]:
         grant = self.get_tool_grant(session, grant_id)
@@ -1457,14 +1367,8 @@ class Database:
         session.refresh(entry)
         return entry
 
-    def get_memory_entry(
-        self, session: Session, entry_id: str
-    ) -> Optional[MemoryEntryModel]:
-        return (
-            session.query(MemoryEntryModel)
-            .filter(MemoryEntryModel.id == entry_id)
-            .first()
-        )
+    def get_memory_entry(self, session: Session, entry_id: str) -> Optional[MemoryEntryModel]:
+        return session.query(MemoryEntryModel).filter(MemoryEntryModel.id == entry_id).first()
 
     def list_memory_entries(
         self,
@@ -1475,9 +1379,7 @@ class Database:
         tags: Optional[List[str]] = None,
         limit: int = 100,
     ) -> List[MemoryEntryModel]:
-        query = session.query(MemoryEntryModel).filter(
-            MemoryEntryModel.agent_id == agent_id
-        )
+        query = session.query(MemoryEntryModel).filter(MemoryEntryModel.agent_id == agent_id)
         if namespace:
             query = query.filter(MemoryEntryModel.namespace == namespace)
         if memory_type:
@@ -1500,11 +1402,7 @@ class Database:
         return entry
 
     def delete_memory_entry(self, session: Session, entry_id: str) -> bool:
-        entry = (
-            session.query(MemoryEntryModel)
-            .filter(MemoryEntryModel.id == entry_id)
-            .first()
-        )
+        entry = session.query(MemoryEntryModel).filter(MemoryEntryModel.id == entry_id).first()
         if not entry:
             return False
         session.delete(entry)
@@ -1520,13 +1418,9 @@ class Database:
         session.refresh(agent)
         return agent
 
-    def get_agent_record(
-        self, session: Session, agent_id: str
-    ) -> Optional[AgentRecordModel]:
+    def get_agent_record(self, session: Session, agent_id: str) -> Optional[AgentRecordModel]:
         return (
-            session.query(AgentRecordModel)
-            .filter(AgentRecordModel.agent_id == agent_id)
-            .first()
+            session.query(AgentRecordModel).filter(AgentRecordModel.agent_id == agent_id).first()
         )
 
     def list_agent_records(
@@ -1587,11 +1481,7 @@ class Database:
         return trigger
 
     def get_trigger(self, session: Session, trigger_id: str) -> Optional[TriggerModel]:
-        return (
-            session.query(TriggerModel)
-            .filter(TriggerModel.trigger_id == trigger_id)
-            .first()
-        )
+        return session.query(TriggerModel).filter(TriggerModel.trigger_id == trigger_id).first()
 
     def list_triggers(
         self,
@@ -1633,11 +1523,7 @@ class Database:
         return trigger
 
     def delete_trigger(self, session: Session, trigger_id: str) -> bool:
-        trigger = (
-            session.query(TriggerModel)
-            .filter(TriggerModel.trigger_id == trigger_id)
-            .first()
-        )
+        trigger = session.query(TriggerModel).filter(TriggerModel.trigger_id == trigger_id).first()
         if not trigger:
             return False
         session.delete(trigger)
