@@ -9,27 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Server-Enforced Governance (RFC-0013)** — Declarative governance policies with server-side enforcement.
-  - `governance_policy` parameter on `@Agent` and `@Coordinator` decorators.
-  - `completion_mode`: `auto` (default), `require_approval`, or `quorum` with configurable `quorum_threshold`.
-  - `write_scope`: `any` (default) or `assigned_only` to restrict state mutations to assigned agents.
-  - `max_cost` ceiling — server rejects status changes when cumulative cost exceeds the limit.
-  - `require_status_reason` — forces agents to provide a reason string on every status transition.
-  - `allowed_agents` — whitelist of agent IDs permitted to operate on the intent.
-- **Approval Gates** — `POST /api/v1/intents/{id}/approvals` to request approval, `POST .../approve` and `.../deny` to resolve.
-  - `get_governance_policy` (read) and `set_governance_policy` (admin) endpoints.
-  - SSE broadcast of `governance.approval_granted` and `governance.approval_denied` events for zero-polling resume.
-- **Governance Lifecycle Decorators** — `@on_governance_blocked`, `@on_approval_granted`, `@on_approval_denied` for reactive agent behavior.
-- **`self.governance` Proxy** — `get_policy()`, `request_approval()`, `approve()`, `deny()`, `list_approvals()` convenience methods on agent instances.
-- **MCP Governance Tools** — `set_governance_policy`, `get_governance_policy`, `approve_approval`, `deny_approval` added to MCP server (62 total tools; reader=21, operator=38, admin=62).
-- **`GovernancePolicy` Model** — Typed dataclass with `completion_mode`, `write_scope`, `allowed_agents`, `max_cost`, `quorum_threshold`, `require_status_reason`.
+- **Server-Enforced Governance (RFC-0013)** — Declarative governance policies with server-side enforcement on all mutation endpoints. Returns 403 with structured error details when governance rules are violated.
+  - `GovernancePolicy` model with `completion_mode` (`auto`, `require_approval`, `quorum`), `write_scope` (`any`, `assigned_only`), `max_cost`, `quorum_threshold`, `allowed_agents`, and `require_status_reason`.
+  - `governance_policy` parameter on `@Agent` and `@Coordinator` decorators for declarative policy attachment at creation time.
+  - Fully backward compatible — intents without a governance policy behave exactly as before.
+- **Governance Policy Endpoints** — `PUT /api/v1/intents/{id}/governance` (set policy, requires `If-Match`), `GET .../governance` (read effective policy), `DELETE .../governance` (remove policy).
+- **Governance Approval Resolution** — `POST .../approvals/{id}/approve` and `POST .../approvals/{id}/deny` to resolve pending approval gates created by the v0.12.1 `request_approval` endpoint.
+- **SSE Resume-After-Approval** — `governance.approval_granted`, `governance.approval_denied`, `governance.policy_set`, and `governance.policy_removed` events broadcast via SSE, enabling agents to resume without polling.
+- **Governance Lifecycle Decorators** — `@on_governance_blocked`, `@on_approval_granted`, `@on_approval_denied` for reactive agent behavior when governance gates fire.
+- **`self.governance` Proxy** — `set_policy()`, `get_policy()`, `remove_policy()`, `request_approval()`, `approve()`, `deny()` convenience methods on agent instances.
+- **MCP Governance Tools** — 4 new tools: `set_governance_policy`, `get_governance_policy`, `approve_approval`, `deny_approval` (62 total; reader=21, operator=38, admin=62).
 - **`GOVERNANCE_APPROVAL_ENFORCED` Event Type** — Emitted when a governance gate is satisfied and the blocked action proceeds.
 
 ### Changed
 
-- All documentation, READMEs, and examples updated from v0.12.1 to v0.13.0 (21 RFCs).
-- MCP tool surface expanded from 58 to 62 tools with governance enforcement tools.
-- Governance guide and examples updated with server-enforced patterns.
+- All documentation, READMEs, and examples updated from v0.12.1 to v0.13.0.
+- MCP tool surface expanded from 58 to 62 tools with 4 governance enforcement tools.
+- RBAC role counts updated: reader=21 (was 20), operator=38 (was 37), admin=62 (was 58).
+- Governance guide and examples updated with server-enforced patterns, approval gate workflows, and SSE resume examples.
 
 ---
 

@@ -3,6 +3,10 @@
 This adapter wraps the OpenAI client to automatically log intent events
 for chat completions, tool calls, and streaming responses.
 
+Supports both chat models (GPT-4, GPT-4o, etc.) and completions models
+(codex variants like gpt-5.2-codex) by routing to the correct API
+endpoint automatically based on model name.
+
 Installation:
     pip install openintent[openai]
 
@@ -16,13 +20,25 @@ Example:
 
     adapter = OpenAIAdapter(openai_client, openintent, intent_id="...")
 
-    # Regular completion - automatically logs request events
+    # Chat completion - automatically routes to /v1/chat/completions
     response = adapter.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": "Hello"}]
     )
 
-    # Streaming - automatically logs stream events
+    # Codex completion - automatically routes to /v1/completions
+    response = adapter.completions.create(
+        model="gpt-5.2-codex",
+        prompt="def fibonacci(n):"
+    )
+
+    # Auto-routing via chat interface - detects codex from model name
+    response = adapter.chat.completions.create(
+        model="gpt-5.2-codex",
+        messages=[{"role": "user", "content": "Write a fibonacci function"}]
+    )
+
+    # Streaming works for both model types
     stream = adapter.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": "Hello"}],
@@ -36,6 +52,7 @@ import time
 from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from openintent.adapters.base import AdapterConfig, BaseAdapter
+from openintent.adapters.codex_utils import is_codex_model, messages_to_prompt
 
 if TYPE_CHECKING:
     from openintent import OpenIntentClient
@@ -59,7 +76,12 @@ class OpenAIChatCompletions:
         self._adapter = adapter
 
     def create(self, **kwargs: Any) -> Any:
-        """Create a chat completion with automatic event logging."""
+        """Create a chat completion with automatic event logging.
+
+        If the model is a codex model (e.g. gpt-5.2-codex), the request
+        is automatically routed to /v1/completions with messages converted
+        to a prompt string.
+        """
         return self._adapter._create_completion(**kwargs)
 
 
@@ -68,6 +90,26 @@ class OpenAIChat:
 
     def __init__(self, adapter: "OpenAIAdapter"):
         self.completions = OpenAIChatCompletions(adapter)
+
+
+class OpenAICompletions:
+    """Wrapped completions interface for codex/completions-only models.
+
+    Provides adapter.completions.create() for direct access to the
+    /v1/completions endpoint with full event logging.
+    """
+
+    def __init__(self, adapter: "OpenAIAdapter"):
+        self._adapter = adapter
+
+    def create(self, **kwargs: Any) -> Any:
+        """Create a completion using the /v1/completions endpoint.
+
+        Accepts ``prompt`` (string) instead of ``messages``. If ``messages``
+        is provided, it will be converted to a prompt string automatically.
+        """
+        kwargs["_force_completions"] = True
+        return self._adapter._create_completion(**kwargs)
 
 
 class OpenAIAdapter(BaseAdapter):
@@ -116,16 +158,24 @@ class OpenAIAdapter(BaseAdapter):
         super().__init__(openintent_client, intent_id, config)
         self._openai = openai_client
         self.chat = OpenAIChat(self)
+        self.completions = OpenAICompletions(self)
 
     @property
     def openai(self) -> Any:
         """The wrapped OpenAI client."""
         return self._openai
 
+    def _is_completions_model(self, model: str, kwargs: dict[str, Any]) -> bool:
+        """Determine if this request should use the completions endpoint."""
+        if kwargs.pop("_force_completions", False):
+            return True
+        return is_codex_model(model)
+
     def _create_completion(self, **kwargs: Any) -> Any:
         """Create a completion with automatic event logging."""
         stream = kwargs.get("stream", False)
         model = kwargs.get("model", "unknown")
+        use_completions = self._is_completions_model(model, kwargs)
         messages = kwargs.get("messages", [])
         tools = kwargs.get("tools", [])
         temperature = kwargs.get("temperature")
@@ -158,11 +208,13 @@ class OpenAIAdapter(BaseAdapter):
         try:
             if stream:
                 return self._handle_stream(
-                    kwargs, request_id, model, len(messages), start_time
+                    kwargs, request_id, model, len(messages), start_time,
+                    use_completions=use_completions,
                 )
             else:
                 return self._handle_completion(
-                    kwargs, request_id, model, len(messages), start_time
+                    kwargs, request_id, model, len(messages), start_time,
+                    use_completions=use_completions,
                 )
         except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
@@ -190,16 +242,30 @@ class OpenAIAdapter(BaseAdapter):
         model: str,
         messages_count: int,
         start_time: float,
+        use_completions: bool = False,
     ) -> Any:
         """Handle a non-streaming completion."""
-        response = self._openai.chat.completions.create(**kwargs)
+        if use_completions:
+            from openintent.adapters.codex_utils import chat_kwargs_to_completions_kwargs
+
+            comp_kwargs = chat_kwargs_to_completions_kwargs(kwargs)
+            response = self._openai.completions.create(**comp_kwargs)
+        else:
+            response = self._openai.chat.completions.create(**kwargs)
         duration_ms = int((time.time() - start_time) * 1000)
 
         if self._config.log_requests:
             try:
                 usage = getattr(response, "usage", None)
                 choice = response.choices[0] if response.choices else None
-                message = getattr(choice, "message", None) if choice else None
+
+                if use_completions:
+                    response_content = getattr(choice, "text", None) if choice else None
+                else:
+                    message = getattr(choice, "message", None) if choice else None
+                    response_content = (
+                        getattr(message, "content", None) if message else None
+                    )
 
                 self._client.log_llm_request_completed(
                     self._intent_id,
@@ -207,9 +273,7 @@ class OpenAIAdapter(BaseAdapter):
                     provider="openai",
                     model=model,
                     messages_count=messages_count,
-                    response_content=(
-                        getattr(message, "content", None) if message else None
-                    ),
+                    response_content=response_content,
                     finish_reason=(
                         getattr(choice, "finish_reason", None) if choice else None
                     ),
@@ -229,7 +293,7 @@ class OpenAIAdapter(BaseAdapter):
                     e, {"phase": "request_completed", "request_id": request_id}
                 )
 
-        if self._config.log_tool_calls and response.choices:
+        if not use_completions and self._config.log_tool_calls and response.choices:
             self._log_tool_calls(response.choices[0], model)
 
         return response
@@ -241,6 +305,7 @@ class OpenAIAdapter(BaseAdapter):
         model: str,
         messages_count: int,
         start_time: float,
+        use_completions: bool = False,
     ) -> Iterator[Any]:
         """Handle a streaming completion."""
         stream_id = self._generate_id()
@@ -260,12 +325,18 @@ class OpenAIAdapter(BaseAdapter):
 
         self._invoke_stream_start(stream_id, model, "openai")
 
-        if "stream_options" not in kwargs:
-            kwargs["stream_options"] = {"include_usage": True}
-        elif isinstance(kwargs["stream_options"], dict):
-            kwargs["stream_options"].setdefault("include_usage", True)
+        if use_completions:
+            from openintent.adapters.codex_utils import chat_kwargs_to_completions_kwargs
 
-        stream = self._openai.chat.completions.create(**kwargs)
+            comp_kwargs = chat_kwargs_to_completions_kwargs(kwargs)
+            comp_kwargs["stream"] = True
+            stream = self._openai.completions.create(**comp_kwargs)
+        else:
+            if "stream_options" not in kwargs:
+                kwargs["stream_options"] = {"include_usage": True}
+            elif isinstance(kwargs["stream_options"], dict):
+                kwargs["stream_options"].setdefault("include_usage", True)
+            stream = self._openai.chat.completions.create(**kwargs)
         return self._stream_wrapper(
             stream,
             stream_id,
@@ -273,6 +344,7 @@ class OpenAIAdapter(BaseAdapter):
             model,
             messages_count,
             start_time,
+            use_completions=use_completions,
         )
 
     def _stream_wrapper(
@@ -283,6 +355,7 @@ class OpenAIAdapter(BaseAdapter):
         model: str,
         messages_count: int,
         start_time: float,
+        use_completions: bool = False,
     ) -> Iterator[Any]:
         """Wrap a stream to log events."""
         chunk_count = 0
@@ -314,25 +387,31 @@ class OpenAIAdapter(BaseAdapter):
                     usage = chunk.usage
 
                 if chunk.choices:
-                    delta = chunk.choices[0].delta
-                    if hasattr(delta, "content") and delta.content:
-                        content_parts.append(delta.content)
-                        self._invoke_on_token(delta.content, stream_id)
-                    if hasattr(delta, "tool_calls") and delta.tool_calls:
-                        for tc in delta.tool_calls:
-                            tc_dict = {
-                                "id": getattr(tc, "id", None),
-                                "type": getattr(tc, "type", None),
-                                "function": None,
-                            }
-                            if hasattr(tc, "function") and tc.function:
-                                tc_dict["function"] = {
-                                    "name": getattr(tc.function, "name", None),
-                                    "arguments": getattr(
-                                        tc.function, "arguments", None
-                                    ),
+                    if use_completions:
+                        text = getattr(chunk.choices[0], "text", None)
+                        if text:
+                            content_parts.append(text)
+                            self._invoke_on_token(text, stream_id)
+                    else:
+                        delta = chunk.choices[0].delta
+                        if hasattr(delta, "content") and delta.content:
+                            content_parts.append(delta.content)
+                            self._invoke_on_token(delta.content, stream_id)
+                        if hasattr(delta, "tool_calls") and delta.tool_calls:
+                            for tc in delta.tool_calls:
+                                tc_dict = {
+                                    "id": getattr(tc, "id", None),
+                                    "type": getattr(tc, "type", None),
+                                    "function": None,
                                 }
-                            tool_calls_accumulated.append(tc_dict)
+                                if hasattr(tc, "function") and tc.function:
+                                    tc_dict["function"] = {
+                                        "name": getattr(tc.function, "name", None),
+                                        "arguments": getattr(
+                                            tc.function, "arguments", None
+                                        ),
+                                    }
+                                tool_calls_accumulated.append(tc_dict)
                     if chunk.choices[0].finish_reason:
                         finish_reason = chunk.choices[0].finish_reason
 

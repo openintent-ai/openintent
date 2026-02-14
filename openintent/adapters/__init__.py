@@ -4,13 +4,19 @@ These adapters wrap popular LLM provider clients to automatically log
 intent events for tool calls, LLM requests, and streaming responses.
 
 Supported providers:
-- OpenAI (GPT-4, GPT-3.5, etc.)
-- Anthropic (Claude 3, Claude 2, etc.)
-- Google Gemini (Gemini 1.5, etc.)
+- OpenAI (GPT-4, GPT-4o, GPT-5.2, codex models like gpt-5.2-codex, etc.)
+- Anthropic (Claude 3, Claude 4, etc.)
+- Google Gemini (Gemini 1.5, Gemini 2, etc.)
 - xAI Grok (Grok-beta, etc.)
 - DeepSeek (DeepSeek-chat, DeepSeek-coder, etc.)
-- Azure OpenAI (GPT-4, GPT-3.5 via Azure endpoints)
+- Azure OpenAI (GPT-4, GPT-4o via Azure endpoints)
 - OpenRouter (200+ models via unified API)
+
+Codex model support:
+  OpenAI codex models (e.g. gpt-5.2-codex) use /v1/completions instead of
+  /v1/chat/completions. The OpenAI adapter auto-detects codex models by name
+  and routes to the correct endpoint. You can also use adapter.completions.create()
+  directly for explicit completions access.
 
 Streaming hooks:
 All adapters support streaming hooks via AdapterConfig:

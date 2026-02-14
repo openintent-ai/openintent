@@ -257,6 +257,7 @@ class AnthropicStreamContext:
         self._adapter = adapter
         self._kwargs = kwargs
         self._stream: Optional[Any] = None
+        self._wrapper: Optional["AnthropicStreamWrapper"] = None
         self._stream_id: Optional[str] = None
         self._request_id: Optional[str] = None
         self._start_time: float = 0
@@ -313,12 +314,36 @@ class AnthropicStreamContext:
         self._stream = self._adapter._anthropic.messages.stream(**self._kwargs)
         inner_stream = self._stream.__enter__()
 
-        return AnthropicStreamWrapper(self, inner_stream)
+        self._wrapper = AnthropicStreamWrapper(self, inner_stream)
+        return self._wrapper
+
+    def _resolve_usage(self) -> None:
+        """Ensure usage data is populated, falling back to get_final_message.
+
+        If ``_consume_events`` captured usage from streaming events, this
+        is a no-op.  Otherwise it calls the SDK's ``get_final_message()``
+        which always carries authoritative usage — even for models that
+        report usage in non-standard event positions (e.g. extended
+        thinking models like opus-4).
+        """
+        if self._usage is not None:
+            return
+
+        if not self._wrapper:
+            return
+
+        try:
+            self._wrapper.get_final_message()
+        except Exception:
+            pass
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         model = self._kwargs.get("model", "unknown")
         messages = self._kwargs.get("messages", [])
         duration_ms = int((time.time() - self._start_time) * 1000)
+
+        if exc_type is None:
+            self._resolve_usage()
 
         if self._stream:
             try:
@@ -434,53 +459,62 @@ class AnthropicStreamWrapper:
         self._events_consumed = False
 
     def _consume_events(self) -> Iterator[str]:
-        """Iterate raw stream events, capture usage, and yield text deltas."""
+        """Iterate raw stream events, capture usage, and yield text deltas.
+
+        Usage is captured from ``message_start`` (input_tokens) and
+        ``message_delta`` (output_tokens) events. A ``try/finally``
+        ensures usage is written to the context even if the generator
+        is closed early (e.g. consumer breaks out of the loop).
+        """
         input_tokens: Optional[int] = None
         output_tokens: Optional[int] = None
 
-        for event in self._stream:
-            event_type = getattr(event, "type", None)
+        try:
+            for event in self._stream:
+                event_type = getattr(event, "type", None)
 
-            if event_type == "message_start":
-                msg = getattr(event, "message", None)
-                if msg:
-                    usage = getattr(msg, "usage", None)
+                if event_type == "message_start":
+                    msg = getattr(event, "message", None)
+                    if msg:
+                        usage = getattr(msg, "usage", None)
+                        if usage:
+                            input_tokens = getattr(usage, "input_tokens", None)
+
+                elif event_type == "content_block_delta":
+                    delta = getattr(event, "delta", None)
+                    if delta:
+                        delta_type = getattr(delta, "type", None)
+                        if delta_type == "text_delta":
+                            text = getattr(delta, "text", "")
+                            if text:
+                                yield text
+
+                elif event_type == "message_delta":
+                    delta = getattr(event, "delta", None)
+                    if delta:
+                        stop = getattr(delta, "stop_reason", None)
+                        if stop:
+                            self._context._stop_reason = stop
+                    usage = getattr(event, "usage", None)
                     if usage:
-                        input_tokens = getattr(usage, "input_tokens", None)
+                        output_tokens = getattr(usage, "output_tokens", None)
 
-            elif event_type == "content_block_delta":
-                delta = getattr(event, "delta", None)
-                if delta and getattr(delta, "type", None) == "text_delta":
-                    text = getattr(delta, "text", "")
-                    if text:
-                        yield text
-
-            elif event_type == "message_delta":
-                delta = getattr(event, "delta", None)
-                if delta:
-                    stop = getattr(delta, "stop_reason", None)
-                    if stop:
-                        self._context._stop_reason = stop
-                usage = getattr(event, "usage", None)
-                if usage:
-                    output_tokens = getattr(usage, "output_tokens", None)
-
-            elif event_type == "content_block_start":
-                cb = getattr(event, "content_block", None)
-                if cb and getattr(cb, "type", None) == "tool_use":
-                    self._context._tool_use_blocks.append(
-                        {
-                            "id": getattr(cb, "id", None),
-                            "name": getattr(cb, "name", None),
-                            "input": getattr(cb, "input", {}),
-                        }
-                    )
-
-        if input_tokens is not None or output_tokens is not None:
-            self._context._usage = {
-                "input_tokens": input_tokens or 0,
-                "output_tokens": output_tokens or 0,
-            }
+                elif event_type == "content_block_start":
+                    cb = getattr(event, "content_block", None)
+                    if cb and getattr(cb, "type", None) == "tool_use":
+                        self._context._tool_use_blocks.append(
+                            {
+                                "id": getattr(cb, "id", None),
+                                "name": getattr(cb, "name", None),
+                                "input": getattr(cb, "input", {}),
+                            }
+                        )
+        finally:
+            if input_tokens is not None or output_tokens is not None:
+                self._context._usage = {
+                    "input_tokens": input_tokens or 0,
+                    "output_tokens": output_tokens or 0,
+                }
 
     @property
     def text_stream(self) -> Iterator[str]:

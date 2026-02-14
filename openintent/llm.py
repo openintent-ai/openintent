@@ -39,6 +39,13 @@ ANTHROPIC_STYLE_PROVIDERS = {"anthropic"}
 GEMINI_STYLE_PROVIDERS = {"gemini"}
 
 
+def _is_codex_model(model: str) -> bool:
+    """Check if a model name indicates a codex/completions-only model."""
+    from openintent.adapters.codex_utils import is_codex_model
+
+    return is_codex_model(model)
+
+
 @dataclass
 class ToolDef:
     """Definition for a tool that an LLM-powered agent can call.
@@ -1094,6 +1101,9 @@ class LLMEngine:
                 response = adapter.generate_content(
                     messages[-1]["content"] if messages else "",
                 )
+            elif _is_codex_model(self._config.model):
+                call_kwargs.pop("system", None)
+                response = adapter.completions.create(**call_kwargs)
             else:
                 call_kwargs.pop("system", None)
                 response = adapter.chat.completions.create(**call_kwargs)
@@ -1113,6 +1123,13 @@ class LLMEngine:
 
                 client = openai.OpenAI(api_key=self._config.api_key)
                 call_kwargs.pop("system", None)
+                if _is_codex_model(call_kwargs.get("model", "")):
+                    from openintent.adapters.codex_utils import (
+                        chat_kwargs_to_completions_kwargs,
+                    )
+
+                    comp_kwargs = chat_kwargs_to_completions_kwargs(call_kwargs)
+                    return client.completions.create(**comp_kwargs)
                 return client.chat.completions.create(**call_kwargs)
             except ImportError:
                 raise ImportError(
@@ -1163,6 +1180,11 @@ class LLMEngine:
                 for chunk in response:
                     if hasattr(chunk, "text") and chunk.text:
                         yield chunk.text
+            elif _is_codex_model(self._config.model):
+                call_kwargs.pop("system", None)
+                stream = adapter.completions.create(**call_kwargs)
+                async for token in self._iter_completions_stream(stream):
+                    yield token
             else:
                 call_kwargs.pop("system", None)
                 stream = adapter.chat.completions.create(**call_kwargs)
@@ -1180,9 +1202,19 @@ class LLMEngine:
 
                 client = openai.OpenAI(api_key=self._config.api_key)
                 call_kwargs.pop("system", None)
-                stream = client.chat.completions.create(**call_kwargs)
-                async for token in self._iter_openai_stream(stream):
-                    yield token
+                if _is_codex_model(call_kwargs.get("model", "")):
+                    from openintent.adapters.codex_utils import (
+                        chat_kwargs_to_completions_kwargs,
+                    )
+
+                    comp_kwargs = chat_kwargs_to_completions_kwargs(call_kwargs)
+                    stream = client.completions.create(**comp_kwargs)
+                    async for token in self._iter_completions_stream(stream):
+                        yield token
+                else:
+                    stream = client.chat.completions.create(**call_kwargs)
+                    async for token in self._iter_openai_stream(stream):
+                        yield token
             except ImportError:
                 raise ImportError("openai package required.")
         elif self._provider in ANTHROPIC_STYLE_PROVIDERS:
@@ -1209,6 +1241,24 @@ class LLMEngine:
                     content = choices[0].get("delta", {}).get("content")
                     if content:
                         yield content
+
+    async def _iter_completions_stream(self, stream: Any) -> AsyncIterator[str]:
+        """Iterate an OpenAI completions-style stream yielding tokens.
+
+        Completions chunks use ``choices[0].text`` instead of
+        ``choices[0].delta.content``.
+        """
+        for chunk in stream:
+            if hasattr(chunk, "choices") and chunk.choices:
+                text = getattr(chunk.choices[0], "text", None)
+                if text:
+                    yield text
+            elif isinstance(chunk, dict):
+                choices = chunk.get("choices", [])
+                if choices:
+                    text = choices[0].get("text")
+                    if text:
+                        yield text
 
     async def _iter_anthropic_stream(self, stream: Any) -> AsyncIterator[str]:
         """Iterate an Anthropic-style stream yielding tokens."""
