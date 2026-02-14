@@ -121,6 +121,13 @@ class EventType(str, Enum):
     COORDINATOR_STALLED = "coordinator.stalled"
     COORDINATOR_ESCALATION_RESOLVED = "coordinator.escalation_resolved"
 
+    # Governance enforcement events (RFC-0013)
+    GOVERNANCE_POLICY_SET = "governance.policy_set"
+    GOVERNANCE_POLICY_REMOVED = "governance.policy_removed"
+    GOVERNANCE_APPROVAL_GRANTED = "governance.approval_granted"
+    GOVERNANCE_APPROVAL_DENIED = "governance.approval_denied"
+    GOVERNANCE_VIOLATION = "governance.violation"
+
     # Tool and grant events (RFC-0014)
     TOOL_INVOKED = "tool.invoked"
     TOOL_DENIED = "tool.denied"
@@ -171,6 +178,8 @@ class EventType(str, Enum):
     CHANNEL_CLOSED = "channel.closed"
     CHANNEL_MESSAGE = "channel.message"
 
+    GOVERNANCE_APPROVAL_ENFORCED = "governance.approval_enforced"
+
     # Legacy aliases for backward compatibility
     CREATED = "intent_created"
     STATE_UPDATED = "state_patched"
@@ -200,6 +209,99 @@ class PortfolioStatus(str, Enum):
     ACTIVE = "active"
     COMPLETED = "completed"
     ABANDONED = "abandoned"
+
+
+class CompletionMode(str, Enum):
+    """How an intent's completion is governed (RFC-0013 Enforcement)."""
+
+    AUTO = "auto"
+    REQUIRE_APPROVAL = "require_approval"
+    QUORUM = "quorum"
+
+
+class WriteScope(str, Enum):
+    """Who may perform write mutations on an intent (RFC-0013 Enforcement)."""
+
+    ANY = "any"
+    ASSIGNED_ONLY = "assigned_only"
+
+
+@dataclass
+class GovernancePolicy:
+    """Server-enforced governance policy for an intent (RFC-0013 Enforcement).
+
+    Controls who may mutate an intent and under what conditions status
+    transitions are allowed.  When no policy is set on an intent, the
+    server defaults to ``completion_mode='auto'`` and ``write_scope='any'``,
+    preserving full backward compatibility.
+
+    Fields:
+        completion_mode: Governs how an intent may transition to 'completed'.
+            - auto: Any authorized agent may complete (default, legacy behavior).
+            - require_approval: An approved ApprovalRequest for action='complete'
+              must exist before the server allows the status transition.
+            - quorum: A configurable fraction of assigned agents must have
+              recorded an approval before completion is allowed.
+        quorum_threshold: Fraction (0.0–1.0) of assigned agents whose
+            approvals are needed when ``completion_mode='quorum'``.
+        write_scope: Controls which agents may perform write operations
+            (state patches, event creation, cost recording).
+            - any: All authenticated agents may write (default, legacy).
+            - assigned_only: Only agents assigned to the intent may write.
+        allowed_agents: Optional allowlist of agent IDs.  If non-empty, only
+            agents in this list may be assigned to the intent, and only they
+            may perform writes when ``write_scope='assigned_only'``.
+        max_cost: Optional cost ceiling.  If set, the server rejects cost
+            records that would push the intent's total cost above this value.
+        require_status_reason: If True, status transitions must include a
+            reason in the request payload.
+    """
+
+    completion_mode: str = CompletionMode.AUTO.value
+    quorum_threshold: float = 0.6
+    write_scope: str = WriteScope.ANY.value
+    allowed_agents: list[str] = field(default_factory=list)
+    max_cost: Optional[float] = None
+    require_status_reason: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "completion_mode": self.completion_mode,
+            "write_scope": self.write_scope,
+        }
+        if self.completion_mode == CompletionMode.QUORUM.value:
+            result["quorum_threshold"] = self.quorum_threshold
+        if self.allowed_agents:
+            result["allowed_agents"] = self.allowed_agents
+        if self.max_cost is not None:
+            result["max_cost"] = self.max_cost
+        if self.require_status_reason:
+            result["require_status_reason"] = True
+        return result
+
+    @classmethod
+    def from_dict(cls, data: Optional[dict[str, Any]]) -> "GovernancePolicy":
+        if not data:
+            return cls()
+        return cls(
+            completion_mode=data.get("completion_mode", CompletionMode.AUTO.value),
+            quorum_threshold=data.get("quorum_threshold", 0.6),
+            write_scope=data.get("write_scope", WriteScope.ANY.value),
+            allowed_agents=data.get("allowed_agents", []),
+            max_cost=data.get("max_cost"),
+            require_status_reason=data.get("require_status_reason", False),
+        )
+
+    @property
+    def is_default(self) -> bool:
+        """True when this policy matches the permissive default."""
+        return (
+            self.completion_mode == CompletionMode.AUTO.value
+            and self.write_scope == WriteScope.ANY.value
+            and not self.allowed_agents
+            and self.max_cost is None
+            and not self.require_status_reason
+        )
 
 
 class MembershipRole(str, Enum):
@@ -565,6 +667,7 @@ class Intent:
     updated_at: Optional[datetime] = None
     created_by: Optional[str] = None
     confidence: int = 0
+    governance_policy: Optional[GovernancePolicy] = None
 
     @property
     def has_parent(self) -> bool:
@@ -576,8 +679,13 @@ class Intent:
         """Check if this intent depends on other intents."""
         return len(self.depends_on) > 0
 
+    @property
+    def effective_governance(self) -> GovernancePolicy:
+        """Return the governance policy, falling back to permissive defaults."""
+        return self.governance_policy or GovernancePolicy()
+
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "id": self.id,
             "title": self.title,
             "description": self.description,
@@ -592,6 +700,9 @@ class Intent:
             "created_by": self.created_by,
             "confidence": self.confidence,
         }
+        if self.governance_policy and not self.governance_policy.is_default:
+            result["governance_policy"] = self.governance_policy.to_dict()
+        return result
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Intent":
@@ -622,6 +733,11 @@ class Intent:
             ),
             created_by=data.get("created_by"),
             confidence=data.get("confidence", 0),
+            governance_policy=(
+                GovernancePolicy.from_dict(data["governance_policy"])
+                if data.get("governance_policy")
+                else None
+            ),
         )
 
 

@@ -48,6 +48,7 @@ class IntentCreate(BaseModel):
     constraints: Dict[str, Any] = Field(default_factory=dict)
     state: Dict[str, Any] = Field(default_factory=dict)
     status: str = "draft"
+    governance_policy: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -64,6 +65,7 @@ class IntentResponse(BaseModel):
     status: str
     confidence: float
     version: int
+    governance_policy: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
 
@@ -107,6 +109,7 @@ class StatePatchRequest(BaseModel):
 
 class StatusUpdateRequest(BaseModel):
     status: str
+    reason: Optional[str] = None
 
 
 class LeaseRenewRequest(BaseModel):
@@ -928,6 +931,246 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         except ValueError:
             return None
 
+    # ==================== Governance Enforcement (RFC-0013) ====================
+
+    def _get_governance_policy(intent) -> dict:
+        """Extract governance policy from an intent model, with safe defaults."""
+        policy = intent.governance_policy
+        if not policy or not isinstance(policy, dict):
+            return {}
+        return policy
+
+    def _enforce_write_scope(db: Database, session, intent, agent_id: str) -> None:
+        """Enforce write_scope governance rule.
+
+        If the intent's governance policy sets write_scope='assigned_only',
+        only agents assigned to the intent may perform write operations.
+        Raises HTTP 403 if the agent is not assigned.
+        """
+        policy = _get_governance_policy(intent)
+        write_scope = policy.get("write_scope", "any")
+
+        if write_scope == "assigned_only":
+            if not db.is_agent_assigned(session, intent.id, agent_id):
+                db.create_event(
+                    session,
+                    intent_id=intent.id,
+                    event_type="governance.violation",
+                    actor=agent_id,
+                    payload={
+                        "rule": "write_scope",
+                        "detail": f"Agent '{agent_id}' is not assigned to this intent",
+                    },
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "governance_violation",
+                        "rule": "write_scope",
+                        "message": (
+                            f"Governance policy requires write_scope='assigned_only'. "
+                            f"Agent '{agent_id}' is not assigned to this intent."
+                        ),
+                    },
+                )
+
+        allowed_agents = policy.get("allowed_agents", [])
+        if allowed_agents and agent_id not in allowed_agents:
+            db.create_event(
+                session,
+                intent_id=intent.id,
+                event_type="governance.violation",
+                actor=agent_id,
+                payload={
+                    "rule": "allowed_agents",
+                    "detail": f"Agent '{agent_id}' is not in the allowed_agents list",
+                },
+            )
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "governance_violation",
+                    "rule": "allowed_agents",
+                    "message": (
+                        f"Governance policy restricts writes to allowed agents. "
+                        f"Agent '{agent_id}' is not in the allowed list."
+                    ),
+                },
+            )
+
+    def _enforce_completion_gate(db: Database, session, intent, agent_id: str) -> None:
+        """Enforce completion governance rules.
+
+        Depending on the intent's completion_mode, this function gates
+        the transition to 'completed' status:
+        - require_approval: An approved ApprovalRequest for action='complete'
+          must exist.
+        - quorum: A fraction of assigned agents must have approved.
+        - auto: No enforcement (legacy behavior).
+        """
+        policy = _get_governance_policy(intent)
+        completion_mode = policy.get("completion_mode", "auto")
+
+        if completion_mode == "require_approval":
+            if not db.has_approved_approval(session, intent.id, "complete"):
+                db.create_event(
+                    session,
+                    intent_id=intent.id,
+                    event_type="governance.violation",
+                    actor=agent_id,
+                    payload={
+                        "rule": "completion_mode",
+                        "detail": "No approved approval request for action='complete'",
+                    },
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "governance_violation",
+                        "rule": "completion_mode",
+                        "mode": "require_approval",
+                        "message": (
+                            "Governance policy requires an approved approval request "
+                            "for action='complete' before this intent can be completed. "
+                            "Submit an approval request and have it approved first."
+                        ),
+                    },
+                )
+
+        elif completion_mode == "quorum":
+            threshold = policy.get("quorum_threshold", 0.6)
+            total_agents = db.count_assigned_agents(session, intent.id)
+            if total_agents == 0:
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "governance_violation",
+                        "rule": "completion_mode",
+                        "mode": "quorum",
+                        "message": (
+                            "Governance policy requires quorum approval, but no "
+                            "agents are assigned to this intent."
+                        ),
+                    },
+                )
+            approved_count = db.count_approved_approvals(session, intent.id, "complete")
+            required = int(total_agents * threshold)
+            if required < 1:
+                required = 1
+            if approved_count < required:
+                db.create_event(
+                    session,
+                    intent_id=intent.id,
+                    event_type="governance.violation",
+                    actor=agent_id,
+                    payload={
+                        "rule": "completion_mode",
+                        "detail": (
+                            f"Quorum not met: {approved_count}/{required} "
+                            f"approvals (threshold={threshold})"
+                        ),
+                    },
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "governance_violation",
+                        "rule": "completion_mode",
+                        "mode": "quorum",
+                        "message": (
+                            f"Governance policy requires quorum approval. "
+                            f"{approved_count} of {required} required approvals received "
+                            f"(threshold={threshold}, {total_agents} assigned agents)."
+                        ),
+                    },
+                )
+
+    def _enforce_cost_limit(
+        db: Database, session, intent, new_amount: float, agent_id: str
+    ) -> None:
+        """Enforce max_cost governance rule.
+
+        If the intent's governance policy sets a max_cost, reject cost
+        records that would push total costs above the ceiling.
+        """
+        policy = _get_governance_policy(intent)
+        max_cost = policy.get("max_cost")
+        if max_cost is not None:
+            current_total = db.get_total_cost(session, intent.id)
+            if current_total + new_amount > max_cost:
+                db.create_event(
+                    session,
+                    intent_id=intent.id,
+                    event_type="governance.violation",
+                    actor=agent_id,
+                    payload={
+                        "rule": "max_cost",
+                        "detail": (
+                            f"Cost ceiling exceeded: current={current_total}, "
+                            f"new={new_amount}, max={max_cost}"
+                        ),
+                    },
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "governance_violation",
+                        "rule": "max_cost",
+                        "message": (
+                            f"Governance policy sets max_cost={max_cost}. "
+                            f"Current total is {current_total}; adding {new_amount} "
+                            f"would exceed the ceiling."
+                        ),
+                    },
+                )
+
+    def _enforce_status_reason(policy: dict, reason: Optional[str]) -> None:
+        """Enforce require_status_reason governance rule."""
+        if policy.get("require_status_reason") and not reason:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "governance_violation",
+                    "rule": "require_status_reason",
+                    "message": (
+                        "Governance policy requires a 'reason' field for "
+                        "all status transitions."
+                    ),
+                },
+            )
+
+    def _enforce_agent_allowlist(
+        db: Database, session, intent, agent_id_to_assign: str, actor: str
+    ) -> None:
+        """Enforce allowed_agents governance rule on agent assignment."""
+        policy = _get_governance_policy(intent)
+        allowed_agents = policy.get("allowed_agents", [])
+        if allowed_agents and agent_id_to_assign not in allowed_agents:
+            db.create_event(
+                session,
+                intent_id=intent.id,
+                event_type="governance.violation",
+                actor=actor,
+                payload={
+                    "rule": "allowed_agents",
+                    "detail": (
+                        f"Agent '{agent_id_to_assign}' is not in the allowed "
+                        f"agents list for assignment"
+                    ),
+                },
+            )
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "governance_violation",
+                    "rule": "allowed_agents",
+                    "message": (
+                        f"Governance policy restricts assignment to allowed agents. "
+                        f"Agent '{agent_id_to_assign}' is not permitted."
+                    ),
+                },
+            )
+
     @app.get("/.well-known/openintent.json")
     async def discovery():
         return {
@@ -957,6 +1200,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 "retry-policies",
                 "leasing",
                 "governance",
+                "governance-enforcement",
                 "access-control",
                 "tools",
             ],
@@ -987,6 +1231,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 "optimisticConcurrency": True,
                 "leasing": True,
                 "governance": True,
+                "governanceEnforcement": True,
                 "portfolios": True,
                 "attachments": True,
                 "subscriptions": True,
@@ -1014,14 +1259,18 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 constraints=intent.constraints,
                 state=intent.state,
                 status=intent.status,
+                governance_policy=intent.governance_policy,
             )
 
+            event_payload: Dict[str, Any] = {"title": intent.title}
+            if intent.governance_policy:
+                event_payload["governance_policy"] = intent.governance_policy
             db.create_event(
                 session,
                 intent_id=created.id,
                 event_type="intent_created",
                 actor=creator,
-                payload={"title": intent.title},
+                payload=event_payload,
             )
 
             _broadcast_event(
@@ -1496,13 +1745,16 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
 
         session = db.get_session()
         try:
+            intent = db.get_intent(session, intent_id)
+            if not intent:
+                raise HTTPException(status_code=404, detail="Intent not found")
+
+            _enforce_write_scope(db, session, intent, api_key)
+
             patches = request.get_patches()
             updated = db.update_intent_state(session, intent_id, if_match, patches)
 
             if not updated:
-                intent = db.get_intent(session, intent_id)
-                if not intent:
-                    raise HTTPException(status_code=404, detail="Intent not found")
                 raise HTTPException(status_code=409, detail="Version conflict")
 
             db.create_event(
@@ -1541,22 +1793,37 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
 
         session = db.get_session()
         try:
+            intent = db.get_intent(session, intent_id)
+            if not intent:
+                raise HTTPException(status_code=404, detail="Intent not found")
+
+            policy = _get_governance_policy(intent)
+
+            _enforce_write_scope(db, session, intent, api_key)
+            _enforce_status_reason(policy, request.reason)
+
+            if request.status == "completed":
+                _enforce_completion_gate(db, session, intent, api_key)
+
             updated = db.update_intent_status(
                 session, intent_id, if_match, request.status
             )
 
             if not updated:
-                intent = db.get_intent(session, intent_id)
-                if not intent:
-                    raise HTTPException(status_code=404, detail="Intent not found")
                 raise HTTPException(status_code=409, detail="Version conflict")
 
+            status_payload: Dict[str, Any] = {
+                "status": request.status,
+                "version": updated.version,
+            }
+            if request.reason:
+                status_payload["reason"] = request.reason
             db.create_event(
                 session,
                 intent_id=intent_id,
                 event_type="status_changed",
                 actor=api_key,
-                payload={"status": request.status, "version": updated.version},
+                payload=status_payload,
             )
 
             _broadcast_event(
@@ -1650,6 +1917,8 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             intent = db.get_intent(session, intent_id)
             if not intent:
                 raise HTTPException(status_code=404, detail="Intent not found")
+
+            _enforce_agent_allowlist(db, session, intent, agent.agent_id, api_key)
 
             assigned = db.assign_agent(
                 session,
@@ -1896,6 +2165,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             intent = db.get_intent(session, intent_id)
             if not intent:
                 raise HTTPException(status_code=404, detail="Intent not found")
+
+            _enforce_write_scope(db, session, intent, api_key)
+            _enforce_cost_limit(db, session, intent, cost.amount, api_key)
 
             created = db.record_cost(
                 session,
@@ -3067,6 +3339,267 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                     status_code=404, detail="Approval request not found"
                 )
             return _approval_to_dict(approval)
+        finally:
+            session.close()
+
+    @app.post("/api/v1/intents/{intent_id}/approvals/{approval_id}/approve")
+    async def approve_approval(
+        intent_id: str,
+        approval_id: str,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        session = db.get_session()
+        try:
+            approval = db.get_approval_request(session, intent_id, approval_id)
+            if not approval:
+                raise HTTPException(
+                    status_code=404, detail="Approval request not found"
+                )
+            if approval.status != "pending":
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Approval is already '{approval.status}', cannot approve",
+                )
+            approval.status = "approved"
+            approval.decided_by = api_key
+            approval.decided_at = datetime.utcnow()
+            session.commit()
+            session.refresh(approval)
+
+            db.create_event(
+                session,
+                intent_id=intent_id,
+                event_type="governance.approval_granted",
+                actor=api_key,
+                payload={
+                    "approval_id": approval_id,
+                    "action": approval.action,
+                    "decision": "approved",
+                    "requested_by": approval.requested_by,
+                },
+            )
+
+            _broadcast_event(
+                "intents",
+                {
+                    "type": "governance.approval_granted",
+                    "intent_id": intent_id,
+                    "data": {
+                        "approval_id": approval_id,
+                        "action": approval.action,
+                        "decision": "approved",
+                        "requested_by": approval.requested_by,
+                        "decided_by": api_key,
+                    },
+                },
+            )
+
+            return _approval_to_dict(approval)
+        finally:
+            session.close()
+
+    @app.post("/api/v1/intents/{intent_id}/approvals/{approval_id}/deny")
+    async def deny_approval(
+        intent_id: str,
+        approval_id: str,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        session = db.get_session()
+        try:
+            approval = db.get_approval_request(session, intent_id, approval_id)
+            if not approval:
+                raise HTTPException(
+                    status_code=404, detail="Approval request not found"
+                )
+            if approval.status != "pending":
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Approval is already '{approval.status}', cannot deny",
+                )
+            approval.status = "denied"
+            approval.decided_by = api_key
+            approval.decided_at = datetime.utcnow()
+            session.commit()
+            session.refresh(approval)
+
+            db.create_event(
+                session,
+                intent_id=intent_id,
+                event_type="governance.approval_denied",
+                actor=api_key,
+                payload={
+                    "approval_id": approval_id,
+                    "action": approval.action,
+                    "decision": "denied",
+                    "requested_by": approval.requested_by,
+                },
+            )
+
+            _broadcast_event(
+                "intents",
+                {
+                    "type": "governance.approval_denied",
+                    "intent_id": intent_id,
+                    "data": {
+                        "approval_id": approval_id,
+                        "action": approval.action,
+                        "decision": "denied",
+                        "requested_by": approval.requested_by,
+                        "decided_by": api_key,
+                    },
+                },
+            )
+
+            return _approval_to_dict(approval)
+        finally:
+            session.close()
+
+    # ==================== Governance Policy Management (RFC-0013) ====================
+
+    @app.put("/api/v1/intents/{intent_id}/governance")
+    async def set_governance_policy(
+        intent_id: str,
+        policy: Dict[str, Any],
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+        if_match: Optional[int] = Depends(get_version_header),
+    ):
+        if if_match is None:
+            raise HTTPException(status_code=400, detail="If-Match header required")
+
+        session = db.get_session()
+        try:
+            intent = db.get_intent(session, intent_id)
+            if not intent:
+                raise HTTPException(status_code=404, detail="Intent not found")
+
+            valid_modes = {"auto", "require_approval", "quorum"}
+            mode = policy.get("completion_mode", "auto")
+            if mode not in valid_modes:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Invalid completion_mode '{mode}'. Must be one of: {valid_modes}",
+                )
+
+            valid_scopes = {"any", "assigned_only"}
+            scope = policy.get("write_scope", "any")
+            if scope not in valid_scopes:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Invalid write_scope '{scope}'. Must be one of: {valid_scopes}",
+                )
+
+            if "quorum_threshold" in policy:
+                t = policy["quorum_threshold"]
+                if not isinstance(t, (int, float)) or t <= 0 or t > 1:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="quorum_threshold must be a number between 0 (exclusive) and 1 (inclusive)",
+                    )
+
+            if "max_cost" in policy:
+                mc = policy["max_cost"]
+                if not isinstance(mc, (int, float)) or mc < 0:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="max_cost must be a non-negative number",
+                    )
+
+            updated = db.update_governance_policy(session, intent_id, if_match, policy)
+            if not updated:
+                raise HTTPException(status_code=409, detail="Version conflict")
+
+            db.create_event(
+                session,
+                intent_id=intent_id,
+                event_type="governance.policy_set",
+                actor=api_key,
+                payload={"governance_policy": policy, "version": updated.version},
+            )
+
+            _broadcast_event(
+                "intents",
+                {
+                    "type": "governance.policy_set",
+                    "intent_id": intent_id,
+                    "data": {
+                        "governance_policy": policy,
+                        "version": updated.version,
+                    },
+                },
+            )
+
+            return IntentResponse.model_validate(updated)
+        finally:
+            session.close()
+
+    @app.get("/api/v1/intents/{intent_id}/governance")
+    async def get_governance_policy(
+        intent_id: str,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        session = db.get_session()
+        try:
+            intent = db.get_intent(session, intent_id)
+            if not intent:
+                raise HTTPException(status_code=404, detail="Intent not found")
+            policy = intent.governance_policy or {}
+            return {
+                "intent_id": intent_id,
+                "governance_policy": policy,
+                "effective_policy": {
+                    "completion_mode": policy.get("completion_mode", "auto"),
+                    "write_scope": policy.get("write_scope", "any"),
+                    "quorum_threshold": policy.get("quorum_threshold", 0.6),
+                    "allowed_agents": policy.get("allowed_agents", []),
+                    "max_cost": policy.get("max_cost"),
+                    "require_status_reason": policy.get("require_status_reason", False),
+                },
+            }
+        finally:
+            session.close()
+
+    @app.delete("/api/v1/intents/{intent_id}/governance")
+    async def remove_governance_policy(
+        intent_id: str,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+        if_match: Optional[int] = Depends(get_version_header),
+    ):
+        if if_match is None:
+            raise HTTPException(status_code=400, detail="If-Match header required")
+
+        session = db.get_session()
+        try:
+            intent = db.get_intent(session, intent_id)
+            if not intent:
+                raise HTTPException(status_code=404, detail="Intent not found")
+
+            updated = db.update_governance_policy(session, intent_id, if_match, None)
+            if not updated:
+                raise HTTPException(status_code=409, detail="Version conflict")
+
+            db.create_event(
+                session,
+                intent_id=intent_id,
+                event_type="governance.policy_removed",
+                actor=api_key,
+                payload={"version": updated.version},
+            )
+
+            _broadcast_event(
+                "intents",
+                {
+                    "type": "governance.policy_removed",
+                    "intent_id": intent_id,
+                    "data": {"version": updated.version},
+                },
+            )
+
+            return IntentResponse.model_validate(updated)
         finally:
             session.close()
 

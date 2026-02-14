@@ -209,6 +209,7 @@ class OpenIntentClient:
         initial_state: Optional[dict[str, Any]] = None,
         parent_intent_id: Optional[str] = None,
         depends_on: Optional[list[str]] = None,
+        governance_policy: Optional[dict[str, Any]] = None,
     ) -> Intent:
         """
         Create a new intent.
@@ -220,6 +221,9 @@ class OpenIntentClient:
             initial_state: Optional initial state data.
             parent_intent_id: Optional parent intent ID for hierarchical graphs (RFC-0002).
             depends_on: Optional list of intent IDs this depends on (RFC-0002).
+            governance_policy: Optional server-enforced governance policy (RFC-0013).
+                Supports: completion_mode, write_scope, allowed_agents, max_cost,
+                quorum_threshold, require_status_reason.
 
         Returns:
             The created Intent object.
@@ -235,6 +239,8 @@ class OpenIntentClient:
             payload["parent_intent_id"] = parent_intent_id
         if depends_on:
             payload["depends_on"] = depends_on
+        if governance_policy:
+            payload["governance_policy"] = governance_policy
         response = self._client.post("/api/v1/intents", json=payload)
         data = self._handle_response(response)
         return Intent.from_dict(data)
@@ -517,6 +523,7 @@ class OpenIntentClient:
         intent_id: str,
         version: int,
         status: IntentStatus,
+        reason: Optional[str] = None,
     ) -> Intent:
         """
         Change intent status.
@@ -525,17 +532,118 @@ class OpenIntentClient:
             intent_id: The intent to update.
             version: Expected current version.
             status: New status to set.
+            reason: Optional reason for the status change (required when
+                governance policy sets require_status_reason=True).
 
         Returns:
             The updated Intent object.
         """
+        body: dict[str, Any] = {"status": status.value}
+        if reason:
+            body["reason"] = reason
         response = self._client.post(
             f"/api/v1/intents/{intent_id}/status",
-            json={"status": status.value},
+            json=body,
             headers={"If-Match": str(version)},
         )
         data = self._handle_response(response)
         return Intent.from_dict(data)
+
+    # ==================== Governance Policy (RFC-0013 Enforcement) ====================
+
+    def set_governance_policy(
+        self,
+        intent_id: str,
+        version: int,
+        policy: dict[str, Any],
+    ) -> Intent:
+        """Set or replace the governance policy for an intent.
+
+        Args:
+            intent_id: The intent to update.
+            version: Expected current version for optimistic concurrency.
+            policy: Governance policy dict with keys like completion_mode,
+                write_scope, allowed_agents, max_cost, quorum_threshold,
+                require_status_reason.
+
+        Returns:
+            The updated Intent object.
+        """
+        response = self._client.put(
+            f"/api/v1/intents/{intent_id}/governance",
+            json=policy,
+            headers={"If-Match": str(version)},
+        )
+        data = self._handle_response(response)
+        return Intent.from_dict(data)
+
+    def get_governance_policy(self, intent_id: str) -> dict[str, Any]:
+        """Get the effective governance policy for an intent.
+
+        Returns:
+            Dict with intent_id, governance_policy, and effective_policy.
+        """
+        response = self._client.get(f"/api/v1/intents/{intent_id}/governance")
+        return self._handle_response(response)
+
+    def remove_governance_policy(
+        self,
+        intent_id: str,
+        version: int,
+    ) -> Intent:
+        """Remove governance policy from an intent (revert to defaults).
+
+        Args:
+            intent_id: The intent to update.
+            version: Expected current version.
+
+        Returns:
+            The updated Intent object.
+        """
+        response = self._client.delete(
+            f"/api/v1/intents/{intent_id}/governance",
+            headers={"If-Match": str(version)},
+        )
+        data = self._handle_response(response)
+        return Intent.from_dict(data)
+
+    def approve_approval(
+        self,
+        intent_id: str,
+        approval_id: str,
+    ) -> dict[str, Any]:
+        """Approve a pending approval request.
+
+        Args:
+            intent_id: The intent the approval belongs to.
+            approval_id: The approval request to approve.
+
+        Returns:
+            The updated approval request dict.
+        """
+        response = self._client.post(
+            f"/api/v1/intents/{intent_id}/approvals/{approval_id}/approve"
+        )
+        return self._handle_response(response)
+
+    def deny_approval(
+        self,
+        intent_id: str,
+        approval_id: str,
+    ) -> dict[str, Any]:
+        """Deny a pending approval request.
+
+        Args:
+            intent_id: The intent the approval belongs to.
+            approval_id: The approval request to deny.
+
+        Returns:
+            The updated approval request dict.
+        """
+        response = self._client.post(
+            f"/api/v1/intents/{intent_id}/approvals/{approval_id}/deny"
+        )
+        return self._handle_response(response)
 
     # ==================== Event Log ====================
 
@@ -2976,6 +3084,7 @@ class AsyncOpenIntentClient:
         description: str,
         constraints: Optional[list[str]] = None,
         initial_state: Optional[dict[str, Any]] = None,
+        governance_policy: Optional[dict[str, Any]] = None,
     ) -> Intent:
         """Create a new intent."""
         payload = {
@@ -2985,6 +3094,8 @@ class AsyncOpenIntentClient:
             "state": initial_state or {},
             "created_by": self.agent_id,
         }
+        if governance_policy:
+            payload["governance_policy"] = governance_policy
         response = await self._client.post("/api/v1/intents", json=payload)
         data = self._handle_response(response)
         return Intent.from_dict(data)
@@ -3032,15 +3143,76 @@ class AsyncOpenIntentClient:
         intent_id: str,
         version: int,
         status: IntentStatus,
+        reason: Optional[str] = None,
     ) -> Intent:
         """Change intent status."""
+        body: dict[str, Any] = {"status": status.value}
+        if reason:
+            body["reason"] = reason
         response = await self._client.post(
             f"/api/v1/intents/{intent_id}/status",
-            json={"status": status.value},
+            json=body,
             headers={"If-Match": str(version)},
         )
         data = self._handle_response(response)
         return Intent.from_dict(data)
+
+    # ==================== Governance Policy (RFC-0013 Enforcement) ====================
+
+    async def set_governance_policy(
+        self,
+        intent_id: str,
+        version: int,
+        policy: dict[str, Any],
+    ) -> Intent:
+        """Set or replace the governance policy for an intent."""
+        response = await self._client.put(
+            f"/api/v1/intents/{intent_id}/governance",
+            json=policy,
+            headers={"If-Match": str(version)},
+        )
+        data = self._handle_response(response)
+        return Intent.from_dict(data)
+
+    async def get_governance_policy(self, intent_id: str) -> dict[str, Any]:
+        """Get the effective governance policy for an intent."""
+        response = await self._client.get(f"/api/v1/intents/{intent_id}/governance")
+        return self._handle_response(response)
+
+    async def remove_governance_policy(
+        self,
+        intent_id: str,
+        version: int,
+    ) -> Intent:
+        """Remove governance policy from an intent."""
+        response = await self._client.delete(
+            f"/api/v1/intents/{intent_id}/governance",
+            headers={"If-Match": str(version)},
+        )
+        data = self._handle_response(response)
+        return Intent.from_dict(data)
+
+    async def approve_approval(
+        self,
+        intent_id: str,
+        approval_id: str,
+    ) -> dict[str, Any]:
+        """Approve a pending approval request."""
+        response = await self._client.post(
+            f"/api/v1/intents/{intent_id}/approvals/{approval_id}/approve"
+        )
+        return self._handle_response(response)
+
+    async def deny_approval(
+        self,
+        intent_id: str,
+        approval_id: str,
+    ) -> dict[str, Any]:
+        """Deny a pending approval request."""
+        response = await self._client.post(
+            f"/api/v1/intents/{intent_id}/approvals/{approval_id}/deny"
+        )
+        return self._handle_response(response)
 
     async def log_event(
         self,

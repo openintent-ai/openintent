@@ -199,7 +199,7 @@ extra:
       link: https://pypi.org/project/openintent/
   version:
     provider: mike
-  announcement: "<strong>v0.12.0</strong> is here &mdash; MCP integration, agent-to-agent messaging, and complete RFC 0001&ndash;0021 coverage. <a href='changelog/'>Read the changelog &rarr;</a>"
+  announcement: "<strong>v0.13.0</strong> is here &mdash; Server-enforced governance, approval gates, SSE-driven resume, and complete RFC 0001&ndash;0021 coverage. <a href='changelog/'>Read the changelog &rarr;</a>"
   meta:
     - name: description
       content: "OpenIntent Python SDK — structured multi-agent coordination protocol with decorator-first agents, 21 RFCs, 7 LLM adapters, MCP integration, and built-in FastAPI server."

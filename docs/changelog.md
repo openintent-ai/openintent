@@ -5,6 +5,51 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-02-14
+
+### Added
+
+- **Server-Enforced Governance (RFC-0013)** — Declarative governance policies with server-side enforcement.
+  - `governance_policy` parameter on `@Agent` and `@Coordinator` decorators.
+  - `completion_mode`: `auto` (default), `require_approval`, or `quorum` with configurable `quorum_threshold`.
+  - `write_scope`: `any` (default) or `assigned_only` to restrict state mutations to assigned agents.
+  - `max_cost` ceiling — server rejects status changes when cumulative cost exceeds the limit.
+  - `require_status_reason` — forces agents to provide a reason string on every status transition.
+  - `allowed_agents` — whitelist of agent IDs permitted to operate on the intent.
+- **Approval Gates** — `POST /api/v1/intents/{id}/approvals` to request approval, `POST .../approve` and `.../deny` to resolve.
+  - `get_governance_policy` (read) and `set_governance_policy` (admin) endpoints.
+  - SSE broadcast of `governance.approval_granted` and `governance.approval_denied` events for zero-polling resume.
+- **Governance Lifecycle Decorators** — `@on_governance_blocked`, `@on_approval_granted`, `@on_approval_denied` for reactive agent behavior.
+- **`self.governance` Proxy** — `get_policy()`, `request_approval()`, `approve()`, `deny()`, `list_approvals()` convenience methods on agent instances.
+- **MCP Governance Tools** — `set_governance_policy`, `get_governance_policy`, `approve_approval`, `deny_approval` added to MCP server (62 total tools; reader=21, operator=38, admin=62).
+- **`GovernancePolicy` Model** — Typed dataclass with `completion_mode`, `write_scope`, `allowed_agents`, `max_cost`, `quorum_threshold`, `require_status_reason`.
+- **`GOVERNANCE_APPROVAL_ENFORCED` Event Type** — Emitted when a governance gate is satisfied and the blocked action proceeds.
+
+### Changed
+
+- All documentation, READMEs, and examples updated from v0.12.1 to v0.13.0 (21 RFCs).
+- MCP tool surface expanded from 58 to 62 tools with governance enforcement tools.
+- Governance guide and examples updated with server-enforced patterns.
+
+---
+
+## [0.12.1] - 2026-02-13
+
+### Added
+
+- **Human Escalation Tools (RFC-0013)**
+  - `escalate_to_human`: Agents escalate when blocked or uncertain, providing reason, priority, urgency, and context.
+  - `list_escalations`: List pending escalations filtered by intent ID or status.
+  - `resolve_escalation`: Humans resolve escalations with a recorded decision and optional notes.
+  - `request_approval`: Agents request human approval before proceeding with specific actions.
+  - `get_approval_status`: Check the current status of a pending approval request.
+- **MCP Tool Surface Expansion**
+  - MCP tool count expanded from 53 to 58 (16 participation + 42 advanced).
+  - RBAC role counts updated: `reader` = 20, `operator` = 37, `admin` = 58.
+  - Human escalation tools assigned to appropriate tiers: `list_escalations` and `get_approval_status` (read), `escalate_to_human` and `request_approval` (write), `resolve_escalation` (admin).
+
+---
+
 ## [0.12.0] - 2026-02-13
 
 ### Added

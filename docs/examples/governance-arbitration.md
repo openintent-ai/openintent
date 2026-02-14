@@ -162,3 +162,101 @@ from openintent.workflow import load_workflow
 wf = load_workflow("governed_deployment.yaml")
 wf.run()
 ```
+
+---
+
+## Server-Enforced Governance (v0.13.0)
+
+### Approval Gate with Resume
+
+The full pattern: agent attempts completion, server blocks with 403, agent requests approval, coordinator approves, SSE triggers resume.
+
+```python
+from openintent import Agent, Coordinator
+from openintent import (
+    on_assignment,
+    on_governance_blocked,
+    on_approval_granted,
+    on_approval_denied,
+)
+
+@Agent("deploy-bot", governance_policy={
+    "completion_mode": "require_approval",
+    "write_scope": "assigned_only",
+    "max_cost": 500.0,
+})
+class DeployAgent:
+
+    @on_assignment
+    async def deploy(self, intent):
+        result = await run_deployment(intent)
+        # Server returns 403 — governance violation
+        await self.async_client.set_status(
+            intent.id, "completed", version=intent.version
+        )
+
+    @on_governance_blocked
+    async def blocked(self, intent, rule, detail):
+        if rule == "completion_mode":
+            await self.governance.request_approval(
+                intent.id, "complete",
+                "Deployment successful, requesting sign-off"
+            )
+
+    @on_approval_granted
+    async def resume(self, intent, approval):
+        if approval["action"] == "complete":
+            await self.async_client.set_status(
+                intent.id, "completed",
+                version=intent.version,
+                reason="Approved by coordinator"
+            )
+
+
+@Coordinator("lead", agents=["deploy-bot"], governance_policy={
+    "completion_mode": "quorum",
+    "quorum_threshold": 0.6,
+})
+class ProjectLead:
+
+    @on_assignment
+    async def plan(self, intent):
+        await self.delegate(intent, "deploy-bot")
+
+    @on_approval_denied
+    async def handle_denial(self, intent, approval):
+        await self.escalate(intent.id, "Approval denied")
+```
+
+### Querying Governance State
+
+```python
+# Get the governance policy for an intent
+policy = client.get_governance_policy(intent.id)
+print(f"Completion mode: {policy['completion_mode']}")
+print(f"Max cost: {policy['max_cost']}")
+
+# List pending approvals
+approvals = client.list_approvals(intent.id, status="pending")
+for a in approvals:
+    print(f"  {a['agent_id']} requests '{a['action']}': {a['reason']}")
+
+# Approve or deny
+client.approve_approval(intent.id, approval_id, decided_by="lead")
+client.deny_approval(intent.id, approval_id, decided_by="lead")
+```
+
+### Cost Ceiling Enforcement
+
+```python
+@Agent("expensive-bot", governance_policy={
+    "max_cost": 100.0,
+})
+class ExpensiveAgent:
+
+    @on_governance_blocked
+    async def cost_exceeded(self, intent, rule, detail):
+        if rule == "max_cost":
+            print(f"Cost ceiling hit: {detail}")
+            await self.escalate(intent.id, "Budget exceeded")
+```

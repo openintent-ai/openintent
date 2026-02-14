@@ -43,6 +43,7 @@ class IntentModel(Base):  # type: ignore[misc, valid-type]
     status = Column(String(50), default="draft")
     confidence = Column(Float, default=0.0)
     version = Column(Integer, default=1)
+    governance_policy = Column(JSON, nullable=True, default=None)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1766,6 +1767,84 @@ class Database:
             )
             .first()
         )
+
+    # ==================== Governance Enforcement (RFC-0013) ====================
+
+    def has_approved_approval(
+        self, session: Session, intent_id: str, action: str
+    ) -> bool:
+        """Check if an approved ApprovalRequest exists for a given action."""
+        return (
+            session.query(ApprovalRequestModel)
+            .filter(
+                ApprovalRequestModel.intent_id == intent_id,
+                ApprovalRequestModel.action == action,
+                ApprovalRequestModel.status == "approved",
+            )
+            .first()
+            is not None
+        )
+
+    def count_approved_approvals(
+        self, session: Session, intent_id: str, action: str
+    ) -> int:
+        """Count the number of approved ApprovalRequests for a given action."""
+        return (
+            session.query(ApprovalRequestModel)
+            .filter(
+                ApprovalRequestModel.intent_id == intent_id,
+                ApprovalRequestModel.action == action,
+                ApprovalRequestModel.status == "approved",
+            )
+            .count()
+        )
+
+    def is_agent_assigned(
+        self, session: Session, intent_id: str, agent_id: str
+    ) -> bool:
+        """Check if a specific agent is assigned to an intent."""
+        return (
+            session.query(IntentAgentModel)
+            .filter(
+                IntentAgentModel.intent_id == intent_id,
+                IntentAgentModel.agent_id == agent_id,
+            )
+            .first()
+            is not None
+        )
+
+    def count_assigned_agents(self, session: Session, intent_id: str) -> int:
+        """Count the number of agents assigned to an intent."""
+        return (
+            session.query(IntentAgentModel)
+            .filter(IntentAgentModel.intent_id == intent_id)
+            .count()
+        )
+
+    def get_total_cost(self, session: Session, intent_id: str) -> float:
+        """Sum all recorded costs for an intent."""
+        from sqlalchemy import func
+
+        result = (
+            session.query(func.coalesce(func.sum(IntentCostModel.amount), 0.0))
+            .filter(IntentCostModel.intent_id == intent_id)
+            .scalar()
+        )
+        return float(result)
+
+    def update_governance_policy(
+        self, session: Session, intent_id: str, version: int, policy: Optional[dict]
+    ) -> Optional[IntentModel]:
+        """Update an intent's governance policy with optimistic concurrency."""
+        intent = self.get_intent(session, intent_id)
+        if not intent or intent.version != version:
+            return None
+        intent.governance_policy = policy
+        intent.version += 1
+        intent.updated_at = datetime.utcnow()
+        session.commit()
+        session.refresh(intent)
+        return intent
 
 
 _database: Optional[Database] = None

@@ -150,6 +150,101 @@ governance:
 !!! info "Governance is non-blocking by default"
     Arbitration requests don't block the intent. Agents can continue working on other scopes while waiting for decisions.
 
+---
+
+## Server-Enforced Governance (v0.13.0)
+
+Starting with v0.13.0, governance policies are enforced server-side. Agents declare their governance constraints, and the server rejects operations that violate them — returning a `403` with structured violation details.
+
+### Governance Policy
+
+A governance policy is a declarative object attached to an intent:
+
+```python
+policy = {
+    "completion_mode": "require_approval",  # auto | require_approval | quorum
+    "write_scope": "assigned_only",          # any | assigned_only
+    "allowed_agents": ["deploy-bot"],
+    "max_cost": 500.0,
+    "quorum_threshold": 0.6,                 # only for quorum mode
+    "require_status_reason": True,
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `completion_mode` | `str` | `"auto"` | `auto` = no gate, `require_approval` = single approver, `quorum` = threshold-based |
+| `write_scope` | `str` | `"any"` | `assigned_only` restricts state writes to assigned agents |
+| `allowed_agents` | `list` | `[]` | Whitelist of agent IDs (empty = allow all) |
+| `max_cost` | `float` | `None` | Reject status changes when cumulative cost exceeds this |
+| `quorum_threshold` | `float` | `None` | Fraction of assigned agents that must approve (0.0–1.0) |
+| `require_status_reason` | `bool` | `False` | Force agents to provide a reason on status transitions |
+
+### Setting a Policy
+
+```python
+# Via the client
+client.set_governance_policy(intent.id, policy)
+
+# Via the @Agent decorator
+@Agent("deploy-bot", governance_policy={
+    "completion_mode": "require_approval",
+    "write_scope": "assigned_only",
+    "max_cost": 500.0,
+})
+class DeployAgent:
+    ...
+```
+
+### Enforcement: 403 on Violation
+
+When an agent violates the policy, the server returns a `403 Forbidden` response:
+
+```json
+{
+  "detail": "Governance violation",
+  "rule": "completion_mode",
+  "message": "Intent requires approval before completion"
+}
+```
+
+### Approval Gates
+
+Agents request approval after being blocked, then wait for SSE notification:
+
+```python
+@on_governance_blocked
+async def blocked(self, intent, rule, detail):
+    if rule == "completion_mode":
+        await self.governance.request_approval(
+            intent.id, "complete",
+            "Deployment successful, requesting sign-off"
+        )
+
+@on_approval_granted
+async def resume(self, intent, approval):
+    await self.async_client.set_status(
+        intent.id, "completed",
+        version=intent.version,
+        reason="Approved by coordinator"
+    )
+```
+
+### SSE Resume (Zero-Polling)
+
+When an approval is granted or denied, the server broadcasts an SSE event:
+
+```
+event: governance.approval_granted
+data: {"intent_id": "...", "approval_id": "...", "action": "complete"}
+```
+
+Agents subscribed via `@on_approval_granted` or `@on_approval_denied` are notified immediately — no polling required.
+
+### Backward Compatibility
+
+Intents without a governance policy behave exactly as before. All governance fields default to permissive values (`completion_mode: "auto"`, `write_scope: "any"`).
+
 ## Next Steps
 
 - [Leasing & Concurrency](leasing.md) — Exclusive ownership of scopes

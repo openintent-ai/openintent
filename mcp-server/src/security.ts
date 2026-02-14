@@ -45,7 +45,7 @@ export const TOOL_TIERS: Record<string, ToolTier> = {
   openintent_unassign_agent:  "admin",
   openintent_create_channel:  "admin",
 
-  // ── Advanced Tools (37) ───────────────────────────────────────────
+  // ── Advanced Tools (46) ───────────────────────────────────────────
 
   // Workflows (RFC-0011)
   openintent_get_workflow:     "read",
@@ -62,6 +62,12 @@ export const TOOL_TIERS: Record<string, ToolTier> = {
   openintent_get_arbitration:  "read",
   openintent_set_coordinator:  "admin",
   openintent_record_decision:  "admin",
+
+  // Governance Enforcement (RFC-0013)
+  openintent_set_governance_policy: "admin",
+  openintent_get_governance_policy: "read",
+  openintent_approve_approval:      "admin",
+  openintent_deny_approval:         "admin",
 
   // Human Escalation (RFC-0013)
   openintent_escalate_to_human:  "write",

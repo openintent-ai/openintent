@@ -59,6 +59,56 @@ class _ToolsProxy:
         )
 
 
+class _GovernanceProxy:
+    """Proxy for governance policy operations (RFC-0013 Enforcement).
+
+    Accessible via ``self.governance`` on any agent.  Provides methods
+    to set policies, request approval, and await approval resolution.
+    """
+
+    def __init__(self, agent):
+        self._agent = agent
+
+    async def set_policy(self, intent_id: str, policy: dict, version: int) -> dict:
+        """Set or update a governance policy on an intent."""
+        return await self._agent.async_client.set_governance_policy(
+            intent_id=intent_id, policy=policy, version=version
+        )
+
+    async def get_policy(self, intent_id: str) -> dict:
+        """Get the effective governance policy for an intent."""
+        return await self._agent.async_client.get_governance_policy(intent_id)
+
+    async def remove_policy(self, intent_id: str, version: int) -> dict:
+        """Remove a governance policy (returns to permissive defaults)."""
+        return await self._agent.async_client.remove_governance_policy(
+            intent_id=intent_id, version=version
+        )
+
+    async def request_approval(
+        self, intent_id: str, action: str, reason: str = ""
+    ) -> dict:
+        """Request approval for a governed action (e.g. 'complete')."""
+        return await self._agent.async_client.create_approval_request(
+            intent_id=intent_id,
+            action=action,
+            reason=reason,
+            requested_by=self._agent._agent_id,
+        )
+
+    async def approve(self, intent_id: str, approval_id: str) -> dict:
+        """Approve a pending approval request."""
+        return await self._agent.async_client.approve_approval(
+            intent_id=intent_id, approval_id=approval_id
+        )
+
+    async def deny(self, intent_id: str, approval_id: str) -> dict:
+        """Deny a pending approval request."""
+        return await self._agent.async_client.deny_approval(
+            intent_id=intent_id, approval_id=approval_id
+        )
+
+
 class _ChannelsProxy:
     """Proxy for agent channel messaging operations (RFC-0021)."""
 
@@ -363,6 +413,72 @@ def on_escalation(func: Callable) -> Callable:
     return func
 
 
+def on_governance_blocked(func: Callable) -> Callable:
+    """
+    Decorator: Called when a mutation is rejected by a governance policy.
+
+    The handler receives the intent, the violated rule, and the server's
+    error detail dict.  Use this to request approval, escalate, or
+    adjust strategy when the server enforces a governance gate.
+
+    Example:
+        ```python
+        @on_governance_blocked
+        async def handle_block(self, intent, rule, detail):
+            if rule == "completion_mode":
+                await self.governance.request_approval(
+                    intent.id, "complete", "Ready for review"
+                )
+            elif rule == "write_scope":
+                await self.escalate(intent.id, "Not authorized")
+        ```
+    """
+    func._openintent_handler = "governance_blocked"
+    return func
+
+
+def on_approval_granted(func: Callable) -> Callable:
+    """
+    Decorator: Called when an approval request is granted (via SSE).
+
+    This is the **resume hook** — when the server broadcasts a
+    ``governance.approval_granted`` event, this handler fires so the
+    agent can retry the previously blocked operation.
+
+    Example:
+        ```python
+        @on_approval_granted
+        async def resume(self, intent, approval):
+            if approval["action"] == "complete":
+                await self.async_client.set_status(
+                    intent.id, "completed",
+                    version=intent.version,
+                    reason="Approved and completing"
+                )
+        ```
+    """
+    func._openintent_handler = "approval_granted"
+    return func
+
+
+def on_approval_denied(func: Callable) -> Callable:
+    """
+    Decorator: Called when an approval request is denied (via SSE).
+
+    Allows the agent to handle denial — e.g. escalate, abandon,
+    or try a different approach.
+
+    Example:
+        ```python
+        @on_approval_denied
+        async def denied(self, intent, approval):
+            await self.escalate(intent.id, "Approval denied, need guidance")
+        ```
+    """
+    func._openintent_handler = "approval_denied"
+    return func
+
+
 def on_quorum(threshold: float = 0.5) -> Callable:
     """Decorator: Called when multi-agent voting reaches a threshold.
     Args: threshold - fraction of agents needed (0.0 to 1.0).
@@ -626,6 +742,7 @@ class BaseAgent(ABC):
         self._tasks_proxy: Optional[_TasksProxy] = None
         self._tools_proxy: Optional[_ToolsProxy] = None
         self._channels_proxy: Optional[_ChannelsProxy] = None
+        self._governance_proxy: Optional[_GovernanceProxy] = None
 
         # MCP bridge for MCPTool-based tools (connected at startup)
         self._mcp_bridge: Any = None
@@ -649,6 +766,9 @@ class BaseAgent(ABC):
             "input_guardrail": [],
             "output_guardrail": [],
             "identity_registered": [],
+            "governance_blocked": [],
+            "approval_granted": [],
+            "approval_denied": [],
         }
 
         for name in dir(self):
@@ -719,6 +839,17 @@ class BaseAgent(ABC):
         if not self._channels_proxy:
             self._channels_proxy = _ChannelsProxy(self)
         return self._channels_proxy
+
+    @property
+    def governance(self) -> _GovernanceProxy:
+        """Access governance policy operations (RFC-0013 Enforcement).
+
+        Provides methods to set/get/remove governance policies,
+        request approval, and approve/deny approval requests.
+        """
+        if not self._governance_proxy:
+            self._governance_proxy = _GovernanceProxy(self)
+        return self._governance_proxy
 
     @property
     def identity_config(self) -> dict:
@@ -1402,6 +1533,7 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
     memory: Optional[str] = None,
     tools: Optional[list] = None,
     auto_heartbeat: bool = True,
+    governance_policy: Optional[dict[str, Any]] = None,
     model: Optional[str] = None,
     provider: Optional[str] = None,
     system_prompt: Optional[str] = None,
@@ -1470,6 +1602,7 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
             if tools:
                 self._config.tools = tools
             self._config.auto_heartbeat = auto_heartbeat
+            self._governance_policy = governance_policy
 
             if model:
                 _setup_llm_engine(
@@ -1502,6 +1635,7 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
             "memory",
             "tasks",
             "tools",
+            "governance",
         ]:
             if not hasattr(cls, prop_name):
                 setattr(cls, prop_name, getattr(BaseAgent, prop_name))
@@ -1592,6 +1726,7 @@ def Coordinator(  # noqa: N802
     memory: Optional[str] = None,
     tools: Optional[list] = None,
     auto_heartbeat: bool = True,
+    governance_policy: Optional[dict[str, Any]] = None,
     model: Optional[str] = None,
     provider: Optional[str] = None,
     system_prompt: Optional[str] = None,
@@ -1661,6 +1796,7 @@ def Coordinator(  # noqa: N802
             if tools:
                 self._config.tools = tools
             self._config.auto_heartbeat = auto_heartbeat
+            self._governance_policy = governance_policy
             self._agents_list = agents or []
             self._strategy = strategy
             self._guardrails = guardrails or []
@@ -1719,6 +1855,7 @@ def Coordinator(  # noqa: N802
             "memory",
             "tasks",
             "tools",
+            "governance",
         ]:
             if not hasattr(cls, prop_name):
                 setattr(cls, prop_name, getattr(BaseAgent, prop_name))
