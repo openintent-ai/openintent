@@ -1,0 +1,48 @@
+openintent: "1.0"
+
+# ============================================================
+# Messaging Pipeline - Multi-Agent Direct Messaging Coordination
+# ============================================================
+#
+# Demonstrates agent-to-agent messaging through channels with
+# explicit membership, auditing, and workflow dependencies.
+#
+# To run:
+#   1. Start the server: openintent-server
+#   2. Run your agents
+#   3. Execute: openintent run messaging_pipeline.yaml
+#
+# ============================================================
+
+info:
+  name: "Messaging Pipeline"
+  description: "Multi-agent pipeline with direct messaging coordination"
+
+channels:
+  data-sync:
+    members: [researcher, data-agent]
+    member_policy: explicit
+    audit: true
+    ttl_seconds: 3600
+
+  progress:
+    member_policy: intent
+    audit: false
+
+workflow:
+  research:
+    title: "Gather Research"
+    description: "Research the topic and coordinate with data agent"
+    assign: researcher
+
+  process:
+    title: "Process Data"
+    description: "Process data based on research findings"
+    assign: data-agent
+    depends_on: [research]
+
+  summarize:
+    title: "Create Summary"
+    description: "Summarize findings from all agents"
+    assign: summarizer
+    depends_on: [process]

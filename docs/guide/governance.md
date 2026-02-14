@@ -4,7 +4,7 @@ title: Governance & Arbitration
 
 # Governance & Arbitration
 
-Governance provides structured escalation paths and auditable decision records when agents are uncertain, in conflict, or need human approval. Defined in [RFC-0004](../rfcs/0004-governance-arbitration.md).
+Governance provides structured escalation paths and auditable decision records when agents are uncertain, in conflict, or need human approval. Defined in [RFC-0003](../rfcs/0003-agent-leasing.md).
 
 ## Arbitration Requests
 

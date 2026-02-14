@@ -141,8 +141,8 @@ Every LLM-powered agent has access to:
 | `remember` | Store a key-value pair in agent memory | RFC-0015 Memory |
 | `recall` | Query agent memory by keyword | RFC-0015 Memory |
 | `update_status` | Patch the current intent's state | RFC-0001 State |
-| `clarify` | Ask a human for clarification | RFC-0004 Arbitration |
-| `escalate` | Escalate the intent to a supervisor | RFC-0004 Governance |
+| `clarify` | Ask a human for clarification | RFC-0003 Arbitration |
+| `escalate` | Escalate the intent to a supervisor | RFC-0003 Governance |
 
 ### Coordinator Tools
 
@@ -351,7 +351,7 @@ class CarefulAgent:
 
 When the LLM calls `clarify`:
 
-1. An **arbitration request** is created (RFC-0004)
+1. An **arbitration request** is created (RFC-0003)
 2. The intent is **paused**, waiting for human input
 3. `think()` returns a JSON response with `status: "awaiting_response"`
 4. When the human responds, the answer is injected into the conversation context

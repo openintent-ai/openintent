@@ -32,7 +32,7 @@ openintent run examples/workflows/hello_world.yaml
 | Workflow | Description | Phases | Features |
 |----------|-------------|--------|----------|
 | [content_pipeline.yaml](content_pipeline.yaml) | Content creation with parallel phases | 4 | Parallel execution, costs, attachments |
-| [compliance_review.yaml](compliance_review.yaml) | Document compliance review | 4 | All 17 RFCs, unified permissions, delegation, context injection |
+| [compliance_review.yaml](compliance_review.yaml) | Document compliance review | 4 | All 21 RFCs, unified permissions, delegation, context injection |
 
 ## Workflow Structure
 

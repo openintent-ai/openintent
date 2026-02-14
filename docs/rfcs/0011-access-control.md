@@ -1,4 +1,4 @@
-# RFC-0011: Access-Aware Coordination v2.0
+# RFC-0011: Access-Aware Coordination v1.0
 
 **Status:** Proposed  
 **Created:** 2026-02-01  

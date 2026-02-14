@@ -25,7 +25,7 @@ flowchart TB
         REP["Report Agent<br/>RFC-0005: Attachments"]
     end
 
-    COORD["Coordinator<br/>RFC-0004: Governance"]
+    COORD["Coordinator<br/>RFC-0003: Governance"]
 
     COORD --> API
     UI --> API
@@ -163,7 +163,7 @@ compliance_review/
     app.py              # FastAPI dashboard server
     templates/
       index.html        # Real-time dashboard UI
-  coordinator.py        # RFC-0004: Governance gates
+  coordinator.py        # RFC-0003: Governance gates
   config.py             # Shared configuration
   README.md             # This file
 ```
@@ -248,7 +248,7 @@ The dashboard provides visibility into all OpenIntent data via REST API polling:
 - **Leases Panel**: Active leases and their holders (RFC-0003)
 - **Costs Panel**: Total spend with breakdown by type (RFC-0009)
 - **Attachments Panel**: Generated reports and files (RFC-0005)
-- **Governance Panel**: Approve/reject high-risk documents (RFC-0004)
+- **Governance Panel**: Approve/reject high-risk documents (RFC-0003)
 - **State Panel**: Full JSON view of intent state
 
 ## Configuration

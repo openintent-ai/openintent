@@ -228,7 +228,7 @@ class TestEnums:
         assert EventType.DEPENDENCY_REMOVED.value == "dependency_removed"
         # Attachment events (RFC-0005)
         assert EventType.ATTACHMENT_ADDED.value == "attachment_added"
-        # Portfolio events (RFC-0007)
+        # Portfolio events (RFC-0004)
         assert EventType.PORTFOLIO_CREATED.value == "portfolio_created"
         assert EventType.ADDED_TO_PORTFOLIO.value == "added_to_portfolio"
         assert EventType.REMOVED_FROM_PORTFOLIO.value == "removed_from_portfolio"

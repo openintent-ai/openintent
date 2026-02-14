@@ -3,7 +3,7 @@
 **Status:** Proposed  
 **Created:** 2026-02-01  
 **Authors:** OpenIntent Contributors  
-**Requires:** [RFC-0001 (Intents)](./0001-intent-objects.md), [RFC-0004 (Governance)](./0004-governance-arbitration.md)
+**Requires:** [RFC-0001 (Intents)](./0001-intent-objects.md), [RFC-0003 (Governance)](./0003-agent-leasing.md)
 
 ---
 

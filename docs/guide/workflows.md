@@ -139,7 +139,82 @@ workflow:
     cost_tracking:
       enabled: true
       budget_usd: 5.00
+
+channels:
+  data-sync:
+    members: [researcher, synthesizer]
+    member_policy: explicit
+    audit: true
 ```
+
+## Channels
+
+The `channels:` block defines named communication channels for direct agent-to-agent messaging (RFC-0021). Channels are created automatically when the workflow starts.
+
+### Basic Channel
+
+```yaml
+channels:
+  questions:
+    members: [researcher, data-agent]
+    audit: true
+```
+
+This creates a channel called `questions` that only `researcher` and `data-agent` can use. Messages are recorded in the event log.
+
+### Channel Options
+
+```yaml
+channels:
+  data-sync:
+    members: [agent-a, agent-b]
+    member_policy: explicit    # Only listed members (default: "intent")
+    audit: true                # Copy messages to event log
+    ttl_seconds: 3600          # Auto-close after 1 hour of inactivity
+    max_messages: 500          # Retain last 500 messages
+
+  progress:
+    member_policy: intent      # Any agent on the intent can participate
+    audit: false
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `members` | `[]` | Agent IDs permitted on the channel |
+| `member_policy` | `"intent"` | `"explicit"` (members only) or `"intent"` (any agent) |
+| `audit` | `false` | Copy messages to the intent event log |
+| `ttl_seconds` | `null` | Auto-close after inactivity (null = lives until intent resolves) |
+| `max_messages` | `1000` | Max messages retained |
+
+### Per-Agent Message Handlers
+
+Declare which agents handle messages from which channels:
+
+```yaml
+agents:
+  data-agent:
+    on_message:
+      - channel: data-sync
+        handler: answer_questions
+  
+  researcher:
+    on_message:
+      - channel: progress
+        handler: log_progress
+```
+
+This maps to the `@on_message` decorator in Python:
+
+```python
+@Agent("data-agent")
+class DataAgent:
+    @on_message(channel="data-sync")
+    async def answer_questions(self, message):
+        return {"answer": "v2.3"}
+```
+
+!!! tip "Channels + Workflows"
+    Channels are ideal for coordination *within* a workflow phase — asking a peer agent a question, broadcasting progress, or negotiating work boundaries. For data passing *between* phases, use intent state and `depends_on`.
 
 ## Dependencies
 

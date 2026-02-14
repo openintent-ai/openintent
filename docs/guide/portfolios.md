@@ -4,7 +4,7 @@ title: Portfolios
 
 # Portfolios
 
-Portfolios group related intents under a shared namespace with aggregate status tracking and shared governance policies. Think of them as project folders for multi-intent coordination. Defined in [RFC-0007](../rfcs/0007-intent-portfolios.md).
+Portfolios group related intents under a shared namespace with aggregate status tracking and shared governance policies. Think of them as project folders for multi-intent coordination. Defined in [RFC-0004](../rfcs/0004-governance-arbitration.md).
 
 ## Creating a Portfolio
 
@@ -124,7 +124,7 @@ class LaunchCoordinator:
 
 | Concept | Purpose | RFC |
 |---------|---------|-----|
-| **Portfolio** | Organizational grouping with shared governance | RFC-0007 |
+| **Portfolio** | Organizational grouping with shared governance | RFC-0004 |
 | **Intent Graph** | Structural dependencies between intents | RFC-0002 |
 | **Plan** | Execution strategy with conditionals and checkpoints | RFC-0012 |
 

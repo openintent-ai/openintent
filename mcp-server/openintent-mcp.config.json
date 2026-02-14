@@ -1,0 +1,18 @@
+{
+  "server": {
+    "url": "http://localhost:8000",
+    "api_key": "your-api-key-here",
+    "agent_id": "mcp-agent"
+  },
+  "security": {
+    "tls_required": false,
+    "allowed_tools": null,
+    "max_timeout": 120,
+    "audit_logging": true
+  },
+  "network": {
+    "timeout": 30000,
+    "retries": 3,
+    "retry_delay": 1000
+  }
+}

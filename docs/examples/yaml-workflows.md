@@ -1,6 +1,6 @@
 # YAML Workflow Specification
 
-Declarative multi-agent workflows covering all 20 RFCs — dependencies, permissions, retry, cost, memory, triggers, planning, and governance.
+Declarative multi-agent workflows covering all 21 RFCs — dependencies, permissions, retry, cost, memory, triggers, planning, messaging, MCP, and governance.
 
 ## Minimal Workflow
 

@@ -1,4 +1,4 @@
-# RFC-0011: Access-Aware Coordination v2.0
+# RFC-0011: Access-Aware Coordination v1.0
 
 | Field       | Value                                |
 |-------------|--------------------------------------|

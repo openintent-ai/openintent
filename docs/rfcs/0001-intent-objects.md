@@ -1,4 +1,4 @@
-# RFC-0001: OpenIntent Coordination Protocol (OICP) v0.1
+# RFC-0001: OpenIntent Coordination Protocol (OICP) v1.0
 
 **Status:** Proposed  
 **Created:** 2026-02-01  

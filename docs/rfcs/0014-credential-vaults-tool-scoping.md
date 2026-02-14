@@ -673,7 +673,7 @@ GET /api/v1/tools/granted?agent_id={agent_id}
 
 ### 9. YAML Workflow Integration
 
-The YAML workflow specification (RFC-0011 v2.0) gains a `tools` block for declaring tool requirements and grants:
+The YAML workflow specification (RFC-0011 v1.0) gains a `tools` block for declaring tool requirements and grants:
 
 ```yaml
 name: quarterly-compliance

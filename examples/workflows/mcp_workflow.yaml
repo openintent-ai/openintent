@@ -1,0 +1,59 @@
+openintent: "1.0"
+
+# ============================================================
+# MCP-Enhanced Research Pipeline
+# ============================================================
+#
+# Agents use MCP tool servers for file access and data
+# retrieval alongside OpenIntent coordination primitives.
+#
+# To run:
+#   1. Start the server: openintent-server
+#   2. Run your agents
+#   3. Execute: openintent run mcp_workflow.yaml
+#
+# ============================================================
+
+info:
+  name: "MCP-Enhanced Research Pipeline"
+  description: "Agents use MCP tools for file access and data retrieval"
+
+mcp:
+  servers:
+    filesystem:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/data"]
+      allowed_tools: ["read_file", "list_directory"]
+      security:
+        audit: true
+    openintent-remote:
+      command: "npx"
+      args: ["-y", "@openintent/mcp-server"]
+      env:
+        OPENINTENT_SERVER_URL: "http://localhost:8000"
+        OPENINTENT_API_KEY: "${OPENINTENT_API_KEY}"
+      security:
+        tls_required: false
+        credential_isolation: true
+        audit: true
+
+workflow:
+  gather:
+    title: "Gather Data"
+    description: "Read input files and collect raw data for analysis"
+    assign: researcher
+  analyze:
+    title: "Analyze Findings"
+    description: "Process gathered data and produce analysis report"
+    assign: analyst
+    depends_on: [gather]
+
+agents:
+  researcher:
+    tools:
+      - mcp:filesystem/read_file
+      - mcp:filesystem/list_directory
+  analyst:
+    tools:
+      - mcp:openintent-remote/openintent_get_intent
+      - mcp:openintent-remote/openintent_get_events

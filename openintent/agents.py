@@ -30,6 +30,7 @@ from .client import AsyncOpenIntentClient, OpenIntentClient
 from .models import (
     AccessRequest,
     ACLEntry,
+    Escalation,
     EventType,
     Intent,
     IntentContext,
@@ -55,6 +56,75 @@ class _ToolsProxy:
             tool_name=tool_name,
             agent_id=self._agent._agent_id,
             parameters=kwargs,
+        )
+
+
+class _ChannelsProxy:
+    """Proxy for agent channel messaging operations (RFC-0021)."""
+
+    def __init__(self, agent):
+        self._agent = agent
+
+    async def open(
+        self,
+        name: str,
+        intent_id: str,
+        members: Optional[list] = None,
+        member_policy: str = "intent",
+        options: Optional[dict] = None,
+    ):
+        """Open or get a channel on an intent. Creates implicitly if not found."""
+        existing = await self._agent.async_client.list_channels(intent_id)
+        for ch in existing:
+            if ch.get("name") == name:
+                return _ChannelHandle(self._agent, ch["id"], name, intent_id)
+        result = await self._agent.async_client.create_channel(
+            intent_id=intent_id,
+            name=name,
+            members=members or [],
+            member_policy=member_policy,
+            options=options,
+        )
+        return _ChannelHandle(self._agent, result["id"], name, intent_id)
+
+
+class _ChannelHandle:
+    """Handle for interacting with a specific channel (RFC-0021)."""
+
+    def __init__(self, agent, channel_id: str, name: str, intent_id: str):
+        self._agent = agent
+        self.channel_id = channel_id
+        self.name = name
+        self.intent_id = intent_id
+
+    async def ask(self, to: str, payload: dict, timeout: int = 30):
+        """Send a request message and await the response."""
+        return await self._agent.async_client.ask(
+            channel_id=self.channel_id,
+            sender=self._agent._agent_id,
+            to=to,
+            payload=payload,
+            timeout=timeout,
+        )
+
+    async def notify(self, to: str, payload: dict):
+        """Send a fire-and-forget notification."""
+        return await self._agent.async_client.send_message(
+            channel_id=self.channel_id,
+            sender=self._agent._agent_id,
+            to=to,
+            message_type="notify",
+            payload=payload,
+        )
+
+    async def broadcast(self, payload: dict):
+        """Send a broadcast message to all channel members."""
+        return await self._agent.async_client.send_message(
+            channel_id=self.channel_id,
+            sender=self._agent._agent_id,
+            to="*",
+            message_type="broadcast",
+            payload=payload,
         )
 
 
@@ -234,6 +304,25 @@ def on_trigger(name: Optional[str] = None) -> Callable:
     def decorator(func: Callable) -> Callable:
         func._openintent_handler = "trigger"
         func._openintent_trigger_name = name
+        return func
+
+    return decorator
+
+
+def on_message(channel: Optional[str] = None):
+    """
+    Decorator: Called when the agent receives a message on a channel (RFC-0021).
+
+    If `channel` is specified, only messages on that named channel trigger the handler.
+    If `channel` is None, messages on any channel trigger the handler.
+
+    The handler receives the message and can optionally return a response payload
+    that is automatically sent as a reply (for request messages).
+    """
+
+    def decorator(func: Callable) -> Callable:
+        func._openintent_handler = "message"
+        func._openintent_channel = channel
         return func
 
     return decorator
@@ -536,6 +625,10 @@ class BaseAgent(ABC):
         self._memory_proxy: Optional[_MemoryProxy] = None
         self._tasks_proxy: Optional[_TasksProxy] = None
         self._tools_proxy: Optional[_ToolsProxy] = None
+        self._channels_proxy: Optional[_ChannelsProxy] = None
+
+        # MCP bridge for MCPTool-based tools (connected at startup)
+        self._mcp_bridge: Any = None
 
     def _discover_handlers(self) -> None:
         """Discover decorated handler methods."""
@@ -549,6 +642,7 @@ class BaseAgent(ABC):
             "access_requested": [],
             "task": [],
             "trigger": [],
+            "message": [],
             "drain": [],
             "handoff": [],
             "retry": [],
@@ -618,6 +712,13 @@ class BaseAgent(ABC):
         if not self._tools_proxy:
             self._tools_proxy = _ToolsProxy(self)
         return self._tools_proxy
+
+    @property
+    def channels(self) -> _ChannelsProxy:
+        """Access channel messaging operations (RFC-0021)."""
+        if not self._channels_proxy:
+            self._channels_proxy = _ChannelsProxy(self)
+        return self._channels_proxy
 
     @property
     def identity_config(self) -> dict:
@@ -772,16 +873,23 @@ class BaseAgent(ABC):
         await self.async_client.assign_agent(intent_id, target_agent_id)
 
     async def escalate(
-        self, intent_id: str, reason: str, data: Optional[dict[str, Any]] = None
-    ) -> None:  # noqa: E501
+        self,
+        intent_id: str,
+        reason: str,
+        data: Optional[dict[str, Any]] = None,
+        priority: str = "medium",
+        urgency: str = "medium",
+    ) -> Escalation:
         """
-        Escalate an intent to administrators for review.
+        Escalate an intent to a human for review.
 
-        Creates an arbitration request through the governance pipeline.
+        Creates a human escalation request through the governance pipeline (RFC-0013).
         """
-        await self.async_client.request_arbitration(
+        return await self.async_client.escalate_to_human(
             intent_id,
             reason=reason,
+            priority=priority,
+            urgency=urgency,
             context=data or {},
         )
 
@@ -1034,15 +1142,55 @@ class BaseAgent(ABC):
 
         asyncio.run(self._run_async())
 
+    async def _resolve_mcp_tools(self) -> None:
+        """Connect to MCP servers declared in tools list and register their tools."""
+        from .mcp import MCPTool, is_mcp_uri, resolve_mcp_tools
+
+        mcp_entries = [
+            t for t in self._config.tools if isinstance(t, MCPTool) or is_mcp_uri(t)
+        ]
+        if not mcp_entries:
+            return
+
+        non_mcp = [
+            t
+            for t in self._config.tools
+            if not isinstance(t, MCPTool) and not is_mcp_uri(t)
+        ]
+
+        bridge, tool_defs = await resolve_mcp_tools(mcp_entries)
+        self._mcp_bridge = bridge
+        self._config.tools = non_mcp + tool_defs
+        logger.info(
+            "Agent '%s': resolved %d MCP tools from %d servers",
+            self._agent_id,
+            len(tool_defs),
+            len(mcp_entries),
+        )
+
+    async def _disconnect_mcp(self) -> None:
+        """Disconnect from all MCP servers."""
+        if self._mcp_bridge is not None:
+            try:
+                await self._mcp_bridge.disconnect_all()
+            except Exception as exc:
+                logger.warning("Error disconnecting MCP bridge: %s", exc)
+            self._mcp_bridge = None
+
     async def _run_async(self) -> None:
         """Async run loop."""
         self._loop = asyncio.get_event_loop()
 
+        await self._resolve_mcp_tools()
+
         if self._config.auto_subscribe:
             await self._subscribe()
 
-        while self._running:
-            await asyncio.sleep(0.1)
+        try:
+            while self._running:
+                await asyncio.sleep(0.1)
+        finally:
+            await self._disconnect_mcp()
 
     async def _subscribe(self) -> None:
         """Set up SSE subscription for this agent."""
@@ -1067,11 +1215,19 @@ class BaseAgent(ABC):
         asyncio.create_task(event_loop())
 
     def stop(self) -> None:
-        """Stop the agent."""
+        """Stop the agent and disconnect MCP servers."""
         logger.info(f"Stopping agent: {self._agent_id}")
         self._running = False
         if self._subscription:
             self._subscription.stop()
+        if self._mcp_bridge is not None and self._loop is not None:
+            try:
+                if self._loop.is_running():
+                    self._loop.create_task(self._disconnect_mcp())
+                else:
+                    self._loop.run_until_complete(self._disconnect_mcp())
+            except Exception:
+                pass
 
 
 class _MemoryProxy:

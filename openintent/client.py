@@ -30,6 +30,8 @@ from .models import (
     AgentRecord,
     AgentStatus,  # noqa: F401
     AggregateStatus,
+    ApprovalRequest,
+    ApprovalStatus,  # noqa: F401
     ArbitrationRequest,
     ChainVerification,
     Checkpoint,  # noqa: F401
@@ -43,6 +45,9 @@ from .models import (
     Decision,
     DecisionRecord,  # noqa: F401
     DecisionType,
+    Escalation,
+    EscalationPriority,  # noqa: F401
+    EscalationStatus,  # noqa: F401
     EventProof,  # noqa: F401
     EventType,
     GrantConstraints,  # noqa: F401
@@ -782,6 +787,148 @@ class OpenIntentClient:
         response = self._client.get(f"/api/v1/intents/{intent_id}/decisions")
         data = self._handle_response(response)
         return [Decision.from_dict(item) for item in data.get("decisions", data)]
+
+    # ==================== Human Escalation (RFC-0013) ====================
+
+    def escalate_to_human(
+        self,
+        intent_id: str,
+        reason: str,
+        priority: str = "medium",
+        urgency: str = "medium",
+        context: Optional[dict[str, Any]] = None,
+    ) -> Escalation:
+        """
+        Escalate an intent to a human for review.
+
+        Args:
+            intent_id: The intent requiring human attention.
+            reason: Explanation of why escalation is needed.
+            priority: Priority level (low, medium, high, critical).
+            urgency: Urgency level (low, medium, high, critical).
+            context: Additional context for the human reviewer.
+
+        Returns:
+            The created Escalation object.
+        """
+        response = self._client.post(
+            f"/api/v1/intents/{intent_id}/escalations",
+            json={
+                "reason": reason,
+                "priority": priority,
+                "urgency": urgency,
+                "context": context or {},
+                "escalated_by": self.agent_id,
+            },
+        )
+        data = self._handle_response(response)
+        return Escalation.from_dict(data)
+
+    def list_escalations(
+        self,
+        intent_id: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> list[Escalation]:
+        """
+        List escalations, optionally filtered by intent or status.
+
+        Args:
+            intent_id: Filter by intent ID.
+            status: Filter by escalation status.
+
+        Returns:
+            List of Escalation objects.
+        """
+        params = {}
+        if intent_id:
+            params["intent_id"] = intent_id
+        if status:
+            params["status"] = status
+        query = "&".join(f"{k}={v}" for k, v in params.items())
+        url = f"/api/v1/escalations{'?' + query if query else ''}"
+        response = self._client.get(url)
+        data = self._handle_response(response)
+        return [Escalation.from_dict(item) for item in data.get("escalations", data)]
+
+    def resolve_escalation(
+        self,
+        escalation_id: str,
+        resolution: str,
+        notes: Optional[str] = None,
+    ) -> Escalation:
+        """
+        Resolve a pending escalation with a human decision.
+
+        Args:
+            escalation_id: The escalation to resolve.
+            resolution: The resolution decision.
+            notes: Additional notes about the resolution.
+
+        Returns:
+            The updated Escalation object.
+        """
+        response = self._client.post(
+            f"/api/v1/escalations/{escalation_id}/resolve",
+            json={
+                "resolution": resolution,
+                "notes": notes,
+                "resolved_by": self.agent_id,
+            },
+        )
+        data = self._handle_response(response)
+        return Escalation.from_dict(data)
+
+    def request_approval(
+        self,
+        intent_id: str,
+        action: str,
+        reason: str = "",
+        context: Optional[dict[str, Any]] = None,
+    ) -> ApprovalRequest:
+        """
+        Request human approval before proceeding with an action.
+
+        Args:
+            intent_id: The intent the action relates to.
+            action: Description of the action requiring approval.
+            reason: Reason the approval is needed.
+            context: Additional context for the approver.
+
+        Returns:
+            The created ApprovalRequest object.
+        """
+        response = self._client.post(
+            f"/api/v1/intents/{intent_id}/approvals",
+            json={
+                "action": action,
+                "reason": reason,
+                "context": context or {},
+                "requested_by": self.agent_id,
+            },
+        )
+        data = self._handle_response(response)
+        return ApprovalRequest.from_dict(data)
+
+    def get_approval_status(
+        self,
+        intent_id: str,
+        approval_id: str,
+    ) -> ApprovalRequest:
+        """
+        Check the status of a pending approval request.
+
+        Args:
+            intent_id: The intent the approval relates to.
+            approval_id: The approval request to check.
+
+        Returns:
+            The ApprovalRequest object with current status.
+        """
+        response = self._client.get(
+            f"/api/v1/intents/{intent_id}/approvals/{approval_id}",
+        )
+        data = self._handle_response(response)
+        return ApprovalRequest.from_dict(data)
 
     # ==================== Agent Management ====================
 
@@ -2575,6 +2722,160 @@ class OpenIntentClient:
         data = self._handle_response(response)
         return ConsistencyProof.from_dict(data)
 
+    # ==================== Agent-to-Agent Messaging (RFC-0021) ====================
+
+    def create_channel(
+        self,
+        intent_id: str,
+        name: str,
+        members: Optional[list[str]] = None,
+        member_policy: str = "intent",
+        task_id: Optional[str] = None,
+        options: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """Create a messaging channel on an intent (RFC-0021)."""
+        payload: dict[str, Any] = {
+            "name": name,
+            "member_policy": member_policy,
+        }
+        if members:
+            payload["members"] = members
+        if task_id:
+            payload["task_id"] = task_id
+        if options:
+            payload["options"] = options
+        response = self._client.post(
+            f"/api/v1/intents/{intent_id}/channels", json=payload
+        )
+        return self._handle_response(response)
+
+    def list_channels(self, intent_id: str) -> Any:
+        """List channels on an intent (RFC-0021)."""
+        response = self._client.get(f"/api/v1/intents/{intent_id}/channels")
+        return self._handle_response(response)
+
+    def get_channel(self, channel_id: str) -> dict[str, Any]:
+        """Get channel details (RFC-0021)."""
+        response = self._client.get(f"/api/v1/channels/{channel_id}")
+        return self._handle_response(response)
+
+    def close_channel(self, channel_id: str) -> None:
+        """Close a channel (RFC-0021)."""
+        self._client.delete(f"/api/v1/channels/{channel_id}")
+
+    def send_message(
+        self,
+        channel_id: str,
+        sender: str,
+        to: Optional[str] = None,
+        message_type: str = "notify",
+        payload: Optional[dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
+        expires_at: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Send a message on a channel (RFC-0021)."""
+        body: dict[str, Any] = {
+            "sender": sender,
+            "message_type": message_type,
+            "payload": payload or {},
+        }
+        if to:
+            body["to"] = to
+        if metadata:
+            body["metadata"] = metadata
+        if expires_at:
+            body["expires_at"] = expires_at
+        response = self._client.post(
+            f"/api/v1/channels/{channel_id}/messages", json=body
+        )
+        return self._handle_response(response)
+
+    def reply_to(
+        self,
+        channel_id: str,
+        message_id: str,
+        sender: str,
+        payload: Optional[dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """Reply to a message (RFC-0021)."""
+        body: dict[str, Any] = {
+            "sender": sender,
+            "payload": payload or {},
+        }
+        if metadata:
+            body["metadata"] = metadata
+        response = self._client.post(
+            f"/api/v1/channels/{channel_id}/messages/{message_id}/reply",
+            json=body,
+        )
+        return self._handle_response(response)
+
+    def list_messages(
+        self,
+        channel_id: str,
+        since: Optional[str] = None,
+        to: Optional[str] = None,
+    ) -> Any:
+        """List messages on a channel (RFC-0021)."""
+        params: dict[str, str] = {}
+        if since:
+            params["since"] = since
+        if to:
+            params["to"] = to
+        response = self._client.get(
+            f"/api/v1/channels/{channel_id}/messages", params=params
+        )
+        return self._handle_response(response)
+
+    def get_message(self, channel_id: str, message_id: str) -> dict[str, Any]:
+        """Get a specific message (RFC-0021)."""
+        response = self._client.get(
+            f"/api/v1/channels/{channel_id}/messages/{message_id}"
+        )
+        return self._handle_response(response)
+
+    def mark_read(self, channel_id: str, message_id: str) -> dict[str, Any]:
+        """Mark a message as read (RFC-0021)."""
+        response = self._client.patch(
+            f"/api/v1/channels/{channel_id}/messages/{message_id}",
+            json={"status": "read"},
+        )
+        return self._handle_response(response)
+
+    def ask(
+        self,
+        channel_id: str,
+        sender: str,
+        to: str,
+        payload: dict[str, Any],
+        timeout: int = 30,
+    ) -> Any:
+        """Send a request and poll for the response (RFC-0021)."""
+        import time as _time
+
+        msg = self.send_message(
+            channel_id=channel_id,
+            sender=sender,
+            to=to,
+            message_type="request",
+            payload=payload,
+        )
+        msg_id = msg["id"]
+        deadline = _time.time() + timeout
+        while _time.time() < deadline:
+            messages = self.list_messages(channel_id)
+            for m in messages:
+                if (
+                    m.get("correlation_id") == msg_id
+                    and m.get("message_type") == "response"
+                ):
+                    return m
+            _time.sleep(0.5)
+        raise TimeoutError(
+            f"No response received within {timeout}s for message {msg_id}"
+        )
+
     def close(self) -> None:
         """Close the HTTP client connection."""
         self._client.close()
@@ -2865,6 +3166,97 @@ class AsyncOpenIntentClient:
         response = await self._client.get(f"/api/v1/intents/{intent_id}/decisions")
         data = self._handle_response(response)
         return [Decision.from_dict(item) for item in data.get("decisions", data)]
+
+    # ==================== Human Escalation (RFC-0013) ====================
+
+    async def escalate_to_human(
+        self,
+        intent_id: str,
+        reason: str,
+        priority: str = "medium",
+        urgency: str = "medium",
+        context: Optional[dict[str, Any]] = None,
+    ) -> Escalation:
+        """Escalate an intent to a human for review."""
+        response = await self._client.post(
+            f"/api/v1/intents/{intent_id}/escalations",
+            json={
+                "reason": reason,
+                "priority": priority,
+                "urgency": urgency,
+                "context": context or {},
+                "escalated_by": self.agent_id,
+            },
+        )
+        data = self._handle_response(response)
+        return Escalation.from_dict(data)
+
+    async def list_escalations(
+        self,
+        intent_id: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> list[Escalation]:
+        """List escalations, optionally filtered by intent or status."""
+        params = {}
+        if intent_id:
+            params["intent_id"] = intent_id
+        if status:
+            params["status"] = status
+        query = "&".join(f"{k}={v}" for k, v in params.items())
+        url = f"/api/v1/escalations{'?' + query if query else ''}"
+        response = await self._client.get(url)
+        data = self._handle_response(response)
+        return [Escalation.from_dict(item) for item in data.get("escalations", data)]
+
+    async def resolve_escalation(
+        self,
+        escalation_id: str,
+        resolution: str,
+        notes: Optional[str] = None,
+    ) -> Escalation:
+        """Resolve a pending escalation with a human decision."""
+        response = await self._client.post(
+            f"/api/v1/escalations/{escalation_id}/resolve",
+            json={
+                "resolution": resolution,
+                "notes": notes,
+                "resolved_by": self.agent_id,
+            },
+        )
+        data = self._handle_response(response)
+        return Escalation.from_dict(data)
+
+    async def request_approval(
+        self,
+        intent_id: str,
+        action: str,
+        reason: str = "",
+        context: Optional[dict[str, Any]] = None,
+    ) -> ApprovalRequest:
+        """Request human approval before proceeding with an action."""
+        response = await self._client.post(
+            f"/api/v1/intents/{intent_id}/approvals",
+            json={
+                "action": action,
+                "reason": reason,
+                "context": context or {},
+                "requested_by": self.agent_id,
+            },
+        )
+        data = self._handle_response(response)
+        return ApprovalRequest.from_dict(data)
+
+    async def get_approval_status(
+        self,
+        intent_id: str,
+        approval_id: str,
+    ) -> ApprovalRequest:
+        """Check the status of a pending approval request."""
+        response = await self._client.get(
+            f"/api/v1/intents/{intent_id}/approvals/{approval_id}",
+        )
+        data = self._handle_response(response)
+        return ApprovalRequest.from_dict(data)
 
     async def assign_agent(
         self, intent_id: str, agent_id: Optional[str] = None
@@ -4216,6 +4608,161 @@ class AsyncOpenIntentClient:
         )
         data = self._handle_response(response)
         return ConsistencyProof.from_dict(data)
+
+    # ==================== Agent-to-Agent Messaging (RFC-0021) ====================
+
+    async def create_channel(
+        self,
+        intent_id: str,
+        name: str,
+        members: Optional[list[str]] = None,
+        member_policy: str = "intent",
+        task_id: Optional[str] = None,
+        options: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """Create a messaging channel on an intent (RFC-0021)."""
+        payload: dict[str, Any] = {
+            "name": name,
+            "member_policy": member_policy,
+        }
+        if members:
+            payload["members"] = members
+        if task_id:
+            payload["task_id"] = task_id
+        if options:
+            payload["options"] = options
+        response = await self._client.post(
+            f"/api/v1/intents/{intent_id}/channels", json=payload
+        )
+        return self._handle_response(response)
+
+    async def list_channels(self, intent_id: str) -> Any:
+        """List channels on an intent (RFC-0021)."""
+        response = await self._client.get(f"/api/v1/intents/{intent_id}/channels")
+        return self._handle_response(response)
+
+    async def get_channel(self, channel_id: str) -> dict[str, Any]:
+        """Get channel details (RFC-0021)."""
+        response = await self._client.get(f"/api/v1/channels/{channel_id}")
+        return self._handle_response(response)
+
+    async def close_channel(self, channel_id: str) -> None:
+        """Close a channel (RFC-0021)."""
+        await self._client.delete(f"/api/v1/channels/{channel_id}")
+
+    async def send_message(
+        self,
+        channel_id: str,
+        sender: str,
+        to: Optional[str] = None,
+        message_type: str = "notify",
+        payload: Optional[dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
+        expires_at: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Send a message on a channel (RFC-0021)."""
+        body: dict[str, Any] = {
+            "sender": sender,
+            "message_type": message_type,
+            "payload": payload or {},
+        }
+        if to:
+            body["to"] = to
+        if metadata:
+            body["metadata"] = metadata
+        if expires_at:
+            body["expires_at"] = expires_at
+        response = await self._client.post(
+            f"/api/v1/channels/{channel_id}/messages", json=body
+        )
+        return self._handle_response(response)
+
+    async def reply_to(
+        self,
+        channel_id: str,
+        message_id: str,
+        sender: str,
+        payload: Optional[dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """Reply to a message (RFC-0021)."""
+        body: dict[str, Any] = {
+            "sender": sender,
+            "payload": payload or {},
+        }
+        if metadata:
+            body["metadata"] = metadata
+        response = await self._client.post(
+            f"/api/v1/channels/{channel_id}/messages/{message_id}/reply",
+            json=body,
+        )
+        return self._handle_response(response)
+
+    async def list_messages(
+        self,
+        channel_id: str,
+        since: Optional[str] = None,
+        to: Optional[str] = None,
+    ) -> Any:
+        """List messages on a channel (RFC-0021)."""
+        params: dict[str, str] = {}
+        if since:
+            params["since"] = since
+        if to:
+            params["to"] = to
+        response = await self._client.get(
+            f"/api/v1/channels/{channel_id}/messages", params=params
+        )
+        return self._handle_response(response)
+
+    async def get_message(self, channel_id: str, message_id: str) -> dict[str, Any]:
+        """Get a specific message (RFC-0021)."""
+        response = await self._client.get(
+            f"/api/v1/channels/{channel_id}/messages/{message_id}"
+        )
+        return self._handle_response(response)
+
+    async def mark_read(self, channel_id: str, message_id: str) -> dict[str, Any]:
+        """Mark a message as read (RFC-0021)."""
+        response = await self._client.patch(
+            f"/api/v1/channels/{channel_id}/messages/{message_id}",
+            json={"status": "read"},
+        )
+        return self._handle_response(response)
+
+    async def ask(
+        self,
+        channel_id: str,
+        sender: str,
+        to: str,
+        payload: dict[str, Any],
+        timeout: int = 30,
+    ) -> Any:
+        """Send a request and poll for the response (RFC-0021)."""
+        import asyncio
+        import time as _time
+
+        msg = await self.send_message(
+            channel_id=channel_id,
+            sender=sender,
+            to=to,
+            message_type="request",
+            payload=payload,
+        )
+        msg_id = msg["id"]
+        deadline = _time.time() + timeout
+        while _time.time() < deadline:
+            messages = await self.list_messages(channel_id)
+            for m in messages:
+                if (
+                    m.get("correlation_id") == msg_id
+                    and m.get("message_type") == "response"
+                ):
+                    return m
+            await asyncio.sleep(0.5)
+        raise TimeoutError(
+            f"No response received within {timeout}s for message {msg_id}"
+        )
 
     async def close(self) -> None:
         """Close the HTTP client connection."""

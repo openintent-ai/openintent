@@ -23,7 +23,7 @@ title: Installation
     pip install openintent[server]
     ```
 
-    Includes the built-in FastAPI server implementing all 20 RFCs.
+    Includes the built-in FastAPI server implementing all 21 RFCs.
 
 === "Everything"
 

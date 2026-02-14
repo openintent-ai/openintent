@@ -2,7 +2,7 @@
 """
 Compliance Review Coordinator - Orchestrates the full document review workflow.
 
-Demonstrates RFC-0004 (Governance):
+Demonstrates RFC-0003 (Governance):
 - Human approval gates
 - Arbitration requests
 - Governance decisions
@@ -41,7 +41,7 @@ class ComplianceCoordinator(Coordinator):
     4. Report Generation (with attachments)
     5. Governance Gate (human approval for high-risk)
 
-    Demonstrates all 17 RFCs working together.
+    Demonstrates all 21 RFCs working together.
     """
 
     async def plan(
@@ -164,7 +164,7 @@ class ComplianceCoordinator(Coordinator):
                 final_report = state["report"]
                 requires_approval = final_report.get("requires_approval", False)
 
-        # Handle governance gate (RFC-0004)
+        # Handle governance gate (RFC-0003)
         if requires_approval:
             print("\n[GOVERNANCE] High-risk document detected!")
             print("[GOVERNANCE] Requesting human approval...")
@@ -210,7 +210,7 @@ async def main():
 
     print("=" * 60)
     print("OpenIntent Compliance Review Coordinator")
-    print("Demonstrates: RFC-0004 (Governance)")
+    print("Demonstrates: RFC-0003 (Governance)")
     print("=" * 60)
     print(f"Document: {args.document}")
     print(f"Server: {OPENINTENT_URL}")

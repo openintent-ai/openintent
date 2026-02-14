@@ -142,7 +142,7 @@ def define_tool(
 
 tool = define_tool
 
-ToolInput = Union[str, ToolDef]
+ToolInput = Union[str, ToolDef, Any]
 
 
 @dataclass
@@ -698,15 +698,24 @@ class LLMEngine:
     def _external_tools(self) -> list[dict]:
         """Get external tool definitions from the agent's tool list.
 
-        Accepts both ``ToolDef`` objects (rich schema + local handler) and
-        plain strings (protocol grant names resolved via RFC-0014).
+        Accepts ``ToolDef`` objects (rich schema + local handler), plain
+        strings (protocol grant names resolved via RFC-0014), and
+        ``MCPTool`` / ``mcp://`` URIs (resolved at startup into ToolDefs).
+
+        MCPTool and mcp:// entries that haven't been resolved yet are
+        skipped here — they will be resolved during ``_run_async()`` and
+        replaced with ToolDefs before the LLM engine is invoked.
         """
+        from .mcp import MCPTool, is_mcp_uri
+
         tool_defs = []
         if hasattr(self._agent, "_config") and self._agent._config.tools:
             for entry in self._agent._config.tools:
                 if isinstance(entry, ToolDef):
                     tool_defs.append(entry.to_schema())
-                else:
+                elif isinstance(entry, MCPTool) or is_mcp_uri(entry):
+                    continue
+                elif isinstance(entry, str):
                     tool_defs.append(
                         {
                             "name": entry,
@@ -727,7 +736,12 @@ class LLMEngine:
 
     @property
     def _local_tool_handlers(self) -> dict[str, Callable]:
-        """Map of tool name -> callable handler for locally defined ToolDefs."""
+        """Map of tool name -> callable handler for locally defined ToolDefs.
+
+        This includes MCP-backed tools whose handlers were synthesised by
+        ``resolve_mcp_tools`` — they appear as regular ``ToolDef`` objects
+        after startup resolution.
+        """
         handlers: dict[str, Callable] = {}
         if hasattr(self._agent, "_config") and self._agent._config.tools:
             for entry in self._agent._config.tools:

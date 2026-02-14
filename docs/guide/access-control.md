@@ -86,7 +86,7 @@ class GatekeeperAgent:
 
 ## Unified Permissions in YAML
 
-RFC-0011 v2.0 provides a unified `permissions` field with shorthand and full forms:
+RFC-0011 v1.0 provides a unified `permissions` field with shorthand and full forms:
 
 === "Shorthand — Open"
 

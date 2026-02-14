@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openintent"
-version = "0.10.1"
+version = "0.12.0"
 description = "Python SDK and Server for the OpenIntent Coordination Protocol"
 readme = "README.md"
 license = {text = "MIT"}
@@ -141,6 +141,8 @@ module = [
     "pydantic",
     "pydantic.*",
     "yaml",
+    "mcp",
+    "mcp.*",
 ]
 ignore_missing_imports = true
 

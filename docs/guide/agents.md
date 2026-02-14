@@ -326,6 +326,72 @@ First-class declarative configuration for protocol features. Import from `openin
 
 ---
 
+## Messaging (`@on_message`)
+
+Agents can communicate directly through **channels** — scoped message streams attached to an intent. The `@on_message` decorator routes incoming messages to handler methods. Return a dict from the handler to auto-reply.
+
+```python
+from openintent.agents import Agent, on_assignment, on_message
+
+@Agent("data-agent")
+class DataAgent:
+
+    @on_assignment
+    async def handle(self, intent):
+        return {"status": "ready"}
+
+    @on_message(channel="data-sync")
+    async def answer_questions(self, message):
+        """Called when a message arrives on the data-sync channel."""
+        if message.message_type == "request":
+            return {"answer": "v2.3", "confidence": 0.95}
+
+    @on_message()  # No filter — receives all messages
+    async def log_all(self, message):
+        print(f"[{message.sender}] {message.payload}")
+```
+
+### Channel Proxy
+
+Every `@Agent` has a `self.channels` proxy for sending messages:
+
+```python
+@Agent("researcher")
+class ResearchAgent:
+
+    @on_assignment
+    async def handle(self, intent):
+        ch = await self.channels.open("data-sync", intent_id=intent.id)
+
+        # Ask a question and wait for the answer
+        response = await ch.ask("data-agent", {
+            "question": "What schema version?"
+        }, timeout=30)
+
+        schema = response.payload["answer"]
+
+        # Notify a specific agent
+        await ch.notify("logger", {"phase": "research", "started": True})
+
+        # Broadcast to all channel members
+        await ch.broadcast({"status": "analysis starting", "schema": schema})
+
+        return {"findings": f"Using schema {schema}"}
+```
+
+| Method | Description |
+|--------|-------------|
+| `channels.open(name, intent_id)` | Open or create a channel |
+| `channel.ask(to, payload, timeout)` | Send request and await response |
+| `channel.notify(to, payload)` | Fire-and-forget message |
+| `channel.broadcast(payload)` | Send to all members |
+| `channel.send(to, type, payload)` | Low-level send |
+
+!!! tip "Declarative channels"
+    Define channels in YAML workflows instead of creating them programmatically. The framework creates channels automatically at workflow start. See the [Messaging guide](messaging.md) and [Workflows guide](workflows.md#channels).
+
+---
+
 ## @Coordinator Decorator
 
 Multi-agent orchestration with governance features:

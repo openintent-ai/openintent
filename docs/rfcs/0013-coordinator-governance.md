@@ -3,7 +3,7 @@
 **Status:** Proposed  
 **Created:** 2026-02-07  
 **Authors:** OpenIntent Contributors  
-**Requires:** RFC-0001 (Intents), RFC-0003 (Leasing), RFC-0004 (Governance), RFC-0011 (Access Control), RFC-0012 (Task Decomposition & Planning)
+**Requires:** RFC-0001 (Intents), RFC-0003 (Leasing & Governance), RFC-0011 (Access Control), RFC-0012 (Task Decomposition & Planning)
 
 ---
 
@@ -640,9 +640,9 @@ All endpoints support optimistic concurrency via `If-Match` headers.
 |-----|-------------|
 | RFC-0001 (Intents) | Coordinators are assigned to intents. Intent state reflects coordinator status. |
 | RFC-0003 (Leasing) | Coordinator lease extends lease model with heartbeat, guardrails, and supervisor. |
-| RFC-0004 (Governance) | Coordinator decisions integrate with governance pipeline. Supervisor actions use arbitration. |
+| RFC-0003 (Governance) | Coordinator decisions integrate with governance pipeline. Supervisor actions use arbitration. |
 | RFC-0006 (Subscriptions) | Clients can subscribe to coordinator events (heartbeats, decisions, escalations). |
-| RFC-0007 (Portfolios) | Coordinator lease can scope to a portfolio for cross-intent coordination. |
+| RFC-0004 (Portfolios) | Coordinator lease can scope to a portfolio for cross-intent coordination. |
 | RFC-0009 (Cost Tracking) | Budget guardrails integrate with cost tracking. Decision records include cost impact. |
 | RFC-0010 (Retry Policies) | Coordinator failure triggers retry/failover. Task retry counts towards guardrail limits. |
 | RFC-0011 (Access Control) | New permission grants (coordinate, approve, supervise). Task-level delegation scoping. |
@@ -662,7 +662,7 @@ All endpoints support optimistic concurrency via `If-Match` headers.
 
 - [RFC-0001: Intent Objects](./0001-intent-objects.md)
 - [RFC-0003: Agent Leasing](./0003-agent-leasing.md)
-- [RFC-0004: Governance & Arbitration](./0004-governance-arbitration.md)
+- [RFC-0003: Governance & Arbitration](./0003-agent-leasing.md)
 - [RFC-0009: Cost & Resource Tracking](./0009-cost-tracking.md)
 - [RFC-0011: Access-Aware Coordination](./0011-access-control.md)
 - [RFC-0012: Task Decomposition & Planning](./0012-task-decomposition-planning.md)

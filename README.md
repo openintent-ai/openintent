@@ -37,7 +37,7 @@ graph TB
     end
 
     subgraph Coord["Coordination Layer"]
-        C1["Leasing<br/>RFC-0003"] --- C2["Governance<br/>RFC-0004 · 0013"] --- C3["Access Control<br/>RFC-0011"] --- C4["Planning<br/>RFC-0012"]
+        C1["Leasing<br/>RFC-0003"] --- C2["Governance<br/>RFC-0003 · 0013"] --- C3["Access Control<br/>RFC-0011"] --- C4["Planning<br/>RFC-0012"]
     end
 
     subgraph Infra["Infrastructure Layer"]
@@ -50,27 +50,27 @@ graph TB
 
     Agents --> Intent --> Coord --> Infra --> Transport
 
-    style Agents fill:#1a1a2e,color:#c4b5fd,stroke:#7c3aed,stroke-width:2px
-    style Intent fill:#16213e,color:#93c5fd,stroke:#3b82f6,stroke-width:2px
-    style Coord fill:#0f3460,color:#a5f3fc,stroke:#06b6d4,stroke-width:2px
-    style Infra fill:#1a1a2e,color:#c4b5fd,stroke:#8b5cf6,stroke-width:2px
-    style Transport fill:#162447,color:#a5b4fc,stroke:#6366f1,stroke-width:2px
+    style Agents fill:#ede9fe,color:#1e1b4b,stroke:#7c3aed,stroke-width:2px
+    style Intent fill:#dbeafe,color:#1e3a5f,stroke:#3b82f6,stroke-width:2px
+    style Coord fill:#cffafe,color:#164e63,stroke:#06b6d4,stroke-width:2px
+    style Infra fill:#f3e8ff,color:#3b0764,stroke:#8b5cf6,stroke-width:2px
+    style Transport fill:#e0e7ff,color:#1e1b4b,stroke:#6366f1,stroke-width:2px
 
-    style A1 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
-    style A2 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
-    style A3 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
-    style I1 fill:#1e3a5f,color:#e0e0ff,stroke:#3b82f6
-    style C1 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
-    style C2 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
-    style C3 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
-    style C4 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
-    style F1 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
-    style F2 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
-    style F3 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
-    style F4 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
-    style T1 fill:#1e1b4b,color:#e0e0ff,stroke:#6366f1
-    style T2 fill:#1e1b4b,color:#e0e0ff,stroke:#6366f1
-    style T3 fill:#1e1b4b,color:#e0e0ff,stroke:#6366f1
+    style A1 fill:#c4b5fd,color:#1e1b4b,stroke:#7c3aed
+    style A2 fill:#c4b5fd,color:#1e1b4b,stroke:#7c3aed
+    style A3 fill:#c4b5fd,color:#1e1b4b,stroke:#7c3aed
+    style I1 fill:#93c5fd,color:#1e3a5f,stroke:#3b82f6
+    style C1 fill:#a5f3fc,color:#164e63,stroke:#06b6d4
+    style C2 fill:#a5f3fc,color:#164e63,stroke:#06b6d4
+    style C3 fill:#a5f3fc,color:#164e63,stroke:#06b6d4
+    style C4 fill:#a5f3fc,color:#164e63,stroke:#06b6d4
+    style F1 fill:#d8b4fe,color:#3b0764,stroke:#8b5cf6
+    style F2 fill:#d8b4fe,color:#3b0764,stroke:#8b5cf6
+    style F3 fill:#d8b4fe,color:#3b0764,stroke:#8b5cf6
+    style F4 fill:#d8b4fe,color:#3b0764,stroke:#8b5cf6
+    style T1 fill:#a5b4fc,color:#1e1b4b,stroke:#6366f1
+    style T2 fill:#a5b4fc,color:#1e1b4b,stroke:#6366f1
+    style T3 fill:#a5b4fc,color:#1e1b4b,stroke:#6366f1
 ```
 
 ### Intent Lifecycle
@@ -96,9 +96,9 @@ stateDiagram-v2
 
     Completed --> [*]
 
-    classDef active fill:#7c3aed,color:#fff,stroke:#7c3aed
-    classDef conflict fill:#ef4444,color:#fff,stroke:#ef4444
-    classDef success fill:#10b981,color:#fff,stroke:#10b981
+    classDef active fill:#ede9fe,color:#1e1b4b,stroke:#7c3aed,stroke-width:2px
+    classDef conflict fill:#fee2e2,color:#7f1d1d,stroke:#ef4444,stroke-width:2px
+    classDef success fill:#d1fae5,color:#064e3b,stroke:#10b981,stroke-width:2px
 
     class Created,Assigned active
     class Leased,Executing active
@@ -118,14 +118,14 @@ sequenceDiagram
     participant A1 as Agent A
     participant A2 as Agent B
 
-    rect rgb(30, 30, 60)
+    rect rgb(237, 233, 254)
         Note over C,S: Setup Phase
         C->>S: create_intent("Research Task")
         S-->>C: intent {id, version: 1}
         C->>S: delegate → Agent A
     end
 
-    rect rgb(20, 40, 80)
+    rect rgb(219, 234, 254)
         Note over S,A1: Execution Phase
         S-->>A1: @on_assignment fires
         A1->>S: acquire_lease("analysis")
@@ -134,7 +134,7 @@ sequenceDiagram
         A1->>S: set_status("completed")
     end
 
-    rect rgb(40, 20, 60)
+    rect rgb(243, 232, 255)
         Note over C,A2: Handoff Phase
         S-->>C: @on_all_complete fires
         C->>S: delegate → Agent B
@@ -144,7 +144,7 @@ sequenceDiagram
         A2->>S: set_status("completed")
     end
 
-    rect rgb(15, 50, 50)
+    rect rgb(209, 250, 229)
         Note over C,S: Decision Record
         S-->>C: @on_all_complete fires
         C->>S: record_decision("pipeline_complete")
@@ -216,32 +216,32 @@ graph TB
     AgentDecorators --- LLM
     CoordDecorators --- LLM
 
-    style AgentDecorators fill:#1a1a2e,color:#c4b5fd,stroke:#7c3aed,stroke-width:2px
-    style CoordDecorators fill:#0f3460,color:#a5f3fc,stroke:#06b6d4,stroke-width:2px
-    style LLM fill:#1e1b4b,color:#c4b5fd,stroke:#8b5cf6,stroke-width:2px
+    style AgentDecorators fill:#ede9fe,color:#1e1b4b,stroke:#7c3aed,stroke-width:2px
+    style CoordDecorators fill:#cffafe,color:#164e63,stroke:#06b6d4,stroke-width:2px
+    style LLM fill:#f3e8ff,color:#3b0764,stroke:#8b5cf6,stroke-width:2px
 
-    style E1 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
-    style E2 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
-    style E3 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
-    style E4 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
-    style E5 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
-    style E6 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
-    style E7 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
-    style E8 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
-    style E9 fill:#2d2066,color:#e0e0ff,stroke:#7c3aed
+    style E1 fill:#c4b5fd,color:#1e1b4b,stroke:#7c3aed
+    style E2 fill:#c4b5fd,color:#1e1b4b,stroke:#7c3aed
+    style E3 fill:#c4b5fd,color:#1e1b4b,stroke:#7c3aed
+    style E4 fill:#c4b5fd,color:#1e1b4b,stroke:#7c3aed
+    style E5 fill:#c4b5fd,color:#1e1b4b,stroke:#7c3aed
+    style E6 fill:#c4b5fd,color:#1e1b4b,stroke:#7c3aed
+    style E7 fill:#c4b5fd,color:#1e1b4b,stroke:#7c3aed
+    style E8 fill:#c4b5fd,color:#1e1b4b,stroke:#7c3aed
+    style E9 fill:#c4b5fd,color:#1e1b4b,stroke:#7c3aed
 
-    style D1 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
-    style D2 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
-    style D3 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
-    style D4 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
-    style D5 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
-    style D6 fill:#0c4a6e,color:#e0e0ff,stroke:#06b6d4
+    style D1 fill:#a5f3fc,color:#164e63,stroke:#06b6d4
+    style D2 fill:#a5f3fc,color:#164e63,stroke:#06b6d4
+    style D3 fill:#a5f3fc,color:#164e63,stroke:#06b6d4
+    style D4 fill:#a5f3fc,color:#164e63,stroke:#06b6d4
+    style D5 fill:#a5f3fc,color:#164e63,stroke:#06b6d4
+    style D6 fill:#a5f3fc,color:#164e63,stroke:#06b6d4
 
-    style L1 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
-    style L2 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
-    style L3 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
-    style L4 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
-    style L5 fill:#2d2066,color:#e0e0ff,stroke:#8b5cf6
+    style L1 fill:#d8b4fe,color:#3b0764,stroke:#8b5cf6
+    style L2 fill:#d8b4fe,color:#3b0764,stroke:#8b5cf6
+    style L3 fill:#d8b4fe,color:#3b0764,stroke:#8b5cf6
+    style L4 fill:#d8b4fe,color:#3b0764,stroke:#8b5cf6
+    style L5 fill:#d8b4fe,color:#3b0764,stroke:#8b5cf6
 ```
 
 ## Features
@@ -249,9 +249,9 @@ graph TB
 - **Built-in Server** — `openintent-server` for instant protocol server with FastAPI
 - **Sync & Async Clients** — `OpenIntentClient` and `AsyncOpenIntentClient`
 - **Decorator-First Agents** — `@Agent`, `@Coordinator`, and `Worker` for minimal-boilerplate agents
-- **17 RFC Coverage** — Complete protocol implementation:
+- **21 RFC Coverage** — Complete protocol implementation:
   - RFC-0001 through RFC-0006: Intent lifecycle, graphs, leasing, governance, attachments, subscriptions
-  - RFC-0007: Intent Portfolios
+  - RFC-0004: Intent Portfolios
   - RFC-0008: LLM Integration & Observability
   - RFC-0009: Cost Tracking
   - RFC-0010: Retry Policies
@@ -262,6 +262,11 @@ graph TB
   - RFC-0015: Agent Memory & Persistent State
   - RFC-0016: Agent Lifecycle & Health
   - RFC-0017: Triggers & Reactive Scheduling
+  - RFC-0018: Cryptographic Agent Identity
+  - RFC-0019: Verifiable Event Logs
+  - RFC-0020: Distributed Tracing
+  - RFC-0021: Agent-to-Agent Messaging
+- **MCP Integration** — Bidirectional Model Context Protocol support (16 MCP tools, 5 resources, RBAC with 3 permission tiers, first-class `MCPTool` for `@Agent`/`@Coordinator`)
 - **7 LLM Adapters** — OpenAI, Anthropic, Gemini, Grok, DeepSeek, Azure OpenAI, OpenRouter
 - **YAML Workflows** — Declarative multi-agent workflows
 - **SSE Streaming** — Real-time event subscriptions
@@ -483,6 +488,135 @@ with client.lease(intent.id, "analysis", duration_seconds=300) as lease:
 client.set_status(intent.id, intent.version + 1, "completed")
 ```
 
+## MCP Integration
+
+OpenIntent supports the [Model Context Protocol](https://modelcontextprotocol.io/) in two directions: expose OpenIntent to MCP clients (Claude Desktop, Cursor) and consume external MCP tool servers from OpenIntent agents.
+
+### Quick Setup
+
+```bash
+pip install openintent[server] mcp
+npm install -g @openintent/mcp-server
+```
+
+Or use the Makefile:
+
+```bash
+make setup-mcp    # Install Python + Node MCP dependencies
+make server       # Start the OpenIntent server
+```
+
+### Direction 1: Expose OpenIntent to Claude Desktop
+
+> **Prerequisite:** The OpenIntent server must be running before Claude connects. Start it with `make server` or `openintent-server`.
+
+Add the MCP server to your Claude Desktop config:
+
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux:** `~/.config/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "openintent": {
+      "command": "npx",
+      "args": ["-y", "@openintent/mcp-server"],
+      "env": {
+        "OPENINTENT_SERVER_URL": "http://localhost:8000",
+        "OPENINTENT_API_KEY": "dev-user-key",
+        "OPENINTENT_MCP_ROLE": "operator"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop. It can now create intents, patch state, log events, and send agent messages — all through natural language.
+
+**Least-privilege principle:** Always use the most restrictive role that covers an agent's needs. If `OPENINTENT_MCP_ROLE` is omitted, the server defaults to `reader` (safest). Each agent should declare its own role explicitly — never rely on a global environment variable for multi-agent setups.
+
+| Role | Tools | Use Case |
+|------|-------|----------|
+| `reader` | 4 read-only | Dashboards, monitoring (default) |
+| `operator` | 10 read+write | Standard agent work |
+| `admin` | 16 (all) | Lifecycle, leasing, coordination (use sparingly) |
+
+### Direction 2: Use MCP Tools in @Agent (MCPTool)
+
+Declare MCP servers directly in your agent's tool list. The SDK handles the full lifecycle — connect, discover tools, register them for the LLM, route invocations, disconnect on shutdown.
+
+Each `MCPTool` sets the role explicitly on its child process, isolating it from any ambient environment variables. This means multiple agents can each run at different privilege levels simultaneously — a reader-only watcher alongside an operator-level worker — without interfering with each other.
+
+```python
+from openintent import Agent, MCPTool, on_assignment
+
+@Agent("analyst", model="gpt-4o", tools=[
+    MCPTool(
+        server="npx",
+        args=["-y", "@openintent/mcp-server"],
+        role="operator",
+        env={"OPENINTENT_SERVER_URL": "http://localhost:8000"},
+    ),
+])
+class Analyst:
+    @on_assignment
+    async def work(self, intent):
+        return await self.think(intent.description)
+```
+
+URI shorthand for the same thing:
+
+```python
+@Agent("analyst", model="gpt-4o", tools=[
+    "mcp://npx/-y/@openintent/mcp-server?role=operator&env_OPENINTENT_SERVER_URL=http://localhost:8000",
+])
+```
+
+Mix local tools, multiple MCP servers, and plain grant strings freely:
+
+```python
+@Agent("researcher", model="gpt-4o", tools=[
+    web_search,                          # local ToolDef
+    MCPTool(server="npx",               # OpenIntent MCP
+        args=["-y", "@openintent/mcp-server"],
+        role="operator"),
+    MCPTool(server="npx",               # filesystem MCP
+        args=["-y", "@modelcontextprotocol/server-filesystem", "/data"],
+        allowed_tools=["read_file", "list_directory"]),
+    "search_results",                    # plain RFC-0014 grant
+])
+```
+
+### Direction 3: Low-Level Bridge (YAML Workflows)
+
+For programmatic control without `@Agent`, use `MCPBridge` directly:
+
+```python
+from openintent.mcp import MCPBridge
+
+bridge = MCPBridge()
+await bridge.connect("fs", "npx", ["-y", "@modelcontextprotocol/server-filesystem", "/data"])
+tools = await bridge.list_tools("fs")
+result = await bridge.invoke("fs", "read_file", path="/data/report.csv")
+await bridge.disconnect("fs")
+```
+
+Or declare servers in the YAML `mcp:` block for workflow-level configuration.
+
+### Full Topology Example
+
+Run the complete stack — server + MCP server + agent with MCPTool:
+
+```bash
+make full-stack   # Terminal 1: Start OpenIntent server
+
+# Terminal 2: Run an agent that auto-connects to the MCP server
+python examples/mcp_agent.py
+```
+
+See [docs/guide/mcp.md](docs/guide/mcp.md) for the full guide and [docs/examples/mcp.md](docs/examples/mcp.md) for more examples.
+
 ## LLM Adapters
 
 Wrap your LLM client — same interface, automatic logging:
@@ -584,6 +718,26 @@ black openintent/       # Format
 mypy openintent/        # Type check
 openintent-server       # Start dev server
 ```
+
+### Makefile
+
+A `Makefile` is provided to aggregate common operations:
+
+```bash
+make install          # Install SDK with server + all adapters
+make install-all      # Install everything including MCP dependencies
+make server           # Start the OpenIntent server on port 8000
+make test             # Run the full test suite
+make lint             # Run linter + formatter + type checker
+make setup-mcp        # Install MCP dependencies (Python mcp + Node @openintent/mcp-server)
+make mcp-server       # Start the MCP server (connects to local OpenIntent server)
+make full-stack       # Start OpenIntent server + MCP server together
+make check            # Verify installation and connectivity
+make clean            # Remove build artifacts and caches
+make help             # Show all available targets
+```
+
+Run `make help` to see the full list with descriptions.
 
 ## Contributing
 

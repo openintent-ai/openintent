@@ -21,11 +21,13 @@ from .database import (  # noqa: F401
     ACLDefaultPolicyModel,
     ACLEntryModel,
     AgentRecordModel,
+    ApprovalRequestModel,
     CoordinatorLeaseModel,
     CredentialModel,
     CredentialVaultModel,
     Database,
     DecisionRecordModel,
+    EscalationModel,
     IntentModel,
     MemoryEntryModel,
     PlanModel,
@@ -272,6 +274,27 @@ class DecisionRecord(BaseModel):
     decided_by: str
     outcome: str
     rationale: str = ""
+
+
+class EscalationCreate(BaseModel):
+    reason: str
+    priority: str = "medium"
+    urgency: str = "medium"
+    context: dict = {}
+    escalated_by: str = ""
+
+
+class EscalationResolve(BaseModel):
+    resolution: str
+    notes: Optional[str] = None
+    resolved_by: str = ""
+
+
+class ApprovalCreate(BaseModel):
+    action: str
+    reason: str = ""
+    context: dict = {}
+    requested_by: str = ""
 
 
 class ACLEntryCreate(BaseModel):
@@ -736,10 +759,72 @@ class TriggerUpdate(BaseModel):
     deduplication: Optional[str] = None
 
 
+# RFC-0021: Agent-to-Agent Messaging
+class ChannelCreate(BaseModel):
+    name: str
+    members: List[str] = Field(default_factory=list)
+    member_policy: str = "intent"
+    task_id: Optional[str] = None
+    options: Optional[Dict[str, Any]] = None
+
+
+class ChannelResponse(BaseModel):
+    id: str
+    intent_id: str
+    name: str
+    created_by: str
+    members: List[str]
+    member_policy: str
+    task_id: Optional[str] = None
+    options: Optional[Dict[str, Any]] = None
+    status: str
+    created_at: datetime
+    closed_at: Optional[datetime] = None
+    message_count: int = 0
+    last_message_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MessageCreate(BaseModel):
+    sender: str
+    to: Optional[str] = None
+    message_type: str = "notify"
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Optional[Dict[str, Any]] = None
+    expires_at: Optional[datetime] = None
+
+
+class MessageResponse(BaseModel):
+    id: str
+    channel_id: str
+    sender: str
+    to: Optional[str] = None
+    message_type: str
+    correlation_id: Optional[str] = None
+    payload: Dict[str, Any]
+    metadata: Optional[Dict[str, Any]] = None
+    status: str
+    created_at: datetime
+    expires_at: Optional[datetime] = None
+    read_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MessageReply(BaseModel):
+    sender: str
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class MessageStatusUpdate(BaseModel):
+    status: str
+
+
 _event_queues: Dict[str, List[asyncio.Queue]] = {
     "intents": [],
     "portfolios": [],
     "agents": [],
+    "channels": [],
 }
 
 
@@ -750,6 +835,51 @@ def _broadcast_event(channel: str, event_data: Dict[str, Any]):
             queue.put_nowait(event_data)
         except asyncio.QueueFull:
             pass
+
+
+def _escalation_to_dict(escalation):
+    result = {
+        "id": escalation.id,
+        "intent_id": escalation.intent_id,
+        "escalated_by": escalation.escalated_by,
+        "reason": escalation.reason,
+        "priority": escalation.priority,
+        "urgency": escalation.urgency,
+        "context": escalation.context or {},
+        "status": escalation.status,
+        "created_at": (
+            escalation.created_at.isoformat() if escalation.created_at else None
+        ),
+    }
+    if escalation.resolved_at:
+        result["resolved_at"] = escalation.resolved_at.isoformat()
+    if escalation.resolved_by:
+        result["resolved_by"] = escalation.resolved_by
+    if escalation.resolution:
+        result["resolution"] = escalation.resolution
+    if escalation.resolution_notes:
+        result["resolution_notes"] = escalation.resolution_notes
+    return result
+
+
+def _approval_to_dict(approval):
+    result = {
+        "id": approval.id,
+        "intent_id": approval.intent_id,
+        "requested_by": approval.requested_by,
+        "action": approval.action,
+        "reason": approval.reason,
+        "context": approval.context or {},
+        "status": approval.status,
+        "created_at": approval.created_at.isoformat() if approval.created_at else None,
+    }
+    if approval.decided_at:
+        result["decided_at"] = approval.decided_at.isoformat()
+    if approval.decided_by:
+        result["decided_by"] = approval.decided_by
+    if approval.decision_notes:
+        result["decision_notes"] = approval.decision_notes
+    return result
 
 
 def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
@@ -778,6 +908,9 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    channels: Dict[str, dict] = {}
+    channel_messages: Dict[str, list] = {}
 
     def get_db() -> Database:
         return app.state.db
@@ -2809,6 +2942,134 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
+    # ==================== Escalations & Approvals ====================
+
+    @app.post("/api/v1/intents/{intent_id}/escalations")
+    async def create_escalation(
+        intent_id: str,
+        request: EscalationCreate,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        session = db.get_session()
+        try:
+            intent = db.get_intent(session, intent_id)
+            if not intent:
+                raise HTTPException(status_code=404, detail="Intent not found")
+            escalation = db.create_escalation(
+                session,
+                intent_id=intent_id,
+                escalated_by=request.escalated_by,
+                reason=request.reason,
+                priority=request.priority,
+                urgency=request.urgency,
+                context=request.context,
+            )
+            db.create_event(
+                session,
+                intent_id=intent_id,
+                event_type="escalation_initiated",
+                actor=request.escalated_by,
+                payload={
+                    "escalation_id": escalation.id,
+                    "reason": request.reason,
+                    "priority": request.priority,
+                },
+            )
+            return _escalation_to_dict(escalation)
+        finally:
+            session.close()
+
+    @app.get("/api/v1/escalations")
+    async def list_escalations(
+        intent_id: Optional[str] = None,
+        status: Optional[str] = None,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        session = db.get_session()
+        try:
+            escalations = db.list_escalations(
+                session, intent_id=intent_id, status=status
+            )
+            return {"escalations": [_escalation_to_dict(e) for e in escalations]}
+        finally:
+            session.close()
+
+    @app.post("/api/v1/escalations/{escalation_id}/resolve")
+    async def resolve_escalation(
+        escalation_id: str,
+        request: EscalationResolve,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        session = db.get_session()
+        try:
+            escalation = db.resolve_escalation(
+                session,
+                escalation_id=escalation_id,
+                resolution=request.resolution,
+                resolved_by=request.resolved_by,
+                notes=request.notes,
+            )
+            if not escalation:
+                raise HTTPException(status_code=404, detail="Escalation not found")
+            db.create_event(
+                session,
+                intent_id=escalation.intent_id,
+                event_type="escalation_resolved",
+                actor=request.resolved_by,
+                payload={
+                    "escalation_id": escalation_id,
+                    "resolution": request.resolution,
+                },
+            )
+            return _escalation_to_dict(escalation)
+        finally:
+            session.close()
+
+    @app.post("/api/v1/intents/{intent_id}/approvals")
+    async def create_approval(
+        intent_id: str,
+        request: ApprovalCreate,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        session = db.get_session()
+        try:
+            intent = db.get_intent(session, intent_id)
+            if not intent:
+                raise HTTPException(status_code=404, detail="Intent not found")
+            approval = db.create_approval_request(
+                session,
+                intent_id=intent_id,
+                requested_by=request.requested_by,
+                action=request.action,
+                reason=request.reason,
+                context=request.context,
+            )
+            return _approval_to_dict(approval)
+        finally:
+            session.close()
+
+    @app.get("/api/v1/intents/{intent_id}/approvals/{approval_id}")
+    async def get_approval_status(
+        intent_id: str,
+        approval_id: str,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        session = db.get_session()
+        try:
+            approval = db.get_approval_request(session, intent_id, approval_id)
+            if not approval:
+                raise HTTPException(
+                    status_code=404, detail="Approval request not found"
+                )
+            return _approval_to_dict(approval)
+        finally:
+            session.close()
+
     # ==================== Credential Vaults & Tool Scoping (RFC-0014) ====================
 
     @app.post("/api/v1/vaults", response_model=VaultResponse)
@@ -3733,6 +3994,274 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 },
             }
         )
+
+    # ==================== Agent-to-Agent Messaging (RFC-0021) ====================
+
+    @app.post(
+        "/api/v1/intents/{intent_id}/channels",
+        response_model=ChannelResponse,
+        status_code=201,
+    )
+    async def create_channel(
+        intent_id: str,
+        body: ChannelCreate,
+        api_key: str = Depends(validate_api_key),
+    ):
+        from uuid import uuid4
+
+        channel_id = str(uuid4())
+        now = datetime.utcnow()
+        channel_data = {
+            "id": channel_id,
+            "intent_id": intent_id,
+            "name": body.name,
+            "created_by": api_key,
+            "members": body.members,
+            "member_policy": body.member_policy,
+            "task_id": body.task_id,
+            "options": body.options,
+            "status": "open",
+            "created_at": now,
+            "closed_at": None,
+            "message_count": 0,
+            "last_message_at": None,
+        }
+        channels[channel_id] = channel_data
+        channel_messages[channel_id] = []
+        return channel_data
+
+    @app.get(
+        "/api/v1/intents/{intent_id}/channels", response_model=List[ChannelResponse]
+    )
+    async def list_channels(
+        intent_id: str,
+        api_key: str = Depends(validate_api_key),
+    ):
+        return [ch for ch in channels.values() if ch["intent_id"] == intent_id]
+
+    @app.get("/api/v1/channels/{channel_id}", response_model=ChannelResponse)
+    async def get_channel(
+        channel_id: str,
+        api_key: str = Depends(validate_api_key),
+    ):
+        if channel_id not in channels:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        return channels[channel_id]
+
+    @app.patch("/api/v1/channels/{channel_id}", response_model=ChannelResponse)
+    async def update_channel(
+        channel_id: str,
+        request: Request,
+        api_key: str = Depends(validate_api_key),
+    ):
+        if channel_id not in channels:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        body = await request.json()
+        ch = channels[channel_id]
+        if "members" in body:
+            ch["members"] = body["members"]
+        if "status" in body:
+            ch["status"] = body["status"]
+            if body["status"] == "closed":
+                ch["closed_at"] = datetime.utcnow()
+        if "options" in body:
+            ch["options"] = body["options"]
+        if "member_policy" in body:
+            ch["member_policy"] = body["member_policy"]
+        return ch
+
+    @app.delete("/api/v1/channels/{channel_id}")
+    async def delete_channel(
+        channel_id: str,
+        api_key: str = Depends(validate_api_key),
+    ):
+        if channel_id not in channels:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        channels[channel_id]["status"] = "closed"
+        channels[channel_id]["closed_at"] = datetime.utcnow()
+        channels.pop(channel_id)
+        channel_messages.pop(channel_id, None)
+        return {"status": "closed", "channel_id": channel_id}
+
+    @app.get("/api/v1/subscribe/channels/{channel_id}")
+    async def subscribe_channel(
+        channel_id: str,
+        request: Request,
+        api_key: str = Depends(validate_api_key),
+    ):
+        """SSE subscription for channel messages (RFC-0021)."""
+        if channel_id not in channels:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+        _event_queues["channels"].append(queue)
+
+        async def event_generator():
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                        if event.get("channel_id") == channel_id:
+                            yield {
+                                "event": event.get("type", "message"),
+                                "data": str(event.get("data", {})),
+                            }
+                    except asyncio.TimeoutError:
+                        yield {"event": "ping", "data": ""}
+            finally:
+                _event_queues["channels"].remove(queue)
+
+        return EventSourceResponse(event_generator())
+
+    @app.post(
+        "/api/v1/channels/{channel_id}/messages",
+        response_model=MessageResponse,
+        status_code=201,
+    )
+    async def send_message(
+        channel_id: str,
+        body: MessageCreate,
+        api_key: str = Depends(validate_api_key),
+    ):
+        if channel_id not in channels:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        from uuid import uuid4
+
+        msg_id = str(uuid4())
+        now = datetime.utcnow()
+        msg_data = {
+            "id": msg_id,
+            "channel_id": channel_id,
+            "sender": body.sender,
+            "to": body.to,
+            "message_type": body.message_type,
+            "correlation_id": None,
+            "payload": body.payload,
+            "metadata": body.metadata,
+            "status": "delivered",
+            "created_at": now,
+            "expires_at": body.expires_at,
+            "read_at": None,
+        }
+        channel_messages[channel_id].append(msg_data)
+        ch = channels[channel_id]
+        ch["message_count"] = ch.get("message_count", 0) + 1
+        ch["last_message_at"] = now
+        _broadcast_event(
+            "channels",
+            {
+                "channel_id": channel_id,
+                "type": "channel_message",
+                "data": msg_data,
+            },
+        )
+        return msg_data
+
+    @app.get(
+        "/api/v1/channels/{channel_id}/messages", response_model=List[MessageResponse]
+    )
+    async def list_messages(
+        channel_id: str,
+        since: Optional[str] = Query(None),
+        to: Optional[str] = Query(None),
+        api_key: str = Depends(validate_api_key),
+    ):
+        if channel_id not in channels:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        msgs = channel_messages.get(channel_id, [])
+        if since:
+            found = False
+            filtered = []
+            for m in msgs:
+                if found:
+                    filtered.append(m)
+                if m["id"] == since:
+                    found = True
+            msgs = filtered
+        if to:
+            msgs = [m for m in msgs if m.get("to") == to]
+        return msgs
+
+    @app.get(
+        "/api/v1/channels/{channel_id}/messages/{message_id}",
+        response_model=MessageResponse,
+    )
+    async def get_message(
+        channel_id: str,
+        message_id: str,
+        api_key: str = Depends(validate_api_key),
+    ):
+        if channel_id not in channels:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        for m in channel_messages.get(channel_id, []):
+            if m["id"] == message_id:
+                return m
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    @app.post(
+        "/api/v1/channels/{channel_id}/messages/{message_id}/reply",
+        response_model=MessageResponse,
+        status_code=201,
+    )
+    async def reply_to_message(
+        channel_id: str,
+        message_id: str,
+        body: MessageReply,
+        api_key: str = Depends(validate_api_key),
+    ):
+        if channel_id not in channels:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        original = None
+        for m in channel_messages.get(channel_id, []):
+            if m["id"] == message_id:
+                original = m
+                break
+        if not original:
+            raise HTTPException(status_code=404, detail="Message not found")
+        from uuid import uuid4
+
+        reply_id = str(uuid4())
+        now = datetime.utcnow()
+        reply_data = {
+            "id": reply_id,
+            "channel_id": channel_id,
+            "sender": body.sender,
+            "to": original["sender"],
+            "message_type": "response",
+            "correlation_id": message_id,
+            "payload": body.payload,
+            "metadata": body.metadata,
+            "status": "delivered",
+            "created_at": now,
+            "expires_at": None,
+            "read_at": None,
+        }
+        channel_messages[channel_id].append(reply_data)
+        ch = channels[channel_id]
+        ch["message_count"] = ch.get("message_count", 0) + 1
+        ch["last_message_at"] = now
+        return reply_data
+
+    @app.patch(
+        "/api/v1/channels/{channel_id}/messages/{message_id}",
+        response_model=MessageResponse,
+    )
+    async def update_message_status(
+        channel_id: str,
+        message_id: str,
+        body: MessageStatusUpdate,
+        api_key: str = Depends(validate_api_key),
+    ):
+        if channel_id not in channels:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        for m in channel_messages.get(channel_id, []):
+            if m["id"] == message_id:
+                m["status"] = body.status
+                if body.status == "read":
+                    m["read_at"] = datetime.utcnow()
+                return m
+        raise HTTPException(status_code=404, detail="Message not found")
 
     return app
 

@@ -99,7 +99,7 @@ class CarefulAgent:
 
 When the LLM calls `clarify`:
 
-1. An arbitration request is created (RFC-0004)
+1. An arbitration request is created (RFC-0003)
 2. The intent pauses, waiting for human input
 3. `think()` returns `{"status": "awaiting_response", "question": "..."}`
 4. When the human responds, the conversation resumes

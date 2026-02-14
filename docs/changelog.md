@@ -5,6 +5,47 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-02-13
+
+### Added
+
+- **MCP Integration (Model Context Protocol)**
+  - `@openintent/mcp-server`: TypeScript MCP server exposing the full protocol API as 16 MCP tools and 5 MCP resources.
+  - `openintent.mcp` Python module: `MCPBridge`, `MCPToolProvider`, and `MCPToolExporter` for bidirectional MCP integration.
+  - YAML `mcp:` block for declarative MCP server configuration in workflows.
+  - Security controls: TLS enforcement, tool allowlists, credential isolation, and audit logging.
+- **MCP Role-Based Access Control (RBAC)**
+  - Three permission tiers: `read` (observe state), `write` (bounded mutations), `admin` (lifecycle and coordination).
+  - Three named roles: `reader` (4 tools), `operator` (10 tools), `admin` (16 tools).
+  - Default role is `reader` — unconfigured servers cannot modify protocol state.
+  - Role gate enforced alongside existing tool allowlist (both must pass).
+  - Tools hidden from MCP tool listing when not permitted by role or allowlist.
+  - Configurable via `OPENINTENT_MCP_ROLE` env var or `security.role` in JSON config.
+  - Startup warnings for `admin` role and unknown role values.
+- **MCPTool — First-Class MCP Tools in @Agent/@Coordinator**
+  - `MCPTool` dataclass for declaring MCP servers as tool sources in `tools=[...]`.
+  - `mcp://` URI scheme for inline MCP tool references (e.g., `"mcp://npx/-y/@openintent/mcp-server?role=operator"`).
+  - Automatic MCP connection at agent startup, tool discovery, ToolDef registration, and clean disconnection on shutdown.
+  - RBAC `role` field on `MCPTool` defaults to `"reader"` (least privilege) and is set explicitly on each child process, isolating agents from ambient `OPENINTENT_MCP_ROLE` in the parent env.
+  - Role validation with fallback to `"reader"` on invalid values and startup warnings for `admin` role.
+  - Mixed tool lists: local `ToolDef`, `MCPTool`, `mcp://` URIs, and plain strings all coexist.
+  - `parse_mcp_uri()` and `resolve_mcp_tools()` helpers exported from `openintent.mcp`.
+
+---
+
+## [0.11.0] - 2026-02-13
+
+### Added
+
+- **RFC-0021: Agent-to-Agent Messaging** — Structured channels for direct agent-to-agent communication within intent scope.
+  - `Channel`, `ChannelMessage`, `MessageType`, `ChannelStatus`, `MemberPolicy`, `MessageStatus` data models.
+  - 11 server endpoints (10 REST + 1 SSE) under `/api/v1/intents/{id}/channels/`.
+  - `@on_message` lifecycle decorator for reactive message handling.
+  - `_ChannelsProxy` / `_ChannelHandle` agent abstractions with `ask()`, `notify()`, `broadcast()`.
+- **YAML `channels:` block** — Declarative channel definitions in workflow specifications.
+
+---
+
 ## [0.10.1] - 2026-02-12
 
 ### Added
@@ -169,7 +210,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **RFC-0011: Access-Aware Coordination v2.0** (unified permissions model)
+- **RFC-0011: Access-Aware Coordination v1.0** (unified permissions model)
   - Unified `permissions` field replaces separate access/delegation/context fields
   - Shorthand forms: `permissions: open`, `permissions: private`, `permissions: [agent-a, agent-b]`
   - Full object form: `policy`, `default`, `allow` (agent grants), `delegate` (delegation rules), `context` (injection config)
@@ -299,7 +340,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Updated all YAML workflow examples to use unified `permissions` field
-- Updated all documentation to RFC-0011 v2.0 format
+- Updated all documentation to RFC-0011 v1.0 format
 - Version bump to 0.7.0
 
 ## [0.6.0] - 2026-02-05
@@ -365,7 +406,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Renamed `STATE_UPDATED` → `STATE_PATCHED` (value: `state_patched`)
   - Added: `DEPENDENCY_ADDED`, `DEPENDENCY_REMOVED` (RFC-0002)
   - Added: `ATTACHMENT_ADDED` (RFC-0005)
-  - Added: `PORTFOLIO_CREATED`, `ADDED_TO_PORTFOLIO`, `REMOVED_FROM_PORTFOLIO` (RFC-0007)
+  - Added: `PORTFOLIO_CREATED`, `ADDED_TO_PORTFOLIO`, `REMOVED_FROM_PORTFOLIO` (RFC-0004)
   - Added: `FAILURE_RECORDED` (RFC-0010)
   - Legacy aliases `CREATED` and `STATE_UPDATED` preserved for backward compatibility
 
@@ -498,7 +539,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - State management with optimistic concurrency control via `If-Match` headers
 - Append-only event logging for audit trails (RFC-0002)
 - Lease-based scope ownership with acquire, renew, and release (RFC-0003)
-- Governance endpoints: arbitration requests and decisions (RFC-0004)
+- Governance endpoints: arbitration requests and decisions (RFC-0003)
 - File attachments with base64 encoding (RFC-0005)
 - Webhook subscriptions for real-time updates (RFC-0006)
 - Cost tracking with summaries by agent and type (RFC-0009)

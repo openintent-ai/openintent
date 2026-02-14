@@ -42,14 +42,14 @@ class EventType(str, Enum):
     LEASE_ACQUIRED = "lease_acquired"
     LEASE_RELEASED = "lease_released"
 
-    # Governance events (RFC-0004)
+    # Governance events (RFC-0003)
     ARBITRATION_REQUESTED = "arbitration_requested"
     DECISION_RECORDED = "decision_recorded"
 
     # Attachment events (RFC-0005)
     ATTACHMENT_ADDED = "attachment_added"
 
-    # Portfolio events (RFC-0007)
+    # Portfolio events (RFC-0004)
     PORTFOLIO_CREATED = "portfolio_created"
     ADDED_TO_PORTFOLIO = "added_to_portfolio"
     REMOVED_FROM_PORTFOLIO = "removed_from_portfolio"
@@ -165,6 +165,11 @@ class EventType(str, Enum):
     # Verifiable log events (RFC-0019)
     LOG_CHECKPOINT_CREATED = "log.checkpoint.created"
     LOG_CHECKPOINT_ANCHORED = "log.checkpoint.anchored"
+
+    # Channel messaging events (RFC-0021)
+    CHANNEL_CREATED = "channel.created"
+    CHANNEL_CLOSED = "channel.closed"
+    CHANNEL_MESSAGE = "channel.message"
 
     # Legacy aliases for backward compatibility
     CREATED = "intent_created"
@@ -356,6 +361,33 @@ class GuardrailExceedAction(str, Enum):
     ESCALATE = "escalate"
     PAUSE_AND_ESCALATE = "pause_and_escalate"
     FAIL = "fail"
+
+
+class EscalationStatus(str, Enum):
+    """Status of a human escalation (RFC-0013)."""
+
+    PENDING = "pending"
+    ACKNOWLEDGED = "acknowledged"
+    RESOLVED = "resolved"
+    EXPIRED = "expired"
+
+
+class EscalationPriority(str, Enum):
+    """Priority level of an escalation (RFC-0013)."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class ApprovalStatus(str, Enum):
+    """Status of an approval request (RFC-0013)."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    EXPIRED = "expired"
 
 
 # ---------------------------------------------------------------------------
@@ -851,6 +883,127 @@ class Decision:
             outcome=data["outcome"],
             reasoning=data["reasoning"],
             created_at=datetime.fromisoformat(data["created_at"]),
+        )
+
+
+@dataclass
+class Escalation:
+    """
+    Human escalation request from an agent (RFC-0013).
+    """
+
+    id: str
+    intent_id: str
+    escalated_by: str
+    reason: str
+    priority: str
+    urgency: str
+    context: dict[str, Any]
+    status: str
+    created_at: datetime
+    resolved_at: Optional[datetime] = None
+    resolved_by: Optional[str] = None
+    resolution: Optional[str] = None
+    resolution_notes: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result = {
+            "id": self.id,
+            "intent_id": self.intent_id,
+            "escalated_by": self.escalated_by,
+            "reason": self.reason,
+            "priority": self.priority,
+            "urgency": self.urgency,
+            "context": self.context,
+            "status": self.status,
+            "created_at": self.created_at.isoformat(),
+        }
+        if self.resolved_at:
+            result["resolved_at"] = self.resolved_at.isoformat()
+        if self.resolved_by:
+            result["resolved_by"] = self.resolved_by
+        if self.resolution:
+            result["resolution"] = self.resolution
+        if self.resolution_notes:
+            result["resolution_notes"] = self.resolution_notes
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Escalation":
+        resolved_at = None
+        if data.get("resolved_at"):
+            resolved_at = datetime.fromisoformat(data["resolved_at"])
+        return cls(
+            id=data["id"],
+            intent_id=data["intent_id"],
+            escalated_by=data["escalated_by"],
+            reason=data["reason"],
+            priority=data.get("priority", "medium"),
+            urgency=data.get("urgency", "medium"),
+            context=data.get("context", {}),
+            status=data.get("status", "pending"),
+            created_at=datetime.fromisoformat(data["created_at"]),
+            resolved_at=resolved_at,
+            resolved_by=data.get("resolved_by"),
+            resolution=data.get("resolution"),
+            resolution_notes=data.get("resolution_notes"),
+        )
+
+
+@dataclass
+class ApprovalRequest:
+    """
+    Human approval request from an agent (RFC-0013).
+    """
+
+    id: str
+    intent_id: str
+    requested_by: str
+    action: str
+    reason: str
+    context: dict[str, Any]
+    status: str
+    created_at: datetime
+    decided_at: Optional[datetime] = None
+    decided_by: Optional[str] = None
+    decision_notes: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result = {
+            "id": self.id,
+            "intent_id": self.intent_id,
+            "requested_by": self.requested_by,
+            "action": self.action,
+            "reason": self.reason,
+            "context": self.context,
+            "status": self.status,
+            "created_at": self.created_at.isoformat(),
+        }
+        if self.decided_at:
+            result["decided_at"] = self.decided_at.isoformat()
+        if self.decided_by:
+            result["decided_by"] = self.decided_by
+        if self.decision_notes:
+            result["decision_notes"] = self.decision_notes
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ApprovalRequest":
+        decided_at = None
+        if data.get("decided_at"):
+            decided_at = datetime.fromisoformat(data["decided_at"])
+        return cls(
+            id=data["id"],
+            intent_id=data["intent_id"],
+            requested_by=data["requested_by"],
+            action=data["action"],
+            reason=data.get("reason", ""),
+            context=data.get("context", {}),
+            status=data.get("status", "pending"),
+            created_at=datetime.fromisoformat(data["created_at"]),
+            decided_at=decided_at,
+            decided_by=data.get("decided_by"),
+            decision_notes=data.get("decision_notes"),
         )
 
 
@@ -3516,4 +3669,221 @@ class ConsistencyProof:
             to_checkpoint=data.get("to_checkpoint", ""),
             consistent=data.get("consistent", False),
             boundary_event=data.get("boundary_event"),
+        )
+
+
+# ==================== RFC-0021: Agent-to-Agent Messaging ====================
+
+
+class MessageType(str, Enum):
+    """Types of messages between agents (RFC-0021)."""
+
+    REQUEST = "request"
+    RESPONSE = "response"
+    NOTIFY = "notify"
+    BROADCAST = "broadcast"
+
+
+class MessageStatus(str, Enum):
+    """Delivery status of a channel message (RFC-0021)."""
+
+    PENDING = "pending"
+    DELIVERED = "delivered"
+    READ = "read"
+    EXPIRED = "expired"
+
+
+class ChannelStatus(str, Enum):
+    """Status of a messaging channel (RFC-0021)."""
+
+    OPEN = "open"
+    CLOSED = "closed"
+
+
+class MemberPolicy(str, Enum):
+    """Membership policy for a channel (RFC-0021)."""
+
+    EXPLICIT = "explicit"
+    INTENT = "intent"
+
+
+@dataclass
+class ChannelOptions:
+    """Configuration options for a channel (RFC-0021)."""
+
+    audit: bool = False
+    ttl_seconds: Optional[int] = None
+    max_messages: int = 1000
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "audit": self.audit,
+            "max_messages": self.max_messages,
+        }
+        if self.ttl_seconds is not None:
+            result["ttl_seconds"] = self.ttl_seconds
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ChannelOptions":
+        return cls(
+            audit=data.get("audit", False),
+            ttl_seconds=data.get("ttl_seconds"),
+            max_messages=data.get("max_messages", 1000),
+        )
+
+
+@dataclass
+class Channel:
+    """
+    A named, scoped communication context for agent-to-agent messaging (RFC-0021).
+
+    Channels are attached to an intent and provide lightweight message streams
+    for direct coordination between agents.
+    """
+
+    id: str
+    intent_id: str
+    name: str
+    created_by: str
+    members: list[str]
+    member_policy: MemberPolicy = MemberPolicy.INTENT
+    task_id: Optional[str] = None
+    options: Optional[ChannelOptions] = None
+    status: ChannelStatus = ChannelStatus.OPEN
+    created_at: Optional[datetime] = None
+    closed_at: Optional[datetime] = None
+    message_count: int = 0
+    last_message_at: Optional[datetime] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "id": self.id,
+            "intent_id": self.intent_id,
+            "name": self.name,
+            "created_by": self.created_by,
+            "members": self.members,
+            "member_policy": self.member_policy.value,
+            "status": self.status.value,
+            "message_count": self.message_count,
+        }
+        if self.task_id:
+            result["task_id"] = self.task_id
+        if self.options:
+            result["options"] = self.options.to_dict()
+        if self.created_at:
+            result["created_at"] = self.created_at.isoformat()
+        if self.closed_at:
+            result["closed_at"] = self.closed_at.isoformat()
+        if self.last_message_at:
+            result["last_message_at"] = self.last_message_at.isoformat()
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Channel":
+        options = None
+        if "options" in data and data["options"]:
+            options = ChannelOptions.from_dict(data["options"])
+
+        created_at = None
+        if data.get("created_at"):
+            created_at = datetime.fromisoformat(data["created_at"])
+
+        closed_at = None
+        if data.get("closed_at"):
+            closed_at = datetime.fromisoformat(data["closed_at"])
+
+        last_message_at = None
+        if data.get("last_message_at"):
+            last_message_at = datetime.fromisoformat(data["last_message_at"])
+
+        return cls(
+            id=data.get("id", ""),
+            intent_id=data.get("intent_id", ""),
+            name=data.get("name", ""),
+            created_by=data.get("created_by", ""),
+            members=data.get("members", []),
+            member_policy=MemberPolicy(data.get("member_policy", "intent")),
+            task_id=data.get("task_id"),
+            options=options,
+            status=ChannelStatus(data.get("status", "open")),
+            created_at=created_at,
+            closed_at=closed_at,
+            message_count=data.get("message_count", 0),
+            last_message_at=last_message_at,
+        )
+
+
+@dataclass
+class ChannelMessage:
+    """
+    A typed, structured message between agents on a channel (RFC-0021).
+
+    Messages support request/response patterns via correlation_id,
+    targeted or broadcast delivery, and optional expiration.
+    """
+
+    id: str
+    channel_id: str
+    sender: str
+    message_type: MessageType
+    payload: dict[str, Any]
+    to: Optional[str] = None
+    correlation_id: Optional[str] = None
+    metadata: Optional[dict[str, Any]] = None
+    status: MessageStatus = MessageStatus.PENDING
+    created_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    read_at: Optional[datetime] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "id": self.id,
+            "channel_id": self.channel_id,
+            "sender": self.sender,
+            "message_type": self.message_type.value,
+            "payload": self.payload,
+            "status": self.status.value,
+        }
+        if self.to:
+            result["to"] = self.to
+        if self.correlation_id:
+            result["correlation_id"] = self.correlation_id
+        if self.metadata:
+            result["metadata"] = self.metadata
+        if self.created_at:
+            result["created_at"] = self.created_at.isoformat()
+        if self.expires_at:
+            result["expires_at"] = self.expires_at.isoformat()
+        if self.read_at:
+            result["read_at"] = self.read_at.isoformat()
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ChannelMessage":
+        created_at = None
+        if data.get("created_at"):
+            created_at = datetime.fromisoformat(data["created_at"])
+
+        expires_at = None
+        if data.get("expires_at"):
+            expires_at = datetime.fromisoformat(data["expires_at"])
+
+        read_at = None
+        if data.get("read_at"):
+            read_at = datetime.fromisoformat(data["read_at"])
+
+        return cls(
+            id=data.get("id", ""),
+            channel_id=data.get("channel_id", ""),
+            sender=data.get("sender", ""),
+            message_type=MessageType(data.get("message_type", "notify")),
+            payload=data.get("payload", {}),
+            to=data.get("to"),
+            correlation_id=data.get("correlation_id"),
+            metadata=data.get("metadata"),
+            status=MessageStatus(data.get("status", "pending")),
+            created_at=created_at,
+            expires_at=expires_at,
+            read_at=read_at,
         )

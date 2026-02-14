@@ -28,6 +28,7 @@ from .agents import (
     on_handoff,
     on_identity_registered,
     on_lease_available,
+    on_message,
     on_quorum,
     on_retry,
     on_state_change,
@@ -44,6 +45,7 @@ from .exceptions import (
     ValidationError,
 )
 from .llm import LLMConfig, LLMEngine, Tool, ToolDef, define_tool, tool
+from .mcp import MCPTool, parse_mcp_uri
 from .models import (
     AccessPolicy,
     AccessRequest,
@@ -56,9 +58,16 @@ from .models import (
     AgentRecord,
     AgentStatus,
     AggregateStatus,
+    ApprovalRequest,
+    ApprovalStatus,
     ArbitrationRequest,
     # RFC-0019: Verifiable Event Logs
     ChainVerification,
+    # RFC-0021: Agent-to-Agent Messaging
+    Channel,
+    ChannelMessage,
+    ChannelOptions,
+    ChannelStatus,
     Checkpoint,
     ConsistencyProof,
     # RFC-0013: Coordinator Governance
@@ -73,6 +82,9 @@ from .models import (
     Decision,
     DecisionRecord,
     DecisionType,
+    Escalation,
+    EscalationPriority,
+    EscalationStatus,
     EventProof,
     EventType,
     GrantConstraints,
@@ -97,6 +109,7 @@ from .models import (
     LeaseStatus,
     LLMRequestPayload,
     LogCheckpoint,
+    MemberPolicy,
     MembershipRole,
     # RFC-0015: Agent Memory
     MemoryEntry,
@@ -105,6 +118,8 @@ from .models import (
     MemoryType,
     MerkleProof,
     MerkleProofEntry,
+    MessageStatus,
+    MessageType,
     PeerInfo,
     Permission,
     Plan,
@@ -185,7 +200,7 @@ def get_server() -> tuple[Any, Any, Any]:
         )
 
 
-__version__ = "0.10.0"
+__version__ = "0.12.0"
 __all__ = [
     "OpenIntentClient",
     "AsyncOpenIntentClient",
@@ -247,6 +262,11 @@ __all__ = [
     "Guardrails",
     "DecisionRecord",
     "DecisionType",
+    "Escalation",
+    "EscalationStatus",
+    "EscalationPriority",
+    "ApprovalRequest",
+    "ApprovalStatus",
     "CredentialVault",
     "Credential",
     "ToolGrant",
@@ -266,6 +286,13 @@ __all__ = [
     "IntentTemplate",
     "TriggerLineage",
     "TracingContext",
+    "Channel",
+    "ChannelMessage",
+    "ChannelOptions",
+    "ChannelStatus",
+    "MemberPolicy",
+    "MessageStatus",
+    "MessageType",
     "OpenIntentError",
     "ConflictError",
     "NotFoundError",
@@ -310,6 +337,7 @@ __all__ = [
     "on_handoff",
     "on_identity_registered",
     "on_lease_available",
+    "on_message",
     "on_quorum",
     "on_retry",
     "on_state_change",
@@ -332,4 +360,6 @@ __all__ = [
     "define_tool",
     "Tool",
     "tool",
+    "MCPTool",
+    "parse_mcp_uri",
 ]

@@ -3,7 +3,7 @@
 **Status:** Proposed  
 **Created:** 2026-02-07  
 **Authors:** OpenIntent Contributors  
-**Requires:** RFC-0001 (Intents), RFC-0003 (Leasing), RFC-0004 (Governance), RFC-0007 (Portfolios), RFC-0011 (Access Control)
+**Requires:** RFC-0001 (Intents), RFC-0003 (Leasing & Governance), RFC-0004 (Portfolios), RFC-0011 (Access Control)
 
 ---
 
@@ -30,7 +30,7 @@ The current OpenIntent protocol defines Intents (desired outcomes), Intent Graph
 | **Intent** | A declaration of desired outcome (unchanged from RFC-0001) |
 | **Task** | A concrete, bounded, measurable unit of work derived from an intent |
 | **Plan** | An execution strategy for achieving an intent, containing ordered tasks, decision points, and checkpoints. Evolves from Intent Graph. |
-| **Portfolio** | An organizational boundary grouping related intents with shared ownership, budget, and access policies (clarified from RFC-0007) |
+| **Portfolio** | An organizational boundary grouping related intents with shared ownership, budget, and access policies (clarified from RFC-0004) |
 | **Coordinator** | An agent (human or LLM) responsible for creating plans, assigning tasks, monitoring progress, and handling escalation |
 | **Checkpoint** | A named point in a plan where execution pauses for review, approval, or decision |
 
@@ -239,7 +239,7 @@ The `when` expression is evaluated after the referenced task completes. If false
 
 ### 3. Portfolio (Clarified)
 
-With Plan now handling execution strategy, Portfolio (RFC-0007) is clarified as a purely **organizational** construct:
+With Plan now handling execution strategy, Portfolio (RFC-0004) is clarified as a purely **organizational** construct:
 
 | Concern | Handled By |
 |---------|-----------|
@@ -581,9 +581,9 @@ New event types added to the intent event log:
 |-----|-------------|
 | RFC-0001 (Intents) | Tasks belong to intents. Intent state reflects plan/task progress. |
 | RFC-0003 (Leasing) | Task claiming uses the existing lease mechanism. One lease per task. |
-| RFC-0004 (Governance) | Plan checkpoints extend governance with task-level approval gates. |
+| RFC-0003 (Governance) | Plan checkpoints extend governance with task-level approval gates. |
 | RFC-0006 (Subscriptions) | Clients can subscribe to task and plan events. |
-| RFC-0007 (Portfolios) | Clarified as organizational boundary. No execution semantics. |
+| RFC-0004 (Portfolios) | Clarified as organizational boundary. No execution semantics. |
 | RFC-0008 (LLM Integration) | LLM adapters can be used within task execution. Events include token/cost data. |
 | RFC-0009 (Cost Tracking) | Task-level cost tracking. Plan aggregates costs across tasks. |
 | RFC-0010 (Retry Policies) | Task retry uses existing retry policy definitions. |
@@ -603,8 +603,8 @@ New event types added to the intent event log:
 
 - [RFC-0001: Intent Objects](./0001-intent-objects.md)
 - [RFC-0003: Agent Leasing](./0003-agent-leasing.md)
-- [RFC-0004: Governance & Arbitration](./0004-governance-arbitration.md)
-- [RFC-0007: Intent Portfolios](./0007-intent-portfolios.md)
+- [RFC-0003: Governance & Arbitration](./0003-agent-leasing.md)
+- [RFC-0004: Intent Portfolios](./0004-governance-arbitration.md)
 - [RFC-0010: Retry Policies](./0010-retry-policies.md)
 - [RFC-0011: Access-Aware Coordination](./0011-access-control.md)
 - [Celery Task Documentation](https://docs.celeryq.dev/)

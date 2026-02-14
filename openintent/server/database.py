@@ -522,6 +522,50 @@ class TriggerModel(Base):  # type: ignore[misc, valid-type]
     )
 
 
+class EscalationModel(Base):  # type: ignore[misc, valid-type]
+    __tablename__ = "escalations"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    intent_id = Column(String(36), ForeignKey("intents.id"), nullable=False)
+    escalated_by = Column(String(255), nullable=False)
+    reason = Column(Text, nullable=False)
+    priority = Column(String(50), default="medium")
+    urgency = Column(String(50), default="medium")
+    context = Column(JSON, default=dict)
+    status = Column(String(50), default="pending")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(String(255), nullable=True)
+    resolution = Column(Text, nullable=True)
+    resolution_notes = Column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("idx_escalations_intent_id", "intent_id"),
+        Index("idx_escalations_status", "status"),
+    )
+
+
+class ApprovalRequestModel(Base):  # type: ignore[misc, valid-type]
+    __tablename__ = "approval_requests"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    intent_id = Column(String(36), ForeignKey("intents.id"), nullable=False)
+    requested_by = Column(String(255), nullable=False)
+    action = Column(Text, nullable=False)
+    reason = Column(Text, default="")
+    context = Column(JSON, default=dict)
+    status = Column(String(50), default="pending")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    decided_at = Column(DateTime, nullable=True)
+    decided_by = Column(String(255), nullable=True)
+    decision_notes = Column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("idx_approvals_intent_id", "intent_id"),
+        Index("idx_approvals_status", "status"),
+    )
+
+
 class Database:
     """Database interface for OpenIntent server."""
 
@@ -1643,6 +1687,85 @@ class Database:
         session.delete(trigger)
         session.commit()
         return True
+
+    # ==================== Escalations & Approvals ====================
+
+    def create_escalation(
+        self,
+        session,
+        intent_id,
+        escalated_by,
+        reason,
+        priority="medium",
+        urgency="medium",
+        context=None,
+    ):
+        escalation = EscalationModel(
+            intent_id=intent_id,
+            escalated_by=escalated_by,
+            reason=reason,
+            priority=priority,
+            urgency=urgency,
+            context=context or {},
+        )
+        session.add(escalation)
+        session.commit()
+        session.refresh(escalation)
+        return escalation
+
+    def list_escalations(self, session, intent_id=None, status=None):
+        query = session.query(EscalationModel)
+        if intent_id:
+            query = query.filter(EscalationModel.intent_id == intent_id)
+        if status:
+            query = query.filter(EscalationModel.status == status)
+        return query.order_by(EscalationModel.created_at.desc()).all()
+
+    def get_escalation(self, session, escalation_id):
+        return (
+            session.query(EscalationModel)
+            .filter(EscalationModel.id == escalation_id)
+            .first()
+        )
+
+    def resolve_escalation(
+        self, session, escalation_id, resolution, resolved_by, notes=None
+    ):
+        escalation = self.get_escalation(session, escalation_id)
+        if escalation:
+            escalation.status = "resolved"
+            escalation.resolution = resolution
+            escalation.resolved_by = resolved_by
+            escalation.resolution_notes = notes
+            escalation.resolved_at = datetime.utcnow()
+            session.commit()
+            session.refresh(escalation)
+        return escalation
+
+    def create_approval_request(
+        self, session, intent_id, requested_by, action, reason="", context=None
+    ):
+        approval = ApprovalRequestModel(
+            intent_id=intent_id,
+            requested_by=requested_by,
+            action=action,
+            reason=reason,
+            context=context or {},
+        )
+        session.add(approval)
+        session.commit()
+        session.refresh(approval)
+        return approval
+
+    def get_approval_request(self, session, intent_id, approval_id):
+        return (
+            session.query(ApprovalRequestModel)
+            .filter(
+                ApprovalRequestModel.id == approval_id,
+                ApprovalRequestModel.intent_id == intent_id,
+            )
+            .first()
+        )
 
 
 _database: Optional[Database] = None
