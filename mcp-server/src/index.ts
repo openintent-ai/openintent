@@ -30,7 +30,7 @@ async function main() {
   const server = new Server(
     {
       name: "openintent-mcp",
-      version: "0.12.0",
+      version: "0.13.2",
     },
     {
       capabilities: {

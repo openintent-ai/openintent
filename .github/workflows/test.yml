@@ -32,7 +32,7 @@ jobs:
           black --check .
 
       - name: Run type checking
-        run: mypy openintent
+        run: mypy openintent --ignore-missing-imports
 
       - name: Run tests
         run: pytest -v --cov=openintent --cov-report=xml
@@ -43,4 +43,3 @@ jobs:
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
-

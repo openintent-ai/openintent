@@ -5,6 +5,14 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.2] - 2026-02-14
+
+### Changed
+
+- **npm Package Scope Rename** — MCP server npm package renamed from `@openintent/mcp-server` to `@openintentai/mcp-server` to match the secured npm organization name. All documentation, examples, YAML workflows, `mcp://` URI schemes, and Makefile targets updated accordingly.
+
+---
+
 ## [0.13.1] - 2026-02-14
 
 ### Added
@@ -69,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **MCP Integration (Model Context Protocol)**
-  - `@openintent/mcp-server`: TypeScript MCP server exposing the full protocol API as 16 MCP tools and 5 MCP resources.
+  - `@openintentai/mcp-server`: TypeScript MCP server exposing the full protocol API as 16 MCP tools and 5 MCP resources.
   - `openintent.mcp` Python module: `MCPBridge`, `MCPToolProvider`, and `MCPToolExporter` for bidirectional MCP integration.
   - YAML `mcp:` block for declarative MCP server configuration in workflows.
   - Security controls: TLS enforcement, tool allowlists, credential isolation, and audit logging.
@@ -83,7 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Startup warnings for `admin` role and unknown role values.
 - **MCPTool — First-Class MCP Tools in @Agent/@Coordinator**
   - `MCPTool` dataclass for declaring MCP servers as tool sources in `tools=[...]`.
-  - `mcp://` URI scheme for inline MCP tool references (e.g., `"mcp://npx/-y/@openintent/mcp-server?role=operator"`).
+  - `mcp://` URI scheme for inline MCP tool references (e.g., `"mcp://npx/-y/@openintentai/mcp-server?role=operator"`).
   - Automatic MCP connection at agent startup, tool discovery, ToolDef registration, and clean disconnection on shutdown.
   - RBAC `role` field on `MCPTool` defaults to `"reader"` (least privilege) and is set explicitly on each child process, isolating agents from ambient `OPENINTENT_MCP_ROLE` in the parent env.
   - Role validation with fallback to `"reader"` on invalid values and startup warnings for `admin` role.

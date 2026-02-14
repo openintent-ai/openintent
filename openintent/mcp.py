@@ -397,7 +397,7 @@ class MCPTool:
     5. Disconnects cleanly on agent shutdown.
 
     The ``role`` field maps to the RBAC system on the MCP server. When
-    connecting to an ``@openintent/mcp-server``, the role determines which
+    connecting to an ``@openintentai/mcp-server``, the role determines which
     tools are visible: ``reader`` (4 read-only tools), ``operator``
     (10 read+write tools), or ``admin`` (all 16 tools).
 
@@ -408,7 +408,7 @@ class MCPTool:
         @Agent("analyst", model="gpt-4o", tools=[
             MCPTool(
                 server="npx",
-                args=["-y", "@openintent/mcp-server"],
+                args=["-y", "@openintentai/mcp-server"],
                 role="operator",
                 allowed_tools=["get_intent", "list_intents", "set_status"],
                 env={"OPENINTENT_SERVER_URL": "http://localhost:8000"},
@@ -420,7 +420,7 @@ class MCPTool:
     Examples — ``mcp://`` URI shorthand::
 
         @Agent("watcher", model="gpt-4o", tools=[
-            "mcp://npx/-y/@openintent/mcp-server?role=reader",
+            "mcp://npx/-y/@openintentai/mcp-server?role=reader",
         ])
         class Watcher:
             ...
@@ -501,8 +501,8 @@ def parse_mcp_uri(uri: str) -> MCPTool:
 
     Examples::
 
-        mcp://npx/-y/@openintent/mcp-server?role=operator
-        mcp://npx/-y/@openintent/mcp-server?role=reader&allow=get_intent,list_intents
+        mcp://npx/-y/@openintentai/mcp-server?role=operator
+        mcp://npx/-y/@openintentai/mcp-server?role=reader&allow=get_intent,list_intents
         mcp://python/-m/my_mcp_server?env_API_KEY=${MY_KEY}
 
     Returns:

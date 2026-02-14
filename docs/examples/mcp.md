@@ -11,7 +11,7 @@ Add the OpenIntent MCP server to your Claude Desktop configuration:
   "mcpServers": {
     "openintent": {
       "command": "npx",
-      "args": ["-y", "@openintent/mcp-server"],
+      "args": ["-y", "@openintentai/mcp-server"],
       "env": {
         "OPENINTENT_SERVER_URL": "http://localhost:8000",
         "OPENINTENT_API_KEY": "your-api-key",
@@ -77,7 +77,7 @@ A monitoring tool that can observe protocol state but never modify it:
   "mcpServers": {
     "openintent-monitor": {
       "command": "npx",
-      "args": ["-y", "@openintent/mcp-server"],
+      "args": ["-y", "@openintentai/mcp-server"],
       "env": {
         "OPENINTENT_SERVER_URL": "https://openintent.example.com",
         "OPENINTENT_API_KEY": "monitor-api-key",
@@ -99,7 +99,7 @@ An agent that creates intents, updates state, logs events, and sends messages â€
   "mcpServers": {
     "openintent-worker": {
       "command": "npx",
-      "args": ["-y", "@openintent/mcp-server"],
+      "args": ["-y", "@openintentai/mcp-server"],
       "env": {
         "OPENINTENT_SERVER_URL": "https://openintent.example.com",
         "OPENINTENT_API_KEY": "worker-api-key",
@@ -121,7 +121,7 @@ A coordinator with full access to all protocol primitives:
   "mcpServers": {
     "openintent-orchestrator": {
       "command": "npx",
-      "args": ["-y", "@openintent/mcp-server"],
+      "args": ["-y", "@openintentai/mcp-server"],
       "env": {
         "OPENINTENT_SERVER_URL": "https://openintent.example.com",
         "OPENINTENT_API_KEY": "orchestrator-api-key",
@@ -175,7 +175,7 @@ from openintent import Agent, MCPTool, on_assignment
 @Agent("analyst", model="gpt-4o", tools=[
     MCPTool(
         server="npx",
-        args=["-y", "@openintent/mcp-server"],
+        args=["-y", "@openintentai/mcp-server"],
         role="operator",
         env={"OPENINTENT_SERVER_URL": "http://localhost:8000"},
     ),
@@ -196,7 +196,7 @@ At startup, the SDK connects to the MCP server, discovers all tools the `operato
 from openintent import Agent, on_assignment
 
 @Agent("watcher", model="gpt-4o", tools=[
-    "mcp://npx/-y/@openintent/mcp-server?role=reader",
+    "mcp://npx/-y/@openintentai/mcp-server?role=reader",
 ])
 class Watcher:
     @on_assignment
@@ -221,7 +221,7 @@ async def web_search(query: str) -> dict:
     web_search,
     MCPTool(
         server="npx",
-        args=["-y", "@openintent/mcp-server"],
+        args=["-y", "@openintentai/mcp-server"],
         role="operator",
         allowed_tools=["get_intent", "list_intents", "set_status"],
     ),
@@ -249,7 +249,7 @@ from openintent import Coordinator, MCPTool, on_assignment
     tools=[
         MCPTool(
             server="npx",
-            args=["-y", "@openintent/mcp-server"],
+            args=["-y", "@openintentai/mcp-server"],
             role="admin",
             env={"OPENINTENT_SERVER_URL": "http://localhost:8000"},
         ),
@@ -360,7 +360,7 @@ mcp:
         audit: true
     openintent-remote:
       command: "npx"
-      args: ["-y", "@openintent/mcp-server"]
+      args: ["-y", "@openintentai/mcp-server"]
       env:
         OPENINTENT_SERVER_URL: "http://localhost:8000"
         OPENINTENT_API_KEY: "${OPENINTENT_API_KEY}"
@@ -454,7 +454,7 @@ A production configuration with TLS enforcement, role-based access control, tool
   "mcpServers": {
     "openintent": {
       "command": "npx",
-      "args": ["-y", "@openintent/mcp-server"],
+      "args": ["-y", "@openintentai/mcp-server"],
       "env": {
         "OPENINTENT_SERVER_URL": "https://openintent.example.com",
         "OPENINTENT_API_KEY": "prod-api-key",
@@ -474,7 +474,7 @@ from openintent.mcp import MCPServerConfig, MCPSecurityConfig, MCPBridge
 production_config = MCPServerConfig(
     name="openintent-prod",
     command="npx",
-    args=["-y", "@openintent/mcp-server"],
+    args=["-y", "@openintentai/mcp-server"],
     env={
         "OPENINTENT_SERVER_URL": "https://openintent.example.com",
         "OPENINTENT_API_KEY": "${OPENINTENT_API_KEY}",

@@ -27,7 +27,7 @@ install-dev: ## Install SDK with dev + server + all extras
 install-all: ## Install everything including MCP dependencies
         $(PIP) install -e ".[dev,server,all-adapters]"
         $(PIP) install mcp
-        npm install -g @openintent/mcp-server
+        npm install -g @openintentai/mcp-server
 
 server: ## Start the OpenIntent server
         openintent-server --port $(PORT)
@@ -57,7 +57,7 @@ setup-mcp: ## Install MCP dependencies (Python + Node)
         @echo "Installing Python MCP SDK..."
         $(PIP) install mcp
         @echo "Installing OpenIntent MCP server (Node)..."
-        npm install -g @openintent/mcp-server
+        npm install -g @openintentai/mcp-server
         @echo ""
         @echo "MCP setup complete. Next steps:"
         @echo "  make server      — Start the OpenIntent server"
@@ -68,7 +68,7 @@ mcp-server: ## Start the MCP server (connects to local OpenIntent server)
         OPENINTENT_SERVER_URL=http://localhost:$(PORT) \
         OPENINTENT_API_KEY=dev-user-key \
         OPENINTENT_MCP_ROLE=$(MCP_ROLE) \
-        $(NPX) -y @openintent/mcp-server
+        $(NPX) -y @openintentai/mcp-server
 
 full-stack: ## Start OpenIntent server + MCP server together
         @echo "Starting OpenIntent server on port $(PORT)..."
@@ -78,7 +78,7 @@ full-stack: ## Start OpenIntent server + MCP server together
         @OPENINTENT_SERVER_URL=http://localhost:$(PORT) \
          OPENINTENT_API_KEY=dev-user-key \
          OPENINTENT_MCP_ROLE=$(MCP_ROLE) \
-         $(NPX) -y @openintent/mcp-server
+         $(NPX) -y @openintentai/mcp-server
 
 check: ## Verify installation and connectivity
         @echo "Checking Python SDK..."
@@ -86,7 +86,7 @@ check: ## Verify installation and connectivity
         @echo "Checking MCP SDK..."
         @$(PYTHON) -c "import mcp; print('  mcp: OK')" 2>/dev/null || echo "  mcp: NOT INSTALLED (run: make setup-mcp)"
         @echo "Checking MCP server (Node)..."
-        @$(NPX) -y @openintent/mcp-server --version 2>/dev/null && echo "  mcp-server: OK" || echo "  mcp-server: NOT INSTALLED (run: make setup-mcp)"
+        @$(NPX) -y @openintentai/mcp-server --version 2>/dev/null && echo "  mcp-server: OK" || echo "  mcp-server: NOT INSTALLED (run: make setup-mcp)"
         @echo "Checking OpenIntent server..."
         @curl -sf http://localhost:$(PORT)/api/v1/intents > /dev/null 2>&1 && echo "  server: RUNNING on port $(PORT)" || echo "  server: NOT RUNNING (run: make server)"
 

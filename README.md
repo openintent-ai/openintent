@@ -496,7 +496,7 @@ OpenIntent supports the [Model Context Protocol](https://modelcontextprotocol.io
 
 ```bash
 pip install openintent[server] mcp
-npm install -g @openintent/mcp-server
+npm install -g @openintentai/mcp-server
 ```
 
 Or use the Makefile:
@@ -521,7 +521,7 @@ Add the MCP server to your Claude Desktop config:
   "mcpServers": {
     "openintent": {
       "command": "npx",
-      "args": ["-y", "@openintent/mcp-server"],
+      "args": ["-y", "@openintentai/mcp-server"],
       "env": {
         "OPENINTENT_SERVER_URL": "http://localhost:8000",
         "OPENINTENT_API_KEY": "dev-user-key",
@@ -554,7 +554,7 @@ from openintent import Agent, MCPTool, on_assignment
 @Agent("analyst", model="gpt-4o", tools=[
     MCPTool(
         server="npx",
-        args=["-y", "@openintent/mcp-server"],
+        args=["-y", "@openintentai/mcp-server"],
         role="operator",
         env={"OPENINTENT_SERVER_URL": "http://localhost:8000"},
     ),
@@ -569,7 +569,7 @@ URI shorthand for the same thing:
 
 ```python
 @Agent("analyst", model="gpt-4o", tools=[
-    "mcp://npx/-y/@openintent/mcp-server?role=operator&env_OPENINTENT_SERVER_URL=http://localhost:8000",
+    "mcp://npx/-y/@openintentai/mcp-server?role=operator&env_OPENINTENT_SERVER_URL=http://localhost:8000",
 ])
 ```
 
@@ -579,7 +579,7 @@ Mix local tools, multiple MCP servers, and plain grant strings freely:
 @Agent("researcher", model="gpt-4o", tools=[
     web_search,                          # local ToolDef
     MCPTool(server="npx",               # OpenIntent MCP
-        args=["-y", "@openintent/mcp-server"],
+        args=["-y", "@openintentai/mcp-server"],
         role="operator"),
     MCPTool(server="npx",               # filesystem MCP
         args=["-y", "@modelcontextprotocol/server-filesystem", "/data"],
@@ -729,7 +729,7 @@ make install-all      # Install everything including MCP dependencies
 make server           # Start the OpenIntent server on port 8000
 make test             # Run the full test suite
 make lint             # Run linter + formatter + type checker
-make setup-mcp        # Install MCP dependencies (Python mcp + Node @openintent/mcp-server)
+make setup-mcp        # Install MCP dependencies (Python mcp + Node @openintentai/mcp-server)
 make mcp-server       # Start the MCP server (connects to local OpenIntent server)
 make full-stack       # Start OpenIntent server + MCP server together
 make check            # Verify installation and connectivity

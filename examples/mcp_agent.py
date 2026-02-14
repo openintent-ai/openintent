@@ -5,7 +5,7 @@ OpenIntent tools through the MCP server.
 
 Prerequisites:
     pip install openintent[openai] mcp
-    npm install -g @openintent/mcp-server
+    npm install -g @openintentai/mcp-server
 
 Usage:
     # Terminal 1: Start the OpenIntent server
@@ -25,7 +25,7 @@ from openintent import Agent, MCPTool, on_assignment
     tools=[
         MCPTool(
             server="npx",
-            args=["-y", "@openintent/mcp-server"],
+            args=["-y", "@openintentai/mcp-server"],
             role="operator",
             env={"OPENINTENT_SERVER_URL": "http://localhost:8000"},
         ),

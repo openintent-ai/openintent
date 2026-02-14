@@ -14,7 +14,7 @@ MCP handles the last mile — connecting an LLM to tools and data sources over a
 
 ### MCP Server: Exposing OpenIntent to LLMs
 
-The `@openintent/mcp-server` package runs as a stdio-based MCP server. An MCP client connects to it and gains access to OpenIntent tools (create intents, patch state, send messages) and resources (read intent state, event logs, channel messages).
+The `@openintentai/mcp-server` package runs as a stdio-based MCP server. An MCP client connects to it and gains access to OpenIntent tools (create intents, patch state, send messages) and resources (read intent state, event logs, channel messages).
 
 ```
 ┌─────────────────────────────────────────┐
@@ -24,7 +24,7 @@ The `@openintent/mcp-server` package runs as a stdio-based MCP server. An MCP cl
                │ MCP Protocol (JSON-RPC)
 ┌──────────────▼──────────────────────────┐
 │  OpenIntent MCP Server                  │
-│  @openintent/mcp-server                 │
+│  @openintentai/mcp-server                 │
 │                                         │
 │  Security:     Tools:     Resources:    │
 │  - Role RBAC   - Intents  - State      │
@@ -73,7 +73,7 @@ from openintent import Agent, MCPTool, on_assignment
 @Agent("analyst", model="gpt-4o", tools=[
     MCPTool(
         server="npx",
-        args=["-y", "@openintent/mcp-server"],
+        args=["-y", "@openintentai/mcp-server"],
         role="operator",
         allowed_tools=["get_intent", "list_intents", "set_status"],
         env={"OPENINTENT_SERVER_URL": "http://localhost:8000"},
@@ -89,7 +89,7 @@ class Analyst:
 
 ```python
 @Agent("watcher", model="gpt-4o", tools=[
-    "mcp://npx/-y/@openintent/mcp-server?role=reader",
+    "mcp://npx/-y/@openintentai/mcp-server?role=reader",
 ])
 class Watcher:
     @on_assignment
@@ -104,7 +104,7 @@ class Watcher:
     web_search,  # local ToolDef
     MCPTool(
         server="npx",
-        args=["-y", "@openintent/mcp-server"],
+        args=["-y", "@openintentai/mcp-server"],
         role="operator",
     ),
     MCPTool(
@@ -120,7 +120,7 @@ class Researcher:
 ```
 
 !!! info "RBAC role determines tool visibility"
-    The `role` field on `MCPTool` maps directly to the RBAC system. When connecting to `@openintent/mcp-server`, the server filters its tool listing based on the role: `reader` sees 4 read-only tools, `operator` sees 10 read+write tools, `admin` sees all 16 tools. The `allowed_tools` field further restricts within the role's permissions — both gates must pass.
+    The `role` field on `MCPTool` maps directly to the RBAC system. When connecting to `@openintentai/mcp-server`, the server filters its tool listing based on the role: `reader` sees 4 read-only tools, `operator` sees 10 read+write tools, `admin` sees all 16 tools. The `allowed_tools` field further restricts within the role's permissions — both gates must pass.
 
 !!! warning "Least-privilege by design"
     `MCPTool.role` defaults to `"reader"` — the most restrictive level. Each agent should declare exactly the minimum role it needs. In multi-agent topologies, each agent's MCP server runs as an isolated child process with its own explicit role, so one agent's privilege never leaks to another. Do **not** set `OPENINTENT_MCP_ROLE` as a global environment variable in multi-agent setups — declare the role per-agent on each `MCPTool` instead.
@@ -162,7 +162,7 @@ For lower-level control, the Python SDK includes `MCPBridge`, which connects Ope
 ### 1. Install the MCP Server
 
 ```bash
-npm install -g @openintent/mcp-server
+npm install -g @openintentai/mcp-server
 ```
 
 ### 2. Configure Claude Desktop
@@ -182,7 +182,7 @@ Add the server to your Claude Desktop configuration file:
   "mcpServers": {
     "openintent": {
       "command": "npx",
-      "args": ["-y", "@openintent/mcp-server"],
+      "args": ["-y", "@openintentai/mcp-server"],
       "env": {
         "OPENINTENT_SERVER_URL": "http://localhost:8000",
         "OPENINTENT_API_KEY": "your-api-key",
@@ -380,7 +380,7 @@ Tools that fail either gate are **hidden from the tool listing**. The MCP client
       "mcpServers": {
         "openintent": {
           "command": "npx",
-          "args": ["-y", "@openintent/mcp-server"],
+          "args": ["-y", "@openintentai/mcp-server"],
           "env": {
             "OPENINTENT_SERVER_URL": "https://openintent.example.com",
             "OPENINTENT_API_KEY": "your-api-key",

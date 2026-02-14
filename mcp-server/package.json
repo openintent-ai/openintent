@@ -1,16 +1,47 @@
 {
-  "name": "@openintent/mcp-server",
-  "version": "0.12.0",
-  "description": "MCP server for the OpenIntent Coordination Protocol",
+  "name": "@openintentai/mcp-server",
+  "version": "0.13.2",
+  "description": "MCP server exposing the OpenIntent Coordination Protocol as MCP tools and resources",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
     "openintent-mcp": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "openintent-mcp.config.json",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "openintent",
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "coordination",
+    "llm",
+    "tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openintent-ai/openintent.git",
+    "directory": "reference-implementation/mcp-server"
+  },
+  "homepage": "https://openintent.wintermute.wiki",
+  "bugs": {
+    "url": "https://github.com/openintent-ai/openintent/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"

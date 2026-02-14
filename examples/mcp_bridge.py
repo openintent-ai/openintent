@@ -94,7 +94,7 @@ async def multi_server_bridge():
     openintent_config = MCPServerConfig(
         name="openintent-remote",
         command="npx",
-        args=["-y", "@openintent/mcp-server"],
+        args=["-y", "@openintentai/mcp-server"],
         env={
             "OPENINTENT_SERVER_URL": "http://localhost:8000",
             "OPENINTENT_API_KEY": "${OPENINTENT_API_KEY}",
