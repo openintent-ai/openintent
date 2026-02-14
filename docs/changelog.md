@@ -5,6 +5,23 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.1] - 2026-02-14
+
+### Added
+
+- **OpenAI Codex Model Support** — Automatic routing for codex-family models (`gpt-5.2-codex`, `o3-codex`, etc.) that use the `/v1/completions` endpoint instead of `/v1/chat/completions`.
+  - New `codex_utils` module with `is_codex_model()`, `messages_to_prompt()`, and `chat_kwargs_to_completions_kwargs()` helpers.
+  - `OpenAICompletions` wrapper class for completions-API responses (maps `choices[0].text` to the standard content interface).
+  - LLM engine routing updated in `_call_llm`, `_stream_llm`, and raw provider paths to auto-detect and redirect codex models.
+
+### Fixed
+
+- **Anthropic Streaming Usage Reliability** — Fixed two bugs causing token usage data (input/output token counts) to be silently lost during streaming:
+  - Wrapped event consumption loop in `try/finally` so usage is saved even when the stream consumer exits early (`GeneratorExit`).
+  - Added `_resolve_usage()` fallback that calls the SDK's `get_final_message()` when event parsing misses usage data, ensuring accurate cost tracking for all Anthropic models including those with extended thinking.
+
+---
+
 ## [0.13.0] - 2026-02-14
 
 ### Added
