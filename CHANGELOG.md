@@ -5,6 +5,29 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.5] - 2026-02-14
+
+### Added
+
+- **MCP Governance Tool Surface Complete** — 4 governance enforcement tools now fully wired in the MCP server TypeScript implementation:
+  - `set_governance_policy` — Set or update governance policy on an intent (admin tier, uses `If-Match` for optimistic concurrency).
+  - `get_governance_policy` — Retrieve effective governance policy for an intent (reader tier).
+  - `approve_approval` — Approve a pending approval gate (admin tier).
+  - `deny_approval` — Deny a pending approval gate with optional reason (admin tier).
+- **Full MCP Implementation Chain** — Tool definitions, client methods, handler cases, and RBAC tier assignments all in sync for the complete 62-tool surface.
+
+### Fixed
+
+- **MCP Startup Tool Count** — Fixed tool count mismatch where RBAC security tiers listed 62 tools but only 58 tool definitions existed. Startup log now correctly reports `tools=62/62` for admin role.
+- **RBAC Tier Correction** — `operator` role count corrected from 37 to 38 across changelog entries and documentation.
+
+### Changed
+
+- Version bumped to 0.13.5 (v0.13.3 and v0.13.4 were npm publish patch releases for the `@openintentai/mcp-server` package).
+- All version references updated across Python SDK, MCP server package, and documentation.
+
+---
+
 ## [0.13.2] - 2026-02-14
 
 ### Changed

@@ -640,6 +640,97 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     tier: "read" as ToolTier,
   },
 
+  // ── Governance Policy Enforcement (RFC-0013) ─────────────────────
+  {
+    name: "openintent_set_governance_policy",
+    description:
+      "Set or update the governance policy on an intent. Governance policies " +
+      "control completion mode (auto/require_approval/quorum), write scope, " +
+      "cost ceilings, allowed agents, and quorum thresholds. Requires If-Match " +
+      "for optimistic concurrency.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        intent_id: { type: "string", description: "The intent to set the governance policy on" },
+        version: { type: "number", description: "Current version of the intent (for If-Match)" },
+        policy: {
+          type: "object",
+          description: "Governance policy configuration",
+          properties: {
+            completion_mode: {
+              type: "string",
+              enum: ["auto", "require_approval", "quorum"],
+              description: "How intent completion is determined",
+            },
+            write_scope: {
+              type: "string",
+              enum: ["any", "assigned_only"],
+              description: "Who can write to the intent",
+            },
+            max_cost: { type: "number", description: "Maximum cost ceiling" },
+            quorum_threshold: { type: "number", description: "Quorum threshold for voting" },
+            allowed_agents: {
+              type: "array",
+              items: { type: "string" },
+              description: "List of agent IDs allowed to participate",
+            },
+            require_status_reason: { type: "boolean", description: "Require reason for status changes" },
+          },
+          additionalProperties: true,
+        },
+      },
+      required: ["intent_id", "version", "policy"],
+    },
+    tier: "admin" as ToolTier,
+  },
+  {
+    name: "openintent_get_governance_policy",
+    description:
+      "Retrieve the effective governance policy for an intent. Returns the " +
+      "policy configuration including completion mode, write scope, cost " +
+      "ceilings, and allowed agents.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        intent_id: { type: "string", description: "The intent to query" },
+      },
+      required: ["intent_id"],
+    },
+    tier: "read" as ToolTier,
+  },
+  {
+    name: "openintent_approve_approval",
+    description:
+      "Approve a pending approval request, allowing the requesting agent to " +
+      "proceed with the action. The approval is recorded for audit.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        intent_id: { type: "string", description: "The intent the approval belongs to" },
+        approval_id: { type: "string", description: "The approval request to approve" },
+        notes: { type: "string", description: "Optional reviewer notes" },
+      },
+      required: ["intent_id", "approval_id"],
+    },
+    tier: "admin" as ToolTier,
+  },
+  {
+    name: "openintent_deny_approval",
+    description:
+      "Deny a pending approval request, preventing the requesting agent from " +
+      "proceeding. The denial and reason are recorded for audit.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        intent_id: { type: "string", description: "The intent the approval belongs to" },
+        approval_id: { type: "string", description: "The approval request to deny" },
+        reason: { type: "string", description: "Reason for denial" },
+      },
+      required: ["intent_id", "approval_id"],
+    },
+    tier: "admin" as ToolTier,
+  },
+
   // ── Portfolios (RFC-0004) ─────────────────────────────────────────
   {
     name: "openintent_create_portfolio",
@@ -1393,6 +1484,37 @@ export async function handleToolCall(
         result = await client.getApprovalStatus({
           intent_id: args.intent_id as string,
           approval_id: args.approval_id as string,
+        });
+        break;
+
+      // ── Governance Policy Enforcement (RFC-0013) ───────────────────
+      case "openintent_set_governance_policy":
+        result = await client.setGovernancePolicy({
+          intent_id: args.intent_id as string,
+          version: args.version as number,
+          policy: args.policy as Record<string, unknown>,
+        });
+        break;
+
+      case "openintent_get_governance_policy":
+        result = await client.getGovernancePolicy({
+          intent_id: args.intent_id as string,
+        });
+        break;
+
+      case "openintent_approve_approval":
+        result = await client.approveApproval({
+          intent_id: args.intent_id as string,
+          approval_id: args.approval_id as string,
+          notes: args.notes as string | undefined,
+        });
+        break;
+
+      case "openintent_deny_approval":
+        result = await client.denyApproval({
+          intent_id: args.intent_id as string,
+          approval_id: args.approval_id as string,
+          reason: args.reason as string | undefined,
         });
         break;
 

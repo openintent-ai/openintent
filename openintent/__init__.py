@@ -203,7 +203,7 @@ def get_server() -> tuple[Any, Any, Any]:
         )
 
 
-__version__ = "0.13.2"
+__version__ = "0.13.5"
 __all__ = [
     "OpenIntentClient",
     "AsyncOpenIntentClient",

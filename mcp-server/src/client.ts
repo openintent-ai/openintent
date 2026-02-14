@@ -497,6 +497,46 @@ export class OpenIntentClient {
     return this.request("GET", `/api/v1/intents/${params.intent_id}/approvals/${params.approval_id}`);
   }
 
+  // ── Governance Policy Enforcement (RFC-0013) ─────────────────────
+
+  async setGovernancePolicy(params: {
+    intent_id: string;
+    version: number;
+    policy: Record<string, unknown>;
+  }): Promise<unknown> {
+    return this.request("PUT", `/api/v1/intents/${params.intent_id}/governance`, params.policy, {
+      "If-Match": String(params.version),
+    });
+  }
+
+  async getGovernancePolicy(params: {
+    intent_id: string;
+  }): Promise<unknown> {
+    return this.request("GET", `/api/v1/intents/${params.intent_id}/governance`);
+  }
+
+  async approveApproval(params: {
+    intent_id: string;
+    approval_id: string;
+    notes?: string;
+  }): Promise<unknown> {
+    return this.request("POST", `/api/v1/intents/${params.intent_id}/approvals/${params.approval_id}/approve`, {
+      notes: params.notes,
+      approved_by: this.config.server.agent_id,
+    });
+  }
+
+  async denyApproval(params: {
+    intent_id: string;
+    approval_id: string;
+    reason?: string;
+  }): Promise<unknown> {
+    return this.request("POST", `/api/v1/intents/${params.intent_id}/approvals/${params.approval_id}/deny`, {
+      reason: params.reason,
+      denied_by: this.config.server.agent_id,
+    });
+  }
+
   // ── Portfolios (RFC-0004) ─────────────────────────────────────────
 
   async createPortfolio(params: {
