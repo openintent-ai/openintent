@@ -53,7 +53,7 @@ jobs:
     environment: npm
     defaults:
       run:
-        working-directory: reference-implementation/mcp-server
+        working-directory: mcp-server
     steps:
       - uses: actions/checkout@v4
 
