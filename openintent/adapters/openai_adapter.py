@@ -52,7 +52,7 @@ import time
 from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from openintent.adapters.base import AdapterConfig, BaseAdapter
-from openintent.adapters.codex_utils import is_codex_model, messages_to_prompt
+from openintent.adapters.codex_utils import is_codex_model
 
 if TYPE_CHECKING:
     from openintent import OpenIntentClient
