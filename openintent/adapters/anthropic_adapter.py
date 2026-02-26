@@ -318,22 +318,33 @@ class AnthropicStreamContext:
         return self._wrapper
 
     def _resolve_usage(self) -> None:
-        """Ensure usage data is populated, falling back to get_final_message.
+        """Ensure usage data is populated from the most authoritative source.
 
-        If ``_consume_events`` captured usage from streaming events, this
-        is a no-op.  Otherwise it calls the SDK's ``get_final_message()``
-        which always carries authoritative usage — even for models that
-        report usage in non-standard event positions (e.g. extended
-        thinking models like opus-4).
+        Always attempts ``get_final_message()`` on the underlying Anthropic
+        ``MessageStream`` which returns the SDK-accumulated message with
+        authoritative usage data — even for models with extended thinking
+        or non-standard event ordering (e.g. opus-4).
+
+        Falls back to whatever ``_consume_events`` captured via its
+        ``try/finally`` block if ``get_final_message()`` fails (e.g.
+        the stream was only partially consumed before early exit).
+
+        Previous versions short-circuited when ``_usage`` was already set
+        by ``_consume_events``, but that could leave ``output_tokens`` at
+        zero when the generator exited before the ``message_delta`` event
+        arrived.
         """
-        if self._usage is not None:
-            return
-
         if not self._wrapper:
             return
 
         try:
-            self._wrapper.get_final_message()
+            msg = self._wrapper._stream.get_final_message()
+            usage = getattr(msg, "usage", None)
+            if usage:
+                self._usage = {
+                    "input_tokens": getattr(usage, "input_tokens", 0),
+                    "output_tokens": getattr(usage, "output_tokens", 0),
+                }
         except Exception:
             pass
 

@@ -1186,6 +1186,8 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 "/rfc/0009",
                 "/rfc/0010",
                 "/rfc/0011",
+                "/rfc/0022",
+                "/rfc/0023",
             ],
             "capabilities": [
                 "intents",
@@ -1203,6 +1205,7 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 "governance-enforcement",
                 "access-control",
                 "tools",
+                "federation",
             ],
             "openApiUrl": "/openapi.json",
         }
@@ -1222,6 +1225,8 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 "RFC-0009": "full",
                 "RFC-0010": "full",
                 "RFC-0011": "full",
+                "RFC-0022": "full",
+                "RFC-0023": "partial",
             },
             "features": {
                 "intents": True,
@@ -4795,6 +4800,13 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                     m["read_at"] = datetime.utcnow()
                 return m
         raise HTTPException(status_code=404, detail="Message not found")
+
+    # ==================== Federation (RFC-0022 & RFC-0023) ====================
+
+    from .federation import create_federation_router
+
+    federation_router = create_federation_router(validate_api_key=validate_api_key)
+    app.include_router(federation_router)
 
     return app
 

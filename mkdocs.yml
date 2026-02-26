@@ -1,5 +1,5 @@
 site_name: OpenIntent SDK
-site_description: "The Python SDK for structured multi-agent coordination. 21 RFCs. Decorator-first agents. Built-in server. MCP integration."
+site_description: "The Python SDK for structured multi-agent coordination. 23 RFCs. Decorator-first agents. Built-in server. Federation. MCP integration."
 site_url: https://openintent-ai.github.io/openintent/
 repo_url: https://github.com/openintent-ai/openintent
 repo_name: openintent-ai/openintent
@@ -127,6 +127,7 @@ nav:
     - Verifiable Event Logs: guide/verifiable-logs.md
     - Distributed Tracing: guide/distributed-tracing.md
     - Agent-to-Agent Messaging: guide/messaging.md
+    - Federation: guide/federation.md
     - MCP Integration: guide/mcp.md
     - YAML Workflows: guide/workflows.md
     - Agent Abstractions: guide/agents.md
@@ -140,6 +141,7 @@ nav:
     - Agents: api/agents.md
     - Adapters: api/adapters.md
     - Server: api/server.md
+    - Federation: api/federation.md
     - Exceptions: api/exceptions.md
   - Specification:
     - Workflow YAML: spec/workflow-yaml.md
@@ -165,6 +167,8 @@ nav:
     - "0019 \u2014 Verifiable Event Logs": rfcs/0019-verifiable-event-logs.md
     - "0020 \u2014 Distributed Tracing": rfcs/0020-distributed-tracing.md
     - "0021 \u2014 Agent-to-Agent Messaging": rfcs/0021-agent-to-agent-messaging.md
+    - "0022 \u2014 Federation Protocol": rfcs/0022-federation-protocol.md
+    - "0023 \u2014 Federation Security": rfcs/0023-federation-security.md
   - Changelog: changelog.md
   - Examples:
     - Multi-Agent Workflow: examples/multi-agent.md
@@ -188,6 +192,7 @@ nav:
     - YAML Workflows: examples/yaml-workflows.md
     - Agent-to-Agent Messaging: examples/messaging.md
     - MCP Integration: examples/mcp.md
+    - Federation: examples/federation.md
     - Server & Deployment: examples/server-deployment.md
     - Portfolios: examples/portfolios.md
 
@@ -199,10 +204,10 @@ extra:
       link: https://pypi.org/project/openintent/
   version:
     provider: mike
-  announcement: "<strong>v0.13.0</strong> is here &mdash; Server-enforced governance, approval gates, SSE-driven resume, and complete RFC 0001&ndash;0021 coverage. <a href='changelog/'>Read the changelog &rarr;</a>"
+  announcement: "<strong>v0.14.0</strong> is here &mdash; Federation protocol (RFC-0022), federation security (RFC-0023), and complete RFC 0001&ndash;0023 coverage. <a href='changelog/'>Read the changelog &rarr;</a>"
   meta:
     - name: description
-      content: "OpenIntent Python SDK — structured multi-agent coordination protocol with decorator-first agents, 21 RFCs, 7 LLM adapters, MCP integration, and built-in FastAPI server."
+      content: "OpenIntent Python SDK — structured multi-agent coordination protocol with decorator-first agents, 23 RFCs, 7 LLM adapters, federation, MCP integration, and built-in FastAPI server."
     - name: og:title
       content: "OpenIntent SDK — Multi-Agent Coordination Protocol"
     - name: og:description
@@ -216,7 +221,7 @@ extra:
     - name: twitter:title
       content: "OpenIntent SDK"
     - name: twitter:description
-      content: "The Python SDK for structured multi-agent coordination. 21 RFCs. Decorator-first agents. MCP integration. Built-in server."
+      content: "The Python SDK for structured multi-agent coordination. 23 RFCs. Decorator-first agents. Federation. MCP integration. Built-in server."
 
 extra_css:
   - stylesheets/extra.css

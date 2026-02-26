@@ -24,7 +24,7 @@
 
   <!-- Hero -->
   <div class="oi-hero">
-    <div class="oi-hero__badge">v0.13.0 &mdash; Server-Enforced Governance, Approval Gates &amp; SSE Resume</div>
+    <div class="oi-hero__badge">v0.14.0 &mdash; Federation Protocol, Security &amp; Python SDK Implementation</div>
     <h1 class="oi-hero__title">Stop Duct-Taping Your Agents Together</h1>
     <p class="oi-hero__subtitle">
       OpenIntent is a durable, auditable protocol for multi-agent coordination. Structured intents replace fragile chat chains. Versioned state replaces guesswork. Ship agent systems that actually work in production.
@@ -38,7 +38,7 @@
   <!-- Stats -->
   <div class="oi-stats">
     <div class="oi-stat">
-      <div class="oi-stat__number">21</div>
+      <div class="oi-stat__number">23</div>
       <div class="oi-stat__label">RFCs</div>
     </div>
     <div class="oi-stat">
@@ -46,11 +46,11 @@
       <div class="oi-stat__label">LLM Adapters</div>
     </div>
     <div class="oi-stat">
-      <div class="oi-stat__number">720+</div>
+      <div class="oi-stat__number">800+</div>
       <div class="oi-stat__label">Tests</div>
     </div>
     <div class="oi-stat">
-      <div class="oi-stat__number">v0.13.0</div>
+      <div class="oi-stat__number">v0.14.0</div>
       <div class="oi-stat__label">Latest</div>
     </div>
   </div>
@@ -97,8 +97,20 @@
       <div class="oi-feature">
         <div class="oi-feature__icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></div>
         <div class="oi-feature__title">Built-in Server</div>
-        <p class="oi-feature__desc">FastAPI server implementing all 21 RFCs. SQLite or PostgreSQL. One command to start.</p>
+        <p class="oi-feature__desc">FastAPI server implementing all 23 RFCs. SQLite or PostgreSQL. One command to start.</p>
         <a href="guide/server/" class="oi-feature__link">Learn more</a>
+      </div>
+      <div class="oi-feature">
+        <div class="oi-feature__icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+        <div class="oi-feature__title">Federation</div>
+        <p class="oi-feature__desc">Cross-server agent dispatch with signed envelopes, UCAN delegation, and trust policies.</p>
+        <a href="guide/federation/" class="oi-feature__link">Learn more</a>
+      </div>
+      <div class="oi-feature">
+        <div class="oi-feature__icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <div class="oi-feature__title">Federation Security</div>
+        <p class="oi-feature__desc">Ed25519 server identity, HTTP Message Signatures, UCAN tokens, and trust enforcement.</p>
+        <a href="guide/federation/#envelope-signing-rfc-0023" class="oi-feature__link">Learn more</a>
       </div>
     </div>
 
@@ -288,7 +300,7 @@ workflow:
     <!-- RFC Coverage -->
     <div class="oi-quickstart" style="margin-top: 0;">
       <h2 class="oi-quickstart__title">Complete RFC Coverage</h2>
-      <p class="oi-quickstart__subtitle">21 RFCs implemented. From intents to agent-to-agent messaging, every primitive you need.</p>
+      <p class="oi-quickstart__subtitle">23 RFCs implemented. From intents to cross-server federation, every primitive you need.</p>
       <div class="md-typeset">
         <table>
           <thead>
@@ -316,6 +328,8 @@ workflow:
             <tr><td>0019</td><td>Verifiable Event Logs</td><td><span class="oi-pill oi-pill--proposed">Proposed</span></td></tr>
             <tr><td>0020</td><td>Distributed Tracing</td><td><span class="oi-pill oi-pill--proposed">Proposed</span></td></tr>
             <tr><td>0021</td><td>Agent-to-Agent Messaging</td><td><span class="oi-pill oi-pill--proposed">Proposed</span></td></tr>
+            <tr><td>0022</td><td>Federation Protocol</td><td><span class="oi-pill oi-pill--proposed">Proposed</span></td></tr>
+            <tr><td>0023</td><td>Federation Security</td><td><span class="oi-pill oi-pill--proposed">Proposed</span></td></tr>
           </tbody>
         </table>
       </div>

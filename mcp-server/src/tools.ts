@@ -36,9 +36,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         title: { type: "string", description: "Human-readable title for the intent" },
         description: { type: "string", description: "Detailed description of the goal" },
         constraints: {
-          type: "array",
-          items: { type: "string" },
-          description: "Optional constraints or rules the intent must satisfy",
+          type: "object",
+          description: "Optional constraints object the intent must satisfy (e.g. { rules: [...], deadline: '...' })",
+          additionalProperties: true,
         },
         initial_state: {
           type: "object",
@@ -1002,6 +1002,92 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     tier: "admin" as ToolTier,
   },
 
+  // ── Agent Registration (RFC-0016) ────────────────────────────────
+  {
+    name: "openintent_register_agent",
+    description:
+      "Register an agent on the protocol server with capabilities and metadata. " +
+      "If the agent_id already exists, the registration is updated.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent_id: { type: "string", description: "Unique identifier for the agent" },
+        name: { type: "string", description: "Human-readable agent name" },
+        role_id: { type: "string", description: "Role identifier (e.g. researcher, summarizer)" },
+        capabilities: {
+          type: "array",
+          items: { type: "string" },
+          description: "List of capability strings the agent advertises",
+        },
+        endpoint: { type: "string", description: "Optional callback endpoint URL" },
+        drain_timeout_seconds: { type: "integer", description: "Graceful shutdown timeout in seconds" },
+      },
+      required: ["agent_id"],
+    },
+    tier: "write" as ToolTier,
+  },
+  {
+    name: "openintent_get_agent_record",
+    description:
+      "Retrieve the registration record for a specific agent by ID.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent_id: { type: "string", description: "The agent to look up" },
+      },
+      required: ["agent_id"],
+    },
+    tier: "read" as ToolTier,
+  },
+  {
+    name: "openintent_list_registered_agents",
+    description:
+      "List all registered agents, optionally filtered by status or role.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["active", "idle", "draining", "offline"], description: "Filter by agent status" },
+        role_id: { type: "string", description: "Filter by role identifier" },
+      },
+    },
+    tier: "read" as ToolTier,
+  },
+  {
+    name: "openintent_agent_heartbeat",
+    description:
+      "Send a heartbeat for a registered agent, updating its last-seen timestamp and optionally its status and load.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent_id: { type: "string", description: "The agent sending the heartbeat" },
+        status: { type: "string", description: "Current agent status" },
+        current_load: { type: "integer", description: "Current workload count" },
+      },
+      required: ["agent_id"],
+    },
+    tier: "write" as ToolTier,
+  },
+
+  {
+    name: "openintent_update_agent_status",
+    description:
+      "Update the lifecycle status of a registered agent (RFC-0016). " +
+      "Distinct from openintent_set_agent_status which is coordinator-level.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent_id: { type: "string", description: "The agent to update" },
+        status: {
+          type: "string",
+          enum: ["active", "idle", "draining", "offline"],
+          description: "New lifecycle status",
+        },
+      },
+      required: ["agent_id", "status"],
+    },
+    tier: "write" as ToolTier,
+  },
+
   // ── Triggers (RFC-0017) ───────────────────────────────────────────
   {
     name: "openintent_create_trigger",
@@ -1224,6 +1310,67 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
     tier: "write" as ToolTier,
   },
+
+  // ── Federation (RFC-0022) ───────────────────────────────────────────
+  {
+    name: "openintent_federation_status",
+    description:
+      "Get the federation status of this server, including how many agents " +
+      "are federated (registered from remote servers) and their details.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+    tier: "read" as ToolTier,
+  },
+  {
+    name: "openintent_list_federated_agents",
+    description:
+      "List all federated agents — agents that were registered from a remote " +
+      "server and have an origin_server_url indicating where they actually execute.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+    tier: "read" as ToolTier,
+  },
+  {
+    name: "openintent_federation_dispatch",
+    description:
+      "Dispatch an intent to a federated agent's origin server. The intent is " +
+      "forwarded to the remote server where the agent actually executes. The remote " +
+      "server creates a local copy of the intent and assigns the agent to it. " +
+      "A federation_dispatched event is logged for audit.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        intent_id: { type: "string", description: "ID of the intent to dispatch" },
+        agent_id: { type: "string", description: "ID of the federated agent" },
+        trace_id: { type: "string", description: "Optional trace ID for distributed tracing (RFC-0020)" },
+      },
+      required: ["intent_id", "agent_id"],
+    },
+    tier: "admin" as ToolTier,
+  },
+  {
+    name: "openintent_federation_receive",
+    description:
+      "Receive a dispatched intent from a remote server. Creates a local intent " +
+      "copy, assigns the specified agent, and logs a federation_received event. " +
+      "This endpoint is called by remote servers during federation dispatch.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dispatch_id: { type: "string", description: "Unique dispatch identifier from the sending server" },
+        intent: { type: "object", description: "Intent payload to create locally" },
+        agent_id: { type: "string", description: "Agent ID to assign on this server" },
+        source_server: { type: "string", description: "Hostname of the dispatching server" },
+        trace_id: { type: "string", description: "Optional trace ID for distributed tracing" },
+      },
+      required: ["dispatch_id", "intent", "agent_id"],
+    },
+    tier: "admin" as ToolTier,
+  },
 ];
 
 /**
@@ -1249,7 +1396,7 @@ export async function handleToolCall(
         result = await client.createIntent({
           title: args.title as string,
           description: args.description as string | undefined,
-          constraints: args.constraints as string[] | undefined,
+          constraints: args.constraints as Record<string, unknown> | undefined,
           initial_state: args.initial_state as Record<string, unknown> | undefined,
         });
         break;
@@ -1636,6 +1783,46 @@ export async function handleToolCall(
         });
         break;
 
+      // ── Agent Registration (RFC-0016) ────────────────────────────
+      case "openintent_register_agent":
+        result = await client.registerAgent({
+          agent_id: args.agent_id as string,
+          name: args.name as string | undefined,
+          role_id: args.role_id as string | undefined,
+          capabilities: args.capabilities as string[] | undefined,
+          endpoint: args.endpoint as string | undefined,
+          drain_timeout_seconds: args.drain_timeout_seconds as number | undefined,
+        });
+        break;
+
+      case "openintent_get_agent_record":
+        result = await client.getAgentRecord({
+          agent_id: args.agent_id as string,
+        });
+        break;
+
+      case "openintent_list_registered_agents":
+        result = await client.listAgents({
+          status: args.status as string | undefined,
+          role_id: args.role_id as string | undefined,
+        });
+        break;
+
+      case "openintent_agent_heartbeat":
+        result = await client.agentHeartbeat({
+          agent_id: args.agent_id as string,
+          status: args.status as string | undefined,
+          current_load: args.current_load as number | undefined,
+        });
+        break;
+
+      case "openintent_update_agent_status":
+        result = await client.updateAgentStatus({
+          agent_id: args.agent_id as string,
+          status: args.status as string,
+        });
+        break;
+
       // ── Triggers (RFC-0017) ───────────────────────────────────────
       case "openintent_create_trigger":
         result = await client.createTrigger({
@@ -1729,6 +1916,32 @@ export async function handleToolCall(
         result = await client.linkSpans({
           trace_id: args.trace_id as string,
           spans: args.spans as Array<{ span_id: string; parent_span_id?: string; operation: string; status?: string }>,
+        });
+        break;
+
+      case "openintent_federation_status":
+        result = await client.getFederationStatus();
+        break;
+
+      case "openintent_list_federated_agents":
+        result = await client.listFederatedAgents();
+        break;
+
+      case "openintent_federation_dispatch":
+        result = await client.federationDispatch({
+          intent_id: args.intent_id as string,
+          agent_id: args.agent_id as string,
+          trace_id: args.trace_id as string | undefined,
+        });
+        break;
+
+      case "openintent_federation_receive":
+        result = await client.federationReceive({
+          dispatch_id: args.dispatch_id as string,
+          intent: args.intent as Record<string, unknown>,
+          agent_id: args.agent_id as string,
+          source_server: args.source_server as string,
+          trace_id: args.trace_id as string | undefined,
         });
         break;
 

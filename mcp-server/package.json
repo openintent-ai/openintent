@@ -1,6 +1,6 @@
 {
   "name": "@openintentai/mcp-server",
-  "version": "0.13.5",
+  "version": "0.14.0",
   "description": "MCP server exposing the OpenIntent Coordination Protocol as MCP tools and resources",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

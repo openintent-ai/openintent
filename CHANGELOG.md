@@ -5,6 +5,46 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-02-25
+
+### Added
+
+- **RFC-0022: Federation Protocol** — Complete federation contract specification for cross-server agent coordination. Defines: federation envelope format, agent visibility (public/unlisted/private), peer relationships (peer/upstream/downstream), callbacks with at-least-once delivery, intent authority model, delegation scope with UCAN-style attenuation, governance propagation (strictest-wins), federation attestation (OpenTelemetry conventions), discovery via `/.well-known/openintent-federation.json`, federation-aware leasing, and transport bindings (HTTP REST primary, NATS/gRPC alternatives).
+- **RFC-0023: Federation Security** — Authentication, authorization, and verification layer for federation. Defines: server identity via did:web, signed envelopes (HTTP Message Signatures, RFC 9421), delegation tokens (UCAN with attenuation), trust policies (open/allowlist/trustless), agent access policies, signed attestations, and cross-server event log reconciliation via RFC-0019 Merkle primitives.
+- **Python SDK Federation Implementation (RFC-0022 & RFC-0023)** — Full 5-layer federation support:
+  - **Layer 1 — Models** (`openintent/federation/models.py`): `FederationEnvelope`, `FederationCallback`, `FederationPolicy`, `FederationAttestation`, `DelegationScope`, `FederationManifest`, `FederationStatus`, `DispatchResult`, `ReceiveResult`, `FederatedAgent`, `PeerInfo`. Enums: `AgentVisibility`, `PeerRelationship`, `TrustPolicy`, `CallbackEventType`, `DispatchStatus`. All with `to_dict()`/`from_dict()` serialization.
+  - **Layer 2 — Client methods** (`openintent/client.py`): `federation_status()`, `list_federated_agents()`, `federation_dispatch()`, `federation_receive()`, `send_federation_callback()`, `federation_discover()`. Both sync (`OpenIntentClient`) and async (`AsyncOpenIntentClient`) variants.
+  - **Layer 3 — Server endpoints** (`openintent/server/federation.py`): FastAPI router with `GET /api/v1/federation/status`, `GET /api/v1/federation/agents`, `POST /api/v1/federation/dispatch`, `POST /api/v1/federation/receive`, `GET /.well-known/openintent-federation.json`, `GET /.well-known/did.json`. SSRF validation on outbound URLs, callback delivery with retry, governance enforcement, idempotency key handling.
+  - **Layer 4 — Security** (`openintent/federation/security.py`): `ServerIdentity` (Ed25519 key pairs, did:web identifiers, DID document generation), `sign_envelope()`/`verify_envelope_signature()`, `MessageSignature` (RFC 9421 HTTP Message Signatures), `TrustEnforcer` (open/allowlist/trustless policy enforcement), `UCANToken` (delegation token creation, encoding, decoding, attenuation, expiry checks), `resolve_did_web()`, `validate_ssrf()`.
+  - **Layer 5 — Decorators** (`openintent/federation/decorators.py`): `@Federation` class decorator for server configuration (identity, trust_policy, peers, visibility_default). `federation_visibility` parameter on `@Agent`. `federation_policy` parameter on `@Coordinator`. Lifecycle hooks: `@on_federation_received`, `@on_federation_callback`, `@on_budget_warning`.
+- **Federation Dispatch (Express.js)** — 4 REST endpoints for cross-server intent dispatch: `GET /api/v1/federation/status`, `GET /api/v1/federation/agents`, `POST /api/v1/federation/dispatch`, `POST /api/v1/federation/receive`. Federation audit trail with dispatch IDs, provenance in `state._federation`, and RFC-0020 trace propagation.
+- **Federation MCP Tools** — 4 new MCP tools: `federation_status` (read), `list_federated_agents` (read), `federation_dispatch` (admin), `federation_receive` (admin). MCP tool surface expanded from 62 to 66 tools; RBAC counts: reader=23, operator=40, admin=66.
+- **Agent Lifecycle (RFC-0016)** — Registration with atomic upsert, heartbeat protocol, graceful drain, and status management across 5 REST endpoints.
+- **Federation event types** in `EventType` enum: `FEDERATION_DISPATCHED`, `FEDERATION_RECEIVED`, `FEDERATION_CALLBACK`, `FEDERATION_BUDGET_WARNING`, `FEDERATION_COMPLETED`, `FEDERATION_FAILED`.
+- **DelegationScope.attenuate()** — Scope narrowing per hop: intersection of permissions, union of denied operations, minimum delegation depth.
+- **FederationPolicy.compose_strictest()** — Strictest-wins governance composition: minimum for numerics, OR for booleans, merge for observability.
+- **Discovery endpoints** updated: `/.well-known/openintent.json` includes `federation` capability and RFC-0022/0023 in `rfcUrls`. `/.well-known/openintent-compat.json` includes RFC-0022 (full) and RFC-0023 (partial) compliance.
+- **Schema: `origin_server_url`** — New field on `agent_records` table marking federated agents.
+- **82 federation tests** covering models serialization, security (sign/verify, UCAN, SSRF, trust enforcement), server endpoints, decorators, and integration flows.
+
+### Fixed
+
+- **Agent Registration Race Condition** — Replaced two-step check-then-insert with atomic `INSERT ... ON CONFLICT DO UPDATE`. Version increments atomically via SQL expression.
+- **Response Field Naming** — All agent endpoints now return `metadata` (not `agent_metadata`) for consistency with the Python SDK.
+
+### Security
+
+- **SSRF Protection on Federation** — `origin_server_url` validated at registration and dispatch. Blocks private IPs, metadata endpoints, internal hostnames, and non-HTTP schemes.
+- **Federation Timeout** — 10-second timeout on remote dispatch calls. Returns 502 on failure.
+- **Loop Prevention** — Cannot dispatch to local agents or receive for federated agents.
+
+### Changed
+
+- RFC count increased from 22 to 23.
+- All version references updated to 0.14.0 across Python SDK, MCP server, and documentation.
+
+---
+
 ## [0.13.5] - 2026-02-14
 
 ### Added
@@ -18,6 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Anthropic Streaming Usage (Round 2)** — Fixed `_resolve_usage()` in the Anthropic adapter which short-circuited via `if self._usage is not None: return` when `_consume_events` captured partial usage (e.g. `input_tokens` from `message_start` but `output_tokens` stuck at 0 due to early generator exit before `message_delta`). Now always calls `get_final_message()` on the underlying Anthropic `MessageStream` as the primary authoritative source, falling back to event-captured data only if `get_final_message()` fails. Also calls the raw SDK stream directly to avoid duplicate tool-block processing.
+- **LLM Engine Streaming Usage** — Added `_last_stream_usage` to `LLMEngine` and wired usage capture into both `_iter_anthropic_stream` and `_stream_raw_provider` for Anthropic. After text iteration completes, calls `get_final_message()` on the underlying stream to populate usage data, making token counts available even when streaming without the adapter wrapper.
 - **MCP Startup Tool Count** — Fixed tool count mismatch where RBAC security tiers listed 62 tools but only 58 tool definitions existed. Startup log now correctly reports `tools=62/62` for admin role.
 - **RBAC Tier Correction** — `operator` role count corrected from 37 to 38 across changelog entries and documentation.
 

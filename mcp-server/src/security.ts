@@ -120,6 +120,12 @@ export const TOOL_TIERS: Record<string, ToolTier> = {
   openintent_get_trace:    "read",
   openintent_start_trace:  "write",
   openintent_link_spans:   "write",
+
+  // Federation (RFC-0022)
+  openintent_federation_status:    "read",
+  openintent_list_federated_agents: "read",
+  openintent_federation_dispatch:  "admin",
+  openintent_federation_receive:   "admin",
 };
 
 const TIER_ORDER: ToolTier[] = ["read", "write", "admin"];

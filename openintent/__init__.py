@@ -47,6 +47,36 @@ from .exceptions import (
     OpenIntentError,
     ValidationError,
 )
+from .federation import (
+    AgentVisibility,
+    CallbackEventType,
+    DelegationScope,
+    DispatchResult,
+    DispatchStatus,
+    FederatedAgent,
+    Federation,
+    FederationAttestation,
+    FederationCallback,
+    FederationEnvelope,
+    FederationManifest,
+    FederationPolicy,
+    FederationStatus,
+    MessageSignature,
+    PeerRelationship,
+    ReceiveResult,
+    ServerIdentity,
+    TrustEnforcer,
+    TrustPolicy,
+    UCANToken,
+    on_budget_warning,
+    on_federation_callback,
+    on_federation_received,
+    resolve_did_web,
+    sign_envelope,
+    validate_ssrf,
+    verify_envelope_signature,
+)
+from .federation.models import PeerInfo as FederationPeerInfo
 from .llm import LLMConfig, LLMEngine, Tool, ToolDef, define_tool, tool
 from .mcp import MCPTool, parse_mcp_uri
 from .models import (
@@ -203,7 +233,7 @@ def get_server() -> tuple[Any, Any, Any]:
         )
 
 
-__version__ = "0.13.5"
+__version__ = "0.14.0"
 __all__ = [
     "OpenIntentClient",
     "AsyncOpenIntentClient",
@@ -368,4 +398,33 @@ __all__ = [
     "tool",
     "MCPTool",
     "parse_mcp_uri",
+    # Federation (RFC-0022 & RFC-0023)
+    "AgentVisibility",
+    "CallbackEventType",
+    "DelegationScope",
+    "DispatchResult",
+    "DispatchStatus",
+    "FederatedAgent",
+    "Federation",
+    "FederationAttestation",
+    "FederationCallback",
+    "FederationEnvelope",
+    "FederationManifest",
+    "FederationPeerInfo",
+    "FederationPolicy",
+    "FederationStatus",
+    "MessageSignature",
+    "PeerRelationship",
+    "ReceiveResult",
+    "ServerIdentity",
+    "TrustEnforcer",
+    "TrustPolicy",
+    "UCANToken",
+    "on_budget_warning",
+    "on_federation_callback",
+    "on_federation_received",
+    "resolve_did_web",
+    "sign_envelope",
+    "validate_ssrf",
+    "verify_envelope_signature",
 ]

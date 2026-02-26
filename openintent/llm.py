@@ -690,6 +690,7 @@ class LLMEngine:
         self._config = llm_config
         self._conversation_history: list[dict] = []
         self._provider = llm_config.provider or _resolve_provider(llm_config.model)
+        self._last_stream_usage: Optional[dict[str, int]] = None
 
     @property
     def _is_coordinator(self) -> bool:
@@ -1225,6 +1226,16 @@ class LLMEngine:
                 with client.messages.stream(**call_kwargs) as stream:
                     for text in stream.text_stream:
                         yield text
+                    try:
+                        msg = stream.get_final_message()
+                        usage = getattr(msg, "usage", None)
+                        if usage:
+                            self._last_stream_usage = {
+                                "input_tokens": getattr(usage, "input_tokens", 0),
+                                "output_tokens": getattr(usage, "output_tokens", 0),
+                            }
+                    except Exception:
+                        pass
             except ImportError:
                 raise ImportError("anthropic package required.")
 
@@ -1261,7 +1272,13 @@ class LLMEngine:
                         yield text
 
     async def _iter_anthropic_stream(self, stream: Any) -> AsyncIterator[str]:
-        """Iterate an Anthropic-style stream yielding tokens."""
+        """Iterate an Anthropic-style stream yielding tokens.
+
+        After text iteration completes, attempts to capture usage data
+        via ``get_final_message()`` on the underlying stream.  This
+        works for both direct Anthropic ``MessageStream`` objects and
+        the adapter's ``AnthropicStreamContext`` wrapper.
+        """
         if hasattr(stream, "__enter__"):
             with stream as s:
                 if hasattr(s, "text_stream"):
@@ -1275,11 +1292,34 @@ class LLMEngine:
                         ):
                             if hasattr(event, "delta") and hasattr(event.delta, "text"):
                                 yield event.delta.text
+                try:
+                    final_stream = getattr(s, "_stream", s)
+                    if hasattr(final_stream, "get_final_message"):
+                        msg = final_stream.get_final_message()
+                        usage = getattr(msg, "usage", None)
+                        if usage:
+                            self._last_stream_usage = {
+                                "input_tokens": getattr(usage, "input_tokens", 0),
+                                "output_tokens": getattr(usage, "output_tokens", 0),
+                            }
+                except Exception:
+                    pass
         else:
             for event in stream:
                 if hasattr(event, "type") and event.type == "content_block_delta":
                     if hasattr(event, "delta") and hasattr(event.delta, "text"):
                         yield event.delta.text
+            try:
+                if hasattr(stream, "get_final_message"):
+                    msg = stream.get_final_message()
+                    usage = getattr(msg, "usage", None)
+                    if usage:
+                        self._last_stream_usage = {
+                            "input_tokens": getattr(usage, "input_tokens", 0),
+                            "output_tokens": getattr(usage, "output_tokens", 0),
+                        }
+            except Exception:
+                pass
 
     # -----------------------------------------------------------------------
     # Response parsing (provider-agnostic)

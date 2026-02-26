@@ -180,6 +180,14 @@ class EventType(str, Enum):
 
     GOVERNANCE_APPROVAL_ENFORCED = "governance.approval_enforced"
 
+    # Federation events (RFC-0022)
+    FEDERATION_DISPATCHED = "federation.dispatched"
+    FEDERATION_RECEIVED = "federation.received"
+    FEDERATION_CALLBACK = "federation.callback"
+    FEDERATION_BUDGET_WARNING = "federation.budget_warning"
+    FEDERATION_COMPLETED = "federation.completed"
+    FEDERATION_FAILED = "federation.failed"
+
     # Legacy aliases for backward compatibility
     CREATED = "intent_created"
     STATE_UPDATED = "state_patched"
