@@ -112,13 +112,13 @@ export class OpenIntentClient {
   async createIntent(params: {
     title: string;
     description?: string;
-    constraints?: string[];
+    constraints?: Record<string, unknown>;
     initial_state?: Record<string, unknown>;
   }): Promise<unknown> {
     return this.request("POST", "/api/v1/intents", {
       title: params.title,
       description: params.description ?? "",
-      constraints: params.constraints ?? [],
+      constraints: params.constraints ?? {},
       state: params.initial_state ?? {},
       created_by: this.config.server.agent_id,
     });
@@ -681,6 +681,58 @@ export class OpenIntentClient {
     });
   }
 
+  async registerAgent(params: {
+    agent_id: string;
+    name?: string;
+    role_id?: string;
+    capabilities?: string[];
+    capacity?: Record<string, unknown>;
+    endpoint?: string;
+    heartbeat_config?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+    drain_timeout_seconds?: number;
+  }): Promise<unknown> {
+    return this.request("POST", "/api/v1/agents/register", {
+      agent_id: params.agent_id,
+      name: params.name,
+      role_id: params.role_id,
+      capabilities: params.capabilities ?? [],
+      capacity: params.capacity,
+      endpoint: params.endpoint,
+      heartbeat_config: params.heartbeat_config,
+      metadata: params.metadata ?? {},
+      drain_timeout_seconds: params.drain_timeout_seconds,
+    });
+  }
+
+  async getAgentRecord(params: {
+    agent_id: string;
+  }): Promise<unknown> {
+    return this.request("GET", `/api/v1/agents/${params.agent_id}/record`);
+  }
+
+  async listAgents(params: {
+    status?: string;
+    role_id?: string;
+  }): Promise<unknown> {
+    const query: Record<string, string> = {};
+    if (params.status) query.status = params.status;
+    if (params.role_id) query.role_id = params.role_id;
+    const qs = new URLSearchParams(query).toString();
+    return this.request("GET", `/api/v1/agents${qs ? `?${qs}` : ""}`);
+  }
+
+  async agentHeartbeat(params: {
+    agent_id: string;
+    status?: string;
+    current_load?: number;
+  }): Promise<unknown> {
+    return this.request("POST", `/api/v1/agents/${params.agent_id}/heartbeat`, {
+      status: params.status ?? "active",
+      current_load: params.current_load ?? 0,
+    });
+  }
+
   async getHealth(params: {
     agent_id: string;
   }): Promise<unknown> {
@@ -694,7 +746,16 @@ export class OpenIntentClient {
   }): Promise<unknown> {
     return this.request("PUT", `/api/v1/agents/${params.agent_id}/status`, {
       status: params.status,
-      reason: params.reason ?? "",
+      reason: params.reason,
+    });
+  }
+
+  async updateAgentStatus(params: {
+    agent_id: string;
+    status: string;
+  }): Promise<unknown> {
+    return this.request("PUT", `/api/v1/agents/${params.agent_id}/status`, {
+      status: params.status,
     });
   }
 
@@ -827,6 +888,42 @@ export class OpenIntentClient {
     return this.request("POST", `/api/v1/traces/${params.trace_id}/spans`, {
       spans: params.spans,
       linked_by: this.config.server.agent_id,
+    });
+  }
+
+  async getFederationStatus(): Promise<unknown> {
+    return this.request("GET", "/api/v1/federation/status");
+  }
+
+  async listFederatedAgents(): Promise<unknown> {
+    return this.request("GET", "/api/v1/federation/agents");
+  }
+
+  async federationDispatch(params: {
+    intent_id: string;
+    agent_id: string;
+    trace_id?: string;
+  }): Promise<unknown> {
+    return this.request("POST", "/api/v1/federation/dispatch", {
+      intent_id: params.intent_id,
+      agent_id: params.agent_id,
+      trace_id: params.trace_id,
+    });
+  }
+
+  async federationReceive(params: {
+    dispatch_id: string;
+    intent: Record<string, unknown>;
+    agent_id: string;
+    source_server: string;
+    trace_id?: string;
+  }): Promise<unknown> {
+    return this.request("POST", "/api/v1/federation/receive", {
+      dispatch_id: params.dispatch_id,
+      intent: params.intent,
+      agent_id: params.agent_id,
+      source_server: params.source_server,
+      trace_id: params.trace_id,
     });
   }
 }

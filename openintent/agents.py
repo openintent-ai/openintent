@@ -1542,6 +1542,7 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
     max_tool_rounds: int = 10,
     planning: bool = False,
     stream_by_default: bool = False,
+    federation_visibility: Optional[str] = None,
     **kwargs: Any,
 ) -> Callable[[type], type]:
     """
@@ -1603,6 +1604,7 @@ def Agent(  # noqa: N802 - intentionally capitalized as class-like decorator
                 self._config.tools = tools
             self._config.auto_heartbeat = auto_heartbeat
             self._governance_policy = governance_policy
+            self._federation_visibility = federation_visibility
 
             if model:
                 _setup_llm_engine(
@@ -1735,6 +1737,8 @@ def Coordinator(  # noqa: N802
     max_tool_rounds: int = 10,
     planning: bool = True,
     stream_by_default: bool = False,
+    federation_visibility: Optional[str] = None,
+    federation_policy: Optional[dict[str, Any]] = None,
     **kwargs: Any,
 ) -> Callable[[type], type]:
     """
@@ -1797,6 +1801,8 @@ def Coordinator(  # noqa: N802
                 self._config.tools = tools
             self._config.auto_heartbeat = auto_heartbeat
             self._governance_policy = governance_policy
+            self._federation_visibility = federation_visibility
+            self._federation_policy = federation_policy
             self._agents_list = agents or []
             self._strategy = strategy
             self._guardrails = guardrails or []

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Generator, Optional
 import httpx
 
 if TYPE_CHECKING:
+    from .federation.models import DispatchResult, FederationStatus, ReceiveResult
     from .streaming import EventQueue, SSEStream
 
 from .exceptions import (
@@ -2984,6 +2985,122 @@ class OpenIntentClient:
             f"No response received within {timeout}s for message {msg_id}"
         )
 
+    # ==================== Federation (RFC-0022) ====================
+
+    def federation_status(self) -> "FederationStatus":
+        from .federation.models import FederationStatus
+
+        response = self._client.get("/api/v1/federation/status")
+        data = self._handle_response(response)
+        return FederationStatus.from_dict(data)
+
+    def list_federated_agents(
+        self, source_server: Optional[str] = None
+    ) -> list[dict[str, Any]]:
+        headers: dict[str, str] = {}
+        if source_server:
+            headers["X-Source-Server"] = source_server
+        response = self._client.get(
+            "/api/v1/federation/agents",
+            headers=headers,
+        )
+        data = self._handle_response(response)
+        agents: list[dict[str, Any]] = data.get("agents", [])
+        return agents
+
+    def federation_dispatch(
+        self,
+        intent_id: str,
+        target_server: str,
+        agent_id: Optional[str] = None,
+        delegation_scope: Optional[dict[str, Any]] = None,
+        federation_policy: Optional[dict[str, Any]] = None,
+        callback_url: Optional[str] = None,
+        trace_context: Optional[dict[str, str]] = None,
+    ) -> "DispatchResult":
+        from .federation.models import DispatchResult
+
+        payload: dict[str, Any] = {
+            "intent_id": intent_id,
+            "target_server": target_server,
+        }
+        if agent_id:
+            payload["agent_id"] = agent_id
+        if delegation_scope:
+            payload["delegation_scope"] = delegation_scope
+        if federation_policy:
+            payload["federation_policy"] = federation_policy
+        if callback_url:
+            payload["callback_url"] = callback_url
+        if trace_context:
+            payload["trace_context"] = trace_context
+        response = self._client.post("/api/v1/federation/dispatch", json=payload)
+        data = self._handle_response(response)
+        return DispatchResult.from_dict(data)
+
+    def federation_receive(
+        self,
+        dispatch_id: str,
+        source_server: str,
+        intent_id: str,
+        intent_title: str,
+        intent_description: str = "",
+        intent_state: Optional[dict[str, Any]] = None,
+        agent_id: Optional[str] = None,
+        delegation_scope: Optional[dict[str, Any]] = None,
+        federation_policy: Optional[dict[str, Any]] = None,
+        callback_url: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> "ReceiveResult":
+        from .federation.models import ReceiveResult
+
+        payload: dict[str, Any] = {
+            "dispatch_id": dispatch_id,
+            "source_server": source_server,
+            "intent_id": intent_id,
+            "intent_title": intent_title,
+            "intent_description": intent_description,
+            "intent_state": intent_state or {},
+        }
+        if agent_id:
+            payload["agent_id"] = agent_id
+        if delegation_scope:
+            payload["delegation_scope"] = delegation_scope
+        if federation_policy:
+            payload["federation_policy"] = federation_policy
+        if callback_url:
+            payload["callback_url"] = callback_url
+        if idempotency_key:
+            payload["idempotency_key"] = idempotency_key
+        response = self._client.post("/api/v1/federation/receive", json=payload)
+        data = self._handle_response(response)
+        return ReceiveResult.from_dict(data)
+
+    def send_federation_callback(
+        self,
+        callback_url: str,
+        dispatch_id: str,
+        event_type: str,
+        state_delta: Optional[dict[str, Any]] = None,
+        attestation: Optional[dict[str, Any]] = None,
+        trace_id: Optional[str] = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "dispatch_id": dispatch_id,
+            "event_type": event_type,
+            "state_delta": state_delta or {},
+        }
+        if attestation:
+            payload["attestation"] = attestation
+        if trace_id:
+            payload["trace_id"] = trace_id
+        response = self._client.post(callback_url, json=payload)
+        return self._handle_response(response)
+
+    def federation_discover(self) -> dict[str, Any]:
+        response = self._client.get("/.well-known/openintent-federation.json")
+        return self._handle_response(response)
+
     def close(self) -> None:
         """Close the HTTP client connection."""
         self._client.close()
@@ -4935,6 +5052,122 @@ class AsyncOpenIntentClient:
         raise TimeoutError(
             f"No response received within {timeout}s for message {msg_id}"
         )
+
+    # ==================== Federation (RFC-0022) ====================
+
+    async def federation_status(self) -> "FederationStatus":
+        from .federation.models import FederationStatus
+
+        response = await self._client.get("/api/v1/federation/status")
+        data = self._handle_response(response)
+        return FederationStatus.from_dict(data)
+
+    async def list_federated_agents(
+        self, source_server: Optional[str] = None
+    ) -> list[dict[str, Any]]:
+        headers: dict[str, str] = {}
+        if source_server:
+            headers["X-Source-Server"] = source_server
+        response = await self._client.get(
+            "/api/v1/federation/agents",
+            headers=headers,
+        )
+        data = self._handle_response(response)
+        agents: list[dict[str, Any]] = data.get("agents", [])
+        return agents
+
+    async def federation_dispatch(
+        self,
+        intent_id: str,
+        target_server: str,
+        agent_id: Optional[str] = None,
+        delegation_scope: Optional[dict[str, Any]] = None,
+        federation_policy: Optional[dict[str, Any]] = None,
+        callback_url: Optional[str] = None,
+        trace_context: Optional[dict[str, str]] = None,
+    ) -> "DispatchResult":
+        from .federation.models import DispatchResult
+
+        payload: dict[str, Any] = {
+            "intent_id": intent_id,
+            "target_server": target_server,
+        }
+        if agent_id:
+            payload["agent_id"] = agent_id
+        if delegation_scope:
+            payload["delegation_scope"] = delegation_scope
+        if federation_policy:
+            payload["federation_policy"] = federation_policy
+        if callback_url:
+            payload["callback_url"] = callback_url
+        if trace_context:
+            payload["trace_context"] = trace_context
+        response = await self._client.post("/api/v1/federation/dispatch", json=payload)
+        data = self._handle_response(response)
+        return DispatchResult.from_dict(data)
+
+    async def federation_receive(
+        self,
+        dispatch_id: str,
+        source_server: str,
+        intent_id: str,
+        intent_title: str,
+        intent_description: str = "",
+        intent_state: Optional[dict[str, Any]] = None,
+        agent_id: Optional[str] = None,
+        delegation_scope: Optional[dict[str, Any]] = None,
+        federation_policy: Optional[dict[str, Any]] = None,
+        callback_url: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> "ReceiveResult":
+        from .federation.models import ReceiveResult
+
+        payload: dict[str, Any] = {
+            "dispatch_id": dispatch_id,
+            "source_server": source_server,
+            "intent_id": intent_id,
+            "intent_title": intent_title,
+            "intent_description": intent_description,
+            "intent_state": intent_state or {},
+        }
+        if agent_id:
+            payload["agent_id"] = agent_id
+        if delegation_scope:
+            payload["delegation_scope"] = delegation_scope
+        if federation_policy:
+            payload["federation_policy"] = federation_policy
+        if callback_url:
+            payload["callback_url"] = callback_url
+        if idempotency_key:
+            payload["idempotency_key"] = idempotency_key
+        response = await self._client.post("/api/v1/federation/receive", json=payload)
+        data = self._handle_response(response)
+        return ReceiveResult.from_dict(data)
+
+    async def send_federation_callback(
+        self,
+        callback_url: str,
+        dispatch_id: str,
+        event_type: str,
+        state_delta: Optional[dict[str, Any]] = None,
+        attestation: Optional[dict[str, Any]] = None,
+        trace_id: Optional[str] = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "dispatch_id": dispatch_id,
+            "event_type": event_type,
+            "state_delta": state_delta or {},
+        }
+        if attestation:
+            payload["attestation"] = attestation
+        if trace_id:
+            payload["trace_id"] = trace_id
+        response = await self._client.post(callback_url, json=payload)
+        return self._handle_response(response)
+
+    async def federation_discover(self) -> dict[str, Any]:
+        response = await self._client.get("/.well-known/openintent-federation.json")
+        return self._handle_response(response)
 
     async def close(self) -> None:
         """Close the HTTP client connection."""
