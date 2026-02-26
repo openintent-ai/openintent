@@ -2997,7 +2997,7 @@ class OpenIntentClient:
     def list_federated_agents(
         self, source_server: Optional[str] = None
     ) -> list[dict[str, Any]]:
-        headers = {}
+        headers: dict[str, str] = {}
         if source_server:
             headers["X-Source-Server"] = source_server
         response = self._client.get(
@@ -3005,7 +3005,8 @@ class OpenIntentClient:
             headers=headers,
         )
         data = self._handle_response(response)
-        return data.get("agents", [])
+        agents: list[dict[str, Any]] = data.get("agents", [])
+        return agents
 
     def federation_dispatch(
         self,
@@ -5064,7 +5065,7 @@ class AsyncOpenIntentClient:
     async def list_federated_agents(
         self, source_server: Optional[str] = None
     ) -> list[dict[str, Any]]:
-        headers = {}
+        headers: dict[str, str] = {}
         if source_server:
             headers["X-Source-Server"] = source_server
         response = await self._client.get(
@@ -5072,7 +5073,8 @@ class AsyncOpenIntentClient:
             headers=headers,
         )
         data = self._handle_response(response)
-        return data.get("agents", [])
+        agents: list[dict[str, Any]] = data.get("agents", [])
+        return agents
 
     async def federation_dispatch(
         self,

@@ -43,7 +43,7 @@ class ServerIdentity:
     private_key_bytes: Optional[bytes] = None
     public_key_bytes: Optional[bytes] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.did:
             domain = (
                 self.server_url.replace("https://", "")
@@ -212,7 +212,7 @@ class MessageSignature:
     )
     signature: str = ""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.created:
             self.created = int(time.time())
 
@@ -292,7 +292,7 @@ class UCANToken:
     nonce: str = ""
     proof_chain: list[str] = field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.not_before:
             self.not_before = int(time.time())
         if not self.expires_at:

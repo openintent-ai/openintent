@@ -18,17 +18,17 @@ from .security import ServerIdentity
 logger = logging.getLogger("openintent.federation.decorators")
 
 
-def on_federation_received(func: Callable) -> Callable:
+def on_federation_received(func: Any) -> Any:
     func._openintent_handler = "federation_received"
     return func
 
 
-def on_federation_callback(func: Callable) -> Callable:
+def on_federation_callback(func: Any) -> Any:
     func._openintent_handler = "federation_callback"
     return func
 
 
-def on_budget_warning(func: Callable) -> Callable:
+def on_budget_warning(func: Any) -> Any:
     func._openintent_handler = "budget_warning"
     return func
 
@@ -43,9 +43,9 @@ def Federation(  # noqa: N802
     server_url: Optional[str] = None,
 ) -> Callable[[type], type]:
     def decorator(cls: type) -> type:
-        original_init = cls.__init__ if hasattr(cls, "__init__") else None
+        original_init = cls.__init__ if hasattr(cls, "__init__") else None  # type: ignore[misc]
 
-        def new_init(self, *args, **kwargs):
+        def new_init(self: Any, *args: Any, **kwargs: Any) -> None:
             if original_init and original_init is not object.__init__:
                 original_init(self, *args, **kwargs)
 
@@ -85,12 +85,12 @@ def Federation(  # noqa: N802
                 f"trust_policy={trust_policy}, peers={len(self._federation_peers)}"
             )
 
-        cls.__init__ = new_init
+        cls.__init__ = new_init  # type: ignore[assignment,misc]
 
-        cls._federation_configured = True
-        cls._federation_trust_policy_name = trust_policy
-        cls._federation_visibility_default_name = visibility_default
-        cls._federation_peer_list = peers or []
+        cls._federation_configured = True  # type: ignore[attr-defined]
+        cls._federation_trust_policy_name = trust_policy  # type: ignore[attr-defined]
+        cls._federation_visibility_default_name = visibility_default  # type: ignore[attr-defined]
+        cls._federation_peer_list = peers or []  # type: ignore[attr-defined]
 
         return cls
 
