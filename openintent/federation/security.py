@@ -45,7 +45,11 @@ class ServerIdentity:
 
     def __post_init__(self):
         if not self.did:
-            domain = self.server_url.replace("https://", "").replace("http://", "").rstrip("/")
+            domain = (
+                self.server_url.replace("https://", "")
+                .replace("http://", "")
+                .rstrip("/")
+            )
             self.did = f"did:web:{domain}"
 
     @classmethod
@@ -198,9 +202,14 @@ class MessageSignature:
     key_id: str
     algorithm: str = "ed25519"
     created: int = 0
-    headers: list[str] = field(default_factory=lambda: [
-        "@method", "@target-uri", "content-type", "content-digest"
-    ])
+    headers: list[str] = field(
+        default_factory=lambda: [
+            "@method",
+            "@target-uri",
+            "content-type",
+            "content-digest",
+        ]
+    )
     signature: str = ""
 
     def __post_init__(self):
@@ -290,6 +299,7 @@ class UCANToken:
             self.expires_at = self.not_before + 3600
         if not self.nonce:
             import os
+
             self.nonce = base64.b64encode(os.urandom(16)).decode()
 
     def to_dict(self) -> dict[str, Any]:
@@ -316,17 +326,25 @@ class UCANToken:
         )
 
     def encode(self, identity: ServerIdentity) -> str:
-        header = base64.urlsafe_b64encode(
-            json.dumps({"alg": "EdDSA", "typ": "UCAN"}).encode()
-        ).decode().rstrip("=")
-        payload = base64.urlsafe_b64encode(
-            json.dumps(self.to_dict(), sort_keys=True).encode()
-        ).decode().rstrip("=")
+        header = (
+            base64.urlsafe_b64encode(
+                json.dumps({"alg": "EdDSA", "typ": "UCAN"}).encode()
+            )
+            .decode()
+            .rstrip("=")
+        )
+        payload = (
+            base64.urlsafe_b64encode(
+                json.dumps(self.to_dict(), sort_keys=True).encode()
+            )
+            .decode()
+            .rstrip("=")
+        )
         signing_input = f"{header}.{payload}"
         signature = identity.sign(signing_input.encode())
-        sig_part = base64.urlsafe_b64encode(
-            base64.b64decode(signature)
-        ).decode().rstrip("=")
+        sig_part = (
+            base64.urlsafe_b64encode(base64.b64decode(signature)).decode().rstrip("=")
+        )
         return f"{header}.{payload}.{sig_part}"
 
     @classmethod
@@ -368,7 +386,7 @@ class UCANToken:
 def resolve_did_web(did: str) -> str:
     if not did.startswith("did:web:"):
         raise ValueError(f"Not a did:web identifier: {did}")
-    domain = did[len("did:web:"):]
+    domain = did[len("did:web:") :]
     domain = domain.replace(":", "/")
     return f"https://{domain}/.well-known/did.json"
 
@@ -393,7 +411,11 @@ def validate_ssrf(url: str) -> bool:
     ]
     if hostname in blocked:
         return False
-    if hostname.startswith("10.") or hostname.startswith("172.") or hostname.startswith("192.168."):
+    if (
+        hostname.startswith("10.")
+        or hostname.startswith("172.")
+        or hostname.startswith("192.168.")
+    ):
         return False
     if hostname.endswith(".internal") or hostname.endswith(".local"):
         return False

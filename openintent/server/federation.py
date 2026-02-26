@@ -95,7 +95,8 @@ class FederationState:
     ) -> FederatedAgent:
         agent = FederatedAgent(
             agent_id=agent_id,
-            server_url=server_url or (self.manifest.server_url if self.manifest else ""),
+            server_url=server_url
+            or (self.manifest.server_url if self.manifest else ""),
             capabilities=capabilities or [],
             visibility=visibility,
             server_did=self.identity.did if self.identity else None,
@@ -103,7 +104,9 @@ class FederationState:
         self.agents[agent_id] = agent
         return agent
 
-    def get_visible_agents(self, requesting_server: Optional[str] = None) -> list[FederatedAgent]:
+    def get_visible_agents(
+        self, requesting_server: Optional[str] = None
+    ) -> list[FederatedAgent]:
         result = []
         for agent in self.agents.values():
             if agent.visibility == AgentVisibility.PUBLIC:
@@ -188,15 +191,15 @@ def create_federation_router(
             return FederationStatus(enabled=False).to_dict()
 
         active_dispatches = sum(
-            1
-            for d in state.dispatches.values()
-            if d.get("status") == "active"
+            1 for d in state.dispatches.values() if d.get("status") == "active"
         )
 
         return FederationStatus(
             enabled=True,
             server_did=state.identity.did if state.identity else None,
-            trust_policy=state.trust_enforcer.policy if state.trust_enforcer else TrustPolicy.ALLOWLIST,
+            trust_policy=state.trust_enforcer.policy
+            if state.trust_enforcer
+            else TrustPolicy.ALLOWLIST,
             peer_count=len(state.peers),
             active_dispatches=active_dispatches,
             total_dispatches=state.total_dispatches,
@@ -273,9 +276,7 @@ def create_federation_router(
         }
         state.total_dispatches += 1
 
-        asyncio.create_task(
-            _deliver_dispatch(state, body.target_server, envelope_dict)
-        )
+        asyncio.create_task(_deliver_dispatch(state, body.target_server, envelope_dict))
 
         return {
             "dispatch_id": dispatch_id,
@@ -294,7 +295,9 @@ def create_federation_router(
         if not state.enabled:
             raise HTTPException(status_code=400, detail="Federation not enabled")
 
-        if state.trust_enforcer and not state.trust_enforcer.is_trusted(body.source_server):
+        if state.trust_enforcer and not state.trust_enforcer.is_trusted(
+            body.source_server
+        ):
             raise HTTPException(
                 status_code=403,
                 detail=f"Source server {body.source_server} not trusted",
@@ -343,7 +346,9 @@ def create_federation_router(
                         dispatch_id=body.dispatch_id,
                         event_type=CallbackEventType.STATE_DELTA,
                         state_delta={"status": "accepted"},
-                        trace_id=body.trace_context.get("trace_id") if body.trace_context else None,
+                        trace_id=body.trace_context.get("trace_id")
+                        if body.trace_context
+                        else None,
                         idempotency_key=f"accept-{body.dispatch_id}",
                         timestamp=datetime.now(timezone.utc).isoformat(),
                     ),
@@ -389,7 +394,7 @@ async def _deliver_dispatch(
             logger.warning(f"Dispatch delivery attempt {attempt + 1} failed: {e}")
 
         if attempt < max_retries - 1:
-            await asyncio.sleep(2 ** attempt)
+            await asyncio.sleep(2**attempt)
 
     dispatch_id = envelope_dict.get("dispatch_id", "")
     if dispatch_id in state.dispatches:
@@ -414,12 +419,14 @@ async def _send_callback(
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(callback_url, json=payload)
                 if response.status_code < 400:
-                    logger.info(f"Callback delivered for dispatch {callback.dispatch_id}")
+                    logger.info(
+                        f"Callback delivered for dispatch {callback.dispatch_id}"
+                    )
                     return
         except Exception as e:
             logger.warning(f"Callback delivery attempt {attempt + 1} failed: {e}")
 
         if attempt < max_retries - 1:
-            await asyncio.sleep(2 ** attempt)
+            await asyncio.sleep(2**attempt)
 
     logger.error(f"Callback delivery failed for dispatch {callback.dispatch_id}")

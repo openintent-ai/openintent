@@ -45,7 +45,9 @@ class DispatchStatus(str, Enum):
 
 @dataclass
 class DelegationScope:
-    permissions: list[str] = field(default_factory=lambda: ["state.patch", "events.log"])
+    permissions: list[str] = field(
+        default_factory=lambda: ["state.patch", "events.log"]
+    )
     denied_operations: list[str] = field(default_factory=list)
     max_delegation_depth: int = 1
     expires_at: Optional[str] = None
@@ -110,7 +112,9 @@ class FederationPolicy:
             if k in governance:
                 if isinstance(v, bool) and isinstance(governance[k], bool):
                     governance[k] = governance[k] or v
-                elif isinstance(v, (int, float)) and isinstance(governance[k], (int, float)):
+                elif isinstance(v, (int, float)) and isinstance(
+                    governance[k], (int, float)
+                ):
                     governance[k] = min(governance[k], v)
                 else:
                     governance[k] = v
@@ -326,12 +330,14 @@ class FederationManifest:
     supported_rfcs: list[str] = field(default_factory=lambda: ["RFC-0022", "RFC-0023"])
     peers: list[str] = field(default_factory=list)
     public_key: Optional[str] = None
-    endpoints: dict[str, str] = field(default_factory=lambda: {
-        "status": "/api/v1/federation/status",
-        "agents": "/api/v1/federation/agents",
-        "dispatch": "/api/v1/federation/dispatch",
-        "receive": "/api/v1/federation/receive",
-    })
+    endpoints: dict[str, str] = field(
+        default_factory=lambda: {
+            "status": "/api/v1/federation/status",
+            "agents": "/api/v1/federation/agents",
+            "dispatch": "/api/v1/federation/dispatch",
+            "receive": "/api/v1/federation/receive",
+        }
+    )
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
@@ -355,7 +361,9 @@ class FederationManifest:
             server_url=data.get("server_url", ""),
             protocol_version=data.get("protocol_version", "0.1"),
             trust_policy=TrustPolicy(data.get("trust_policy", "allowlist")),
-            visibility_default=AgentVisibility(data.get("visibility_default", "public")),
+            visibility_default=AgentVisibility(
+                data.get("visibility_default", "public")
+            ),
             supported_rfcs=data.get("supported_rfcs", ["RFC-0022", "RFC-0023"]),
             peers=data.get("peers", []),
             public_key=data.get("public_key"),
