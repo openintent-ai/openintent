@@ -197,9 +197,11 @@ def create_federation_router(
         return FederationStatus(
             enabled=True,
             server_did=state.identity.did if state.identity else None,
-            trust_policy=state.trust_enforcer.policy
-            if state.trust_enforcer
-            else TrustPolicy.ALLOWLIST,
+            trust_policy=(
+                state.trust_enforcer.policy
+                if state.trust_enforcer
+                else TrustPolicy.ALLOWLIST
+            ),
             peer_count=len(state.peers),
             active_dispatches=active_dispatches,
             total_dispatches=state.total_dispatches,
@@ -346,9 +348,11 @@ def create_federation_router(
                         dispatch_id=body.dispatch_id,
                         event_type=CallbackEventType.STATE_DELTA,
                         state_delta={"status": "accepted"},
-                        trace_id=body.trace_context.get("trace_id")
-                        if body.trace_context
-                        else None,
+                        trace_id=(
+                            body.trace_context.get("trace_id")
+                            if body.trace_context
+                            else None
+                        ),
                         idempotency_key=f"accept-{body.dispatch_id}",
                         timestamp=datetime.now(timezone.utc).isoformat(),
                     ),
