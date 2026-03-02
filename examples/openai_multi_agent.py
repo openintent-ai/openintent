@@ -371,11 +371,13 @@ class Coordinator:
         intent = await self.client.create_intent(
             title=f"Research: {topic}",
             description=f"Conduct research and synthesize findings on: {topic}",
-            constraints=[
-                "Research must be completed before synthesis",
-                "Only one agent may work on each scope at a time",
-                "All activities must be logged to the event stream",
-            ],
+            constraints={
+                "rules": [
+                    "Research must be completed before synthesis",
+                    "Only one agent may work on each scope at a time",
+                    "All activities must be logged to the event stream",
+                ]
+            },
             initial_state={
                 "topic": topic,
                 "research_status": "pending",

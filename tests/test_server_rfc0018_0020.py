@@ -31,12 +31,14 @@ class TestRFC0018IdentityEndpoints:
             db_path = f.name
 
         db_module._database = None
+        db_module._database_url = None
         config = ServerConfig(database_url=f"sqlite:///{db_path}")
         app = create_app(config)
         with TestClient(app) as c:
             yield c
 
         db_module._database = None
+        db_module._database_url = None
         os.unlink(db_path)
 
     def test_register_identity(self, client):
@@ -198,12 +200,14 @@ class TestRFC0019VerifiableEventLogEndpoints:
             db_path = f.name
 
         db_module._database = None
+        db_module._database_url = None
         config = ServerConfig(database_url=f"sqlite:///{db_path}")
         app = create_app(config)
         with TestClient(app) as c:
             yield c
 
         db_module._database = None
+        db_module._database_url = None
         os.unlink(db_path)
 
     def _create_intent(self, client):
@@ -387,12 +391,14 @@ class TestRFC0020DistributedTracingEndpoints:
             db_path = f.name
 
         db_module._database = None
+        db_module._database_url = None
         config = ServerConfig(database_url=f"sqlite:///{db_path}")
         app = create_app(config)
         with TestClient(app) as c:
             yield c
 
         db_module._database = None
+        db_module._database_url = None
         os.unlink(db_path)
 
     def _create_intent(self, client):

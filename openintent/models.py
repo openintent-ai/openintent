@@ -923,14 +923,38 @@ class IntentLease:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "IntentLease":
+        if "status" in data:
+            status = LeaseStatus(data["status"])
+        elif data.get("released_at"):
+            status = LeaseStatus.RELEASED
+        else:
+            expires_str = data.get("expires_at", "")
+            if expires_str:
+                try:
+                    expires = datetime.fromisoformat(expires_str)
+                    status = (
+                        LeaseStatus.ACTIVE
+                        if datetime.now(expires.tzinfo) < expires
+                        else LeaseStatus.EXPIRED
+                    )
+                except (ValueError, TypeError):
+                    status = LeaseStatus.ACTIVE
+            else:
+                status = LeaseStatus.ACTIVE
+
+        created_at_str = data.get("created_at") or data.get("acquired_at")
+        created_at = (
+            datetime.fromisoformat(created_at_str) if created_at_str else datetime.now()
+        )
+
         return cls(
             id=data["id"],
             intent_id=data["intent_id"],
             agent_id=data["agent_id"],
             scope=data["scope"],
-            status=LeaseStatus(data["status"]),
+            status=status,
             expires_at=datetime.fromisoformat(data["expires_at"]),
-            created_at=datetime.fromisoformat(data["created_at"]),
+            created_at=created_at,
         )
 
 

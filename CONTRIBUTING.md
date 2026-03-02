@@ -25,14 +25,21 @@ Thank you for your interest in contributing to the OpenIntent Python SDK! This d
 
 We use the following tools for code quality:
 
-- **Black** for code formatting
-- **Ruff** for linting
+- **Ruff** for linting and code formatting
 - **mypy** for type checking
+- **pre-commit** for automatic formatting on every commit
+
+Set up pre-commit hooks (runs automatically with `make install-dev`):
+
+```bash
+pip install pre-commit
+pre-commit install
+```
 
 Before submitting a PR, run:
 
 ```bash
-black openintent/
+ruff format openintent/
 ruff check openintent/ --fix
 mypy openintent/
 ```

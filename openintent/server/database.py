@@ -1848,12 +1848,23 @@ class Database:
 
 
 _database: Optional[Database] = None
+_database_url: Optional[str] = None
 
 
 def get_database(database_url: str = "sqlite:///./openintent.db") -> Database:
-    """Get or create the database instance."""
-    global _database
+    """Get or create the database instance.
+
+    If called with a different database_url than the existing singleton,
+    the old instance is discarded and a new one is created. This prevents
+    stale connections when the server restarts on a different port and the
+    database path changes (e.g. openintent_server_8001.db -> 8002.db).
+    """
+    global _database, _database_url
+    if _database is not None and _database_url != database_url:
+        _database = None
+        _database_url = None
     if _database is None:
         _database = Database(database_url)
         _database.create_tables()
+        _database_url = database_url
     return _database

@@ -1652,9 +1652,9 @@ class TestMixedToolThinkLoop:
 
         final_response = MagicMock()
         final_response.choices = [MagicMock()]
-        final_response.choices[0].message.content = (
-            "Calculator says 5, search found results."
-        )
+        final_response.choices[
+            0
+        ].message.content = "Calculator says 5, search found results."
         final_response.choices[0].message.tool_calls = None
 
         with patch.object(engine, "_call_llm", new_callable=AsyncMock) as mock_call:

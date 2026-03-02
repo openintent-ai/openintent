@@ -5,6 +5,36 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.1] - 2026-02-27
+
+### Fixed
+
+- **SDK/Server field format mismatches** — Fixed three category of mismatches between the Python SDK client and the protocol server's Pydantic models:
+  - **`constraints` type mismatch** — `create_intent()`, `create_child_intent()`, and `IntentSpec` sent `constraints` as a `list[str]` (e.g., `["rule1", "rule2"]`), but the server expects `Dict[str, Any]` (e.g., `{"rules": [...]}`). All three methods (sync and async) now accept and send `dict[str, Any]`. `Intent.from_dict()` retains backward compatibility for legacy list-format constraints.
+  - **`createdBy` → `created_by` for portfolios** — `create_portfolio()` sent `createdBy` and `governancePolicy` (camelCase) but the server's `PortfolioCreate` model expects `created_by` and `governance_policy` (snake_case). Fixed in both sync and async clients.
+  - **`get_portfolio_intents()` response parsing** — The server returns a raw JSON array from `GET /api/v1/portfolios/{id}/intents`, but the SDK expected a `{"intents": [...]}` wrapper dict, silently returning an empty list.
+
+- **Silent empty results from list endpoints** — Seven additional list-returning methods used `data.get("key", [])` which silently returned empty lists when the server sent raw JSON arrays. All now use `isinstance(data, list)` detection to handle both raw array and wrapped dict responses:
+  - `list_portfolios()` — expected `{"portfolios": [...]}`
+  - `get_intent_portfolios()` — expected `{"portfolios": [...]}`
+  - `get_attachments()` — expected `{"attachments": [...]}`
+  - `get_costs()` — expected `{"costs": [], "summary": {}}`
+  - `get_failures()` — expected `{"failures": [...]}`
+  - `get_subscriptions()` — expected `{"subscriptions": [...]}`
+  - `federation_list_agents()` — expected `{"agents": [...]}`
+
+- **`IntentLease.from_dict()` KeyError on server responses** — `acquire_lease()` threw `KeyError('status')` because the server's `LeaseResponse` model does not include a `status` field (it uses `acquired_at`, `expires_at`, and `released_at` to represent lease state). `IntentLease.from_dict()` now derives status from these fields: `RELEASED` if `released_at` is set, `EXPIRED` if `expires_at` is in the past, otherwise `ACTIVE`. Also handles the field name difference `acquired_at` (server) vs `created_at` (SDK). Backward compatible with the SDK's own serialization format.
+
+- **Stale database singleton after server restart** — `get_database()` cached the `Database` instance at module level and never checked whether `database_url` changed between calls. When the protocol server restarted on a different port (e.g., `openintent_server_8001.db` → `openintent_server_8002.db`), the singleton kept pointing at the old file. Writes went to the old database; reads came from the new (empty) one — intents appeared created but were invisible to `list_intents`. The singleton now tracks its URL and recreates the connection when the URL changes.
+
+- **Example and test updates** — All examples (`basic_usage.py`, `openai_multi_agent.py`, `multi_agent/coordinator.py`, `compliance_review/coordinator.py`) and tests updated to use dict-format constraints.
+
+### Changed
+
+- All version references updated to 0.14.1 across Python SDK, MCP server package, and changelog.
+
+---
+
 ## [0.14.0] - 2026-02-25
 
 ### Added

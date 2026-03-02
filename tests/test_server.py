@@ -554,12 +554,14 @@ class TestAccessControl:
             db_path = f.name
 
         db_module._database = None
+        db_module._database_url = None
         config = ServerConfig(database_url=f"sqlite:///{db_path}")
         app = create_app(config)
         with TestClient(app) as c:
             yield c
 
         db_module._database = None
+        db_module._database_url = None
         os.unlink(db_path)
 
     def _create_intent(self, client):

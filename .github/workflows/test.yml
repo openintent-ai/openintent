@@ -29,7 +29,7 @@ jobs:
       - name: Run linting
         run: |
           ruff check .
-          black --check .
+          ruff format --check .
 
       - name: Run type checking
         run: mypy openintent --ignore-missing-imports

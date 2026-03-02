@@ -306,7 +306,7 @@ class TestIntentSerialization:
             version=5,
             status=IntentStatus.BLOCKED,
             state=IntentState(data={"progress": 50}),
-            constraints=["budget < 1000"],
+            constraints={"rules": ["budget < 1000"]},
             parent_intent_id="parent-xyz",
             depends_on=["dep-a", "dep-b", "dep-c"],
         )
