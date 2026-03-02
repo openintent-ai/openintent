@@ -45,10 +45,12 @@ def main():
         intent = client.create_intent(
             title="Example Research Task",
             description="Demonstrate OpenIntent SDK capabilities",
-            constraints=[
-                "Must complete within reasonable time",
-                "Log all significant activities",
-            ],
+            constraints={
+                "rules": [
+                    "Must complete within reasonable time",
+                    "Log all significant activities",
+                ]
+            },
             initial_state={
                 "phase": "initialization",
                 "progress": 0.0,

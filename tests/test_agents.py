@@ -30,7 +30,7 @@ class TestIntentSpec:
         assert spec.description == ""
         assert spec.assign is None
         assert spec.depends_on == []
-        assert spec.constraints == []
+        assert spec.constraints == {}
         assert spec.initial_state == {}
 
     def test_with_dependencies(self):

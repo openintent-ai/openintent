@@ -634,7 +634,7 @@ class IntentSpec:
     description: str = ""
     assign: Optional[str] = None
     depends_on: Optional[list[str]] = None
-    constraints: list[str] = field(default_factory=list)
+    constraints: dict[str, Any] = field(default_factory=dict)
     initial_state: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):

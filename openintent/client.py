@@ -206,7 +206,7 @@ class OpenIntentClient:
         self,
         title: str,
         description: str = "",
-        constraints: Optional[list[str]] = None,
+        constraints: Optional[dict[str, Any]] = None,
         initial_state: Optional[dict[str, Any]] = None,
         parent_intent_id: Optional[str] = None,
         depends_on: Optional[list[str]] = None,
@@ -218,7 +218,7 @@ class OpenIntentClient:
         Args:
             title: Human-readable title for the intent.
             description: Detailed description of the goal.
-            constraints: Optional list of constraints.
+            constraints: Optional constraints dictionary (e.g. {"rules": [...]}).
             initial_state: Optional initial state data.
             parent_intent_id: Optional parent intent ID for hierarchical graphs (RFC-0002).
             depends_on: Optional list of intent IDs this depends on (RFC-0002).
@@ -232,7 +232,7 @@ class OpenIntentClient:
         payload: dict[str, Any] = {
             "title": title,
             "description": description,
-            "constraints": constraints or [],
+            "constraints": constraints or {},
             "state": initial_state or {},
             "created_by": self.agent_id,
         }
@@ -292,7 +292,7 @@ class OpenIntentClient:
         parent_id: str,
         title: str,
         description: str = "",
-        constraints: Optional[list[str]] = None,
+        constraints: Optional[dict[str, Any]] = None,
         initial_state: Optional[dict[str, Any]] = None,
         depends_on: Optional[list[str]] = None,
     ) -> Intent:
@@ -303,7 +303,7 @@ class OpenIntentClient:
             parent_id: The parent intent ID.
             title: Human-readable title for the child intent.
             description: Detailed description of the goal.
-            constraints: Optional list of constraints.
+            constraints: Optional constraints dictionary (e.g. {"rules": [...]}).
             initial_state: Optional initial state data.
             depends_on: Optional list of intent IDs this depends on.
 
@@ -313,7 +313,7 @@ class OpenIntentClient:
         payload = {
             "title": title,
             "description": description,
-            "constraints": constraints or [],
+            "constraints": constraints or {},
             "state": initial_state or {},
             "parent_intent_id": parent_id,
             "depends_on": depends_on or [],
@@ -1094,8 +1094,8 @@ class OpenIntentClient:
             json={
                 "name": name,
                 "description": description,
-                "createdBy": self.agent_id,
-                "governancePolicy": governance_policy or {},
+                "created_by": self.agent_id,
+                "governance_policy": governance_policy or {},
                 "metadata": metadata or {},
             },
         )
@@ -1133,7 +1133,8 @@ class OpenIntentClient:
             params["created_by"] = created_by
         response = self._client.get("/api/v1/portfolios", params=params)
         data = self._handle_response(response)
-        return [IntentPortfolio.from_dict(p) for p in data.get("portfolios", [])]
+        items = data if isinstance(data, list) else data.get("portfolios", [])
+        return [IntentPortfolio.from_dict(p) for p in items]
 
     def update_portfolio_status(
         self, portfolio_id: str, status: PortfolioStatus
@@ -1213,8 +1214,12 @@ class OpenIntentClient:
         """
         response = self._client.get(f"/api/v1/portfolios/{portfolio_id}/intents")
         data = self._handle_response(response)
-        intents = [Intent.from_dict(i) for i in data.get("intents", [])]
-        agg = AggregateStatus.from_dict(data.get("aggregate_status", {}))
+        if isinstance(data, list):
+            intents = [Intent.from_dict(i) for i in data]
+            agg = AggregateStatus.from_dict({})
+        else:
+            intents = [Intent.from_dict(i) for i in data.get("intents", [])]
+            agg = AggregateStatus.from_dict(data.get("aggregate_status", {}))
         return intents, agg
 
     def get_intent_portfolios(self, intent_id: str) -> list[IntentPortfolio]:
@@ -1229,7 +1234,8 @@ class OpenIntentClient:
         """
         response = self._client.get(f"/api/v1/intents/{intent_id}/portfolios")
         data = self._handle_response(response)
-        return [IntentPortfolio.from_dict(p) for p in data.get("portfolios", [])]
+        items = data if isinstance(data, list) else data.get("portfolios", [])
+        return [IntentPortfolio.from_dict(p) for p in items]
 
     # RFC-0005: Attachments
     def add_attachment(
@@ -1280,7 +1286,8 @@ class OpenIntentClient:
         """
         response = self._client.get(f"/api/v1/intents/{intent_id}/attachments")
         data = self._handle_response(response)
-        return [IntentAttachment.from_dict(a) for a in data.get("attachments", [])]
+        items = data if isinstance(data, list) else data.get("attachments", [])
+        return [IntentAttachment.from_dict(a) for a in items]
 
     def delete_attachment(self, intent_id: str, attachment_id: str) -> None:
         """
@@ -1346,8 +1353,12 @@ class OpenIntentClient:
         """
         response = self._client.get(f"/api/v1/intents/{intent_id}/costs")
         data = self._handle_response(response)
-        costs = [IntentCost.from_dict(c) for c in data.get("costs", [])]
-        summary = CostSummary.from_dict(data.get("summary", {}))
+        if isinstance(data, list):
+            costs = [IntentCost.from_dict(c) for c in data]
+            summary = CostSummary.from_dict({})
+        else:
+            costs = [IntentCost.from_dict(c) for c in data.get("costs", [])]
+            summary = CostSummary.from_dict(data.get("summary", {}))
         return costs, summary
 
     # RFC-0010: Retry Policies
@@ -1457,7 +1468,8 @@ class OpenIntentClient:
         """
         response = self._client.get(f"/api/v1/intents/{intent_id}/failures")
         data = self._handle_response(response)
-        return [IntentFailure.from_dict(f) for f in data.get("failures", [])]
+        items = data if isinstance(data, list) else data.get("failures", [])
+        return [IntentFailure.from_dict(f) for f in items]
 
     # RFC-0006: Subscriptions
     def subscribe(
@@ -1515,7 +1527,8 @@ class OpenIntentClient:
             params["portfolio_id"] = portfolio_id
         response = self._client.get("/api/v1/subscriptions", params=params)
         data = self._handle_response(response)
-        return [IntentSubscription.from_dict(s) for s in data.get("subscriptions", [])]
+        items = data if isinstance(data, list) else data.get("subscriptions", [])
+        return [IntentSubscription.from_dict(s) for s in items]
 
     def unsubscribe(self, subscription_id: str) -> None:
         """
@@ -3005,7 +3018,7 @@ class OpenIntentClient:
             headers=headers,
         )
         data = self._handle_response(response)
-        agents: list[dict[str, Any]] = data.get("agents", [])
+        agents: list[dict[str, Any]] = data if isinstance(data, list) else data.get("agents", [])
         return agents
 
     def federation_dispatch(
@@ -3199,7 +3212,7 @@ class AsyncOpenIntentClient:
         self,
         title: str,
         description: str,
-        constraints: Optional[list[str]] = None,
+        constraints: Optional[dict[str, Any]] = None,
         initial_state: Optional[dict[str, Any]] = None,
         governance_policy: Optional[dict[str, Any]] = None,
     ) -> Intent:
@@ -3207,7 +3220,7 @@ class AsyncOpenIntentClient:
         payload = {
             "title": title,
             "description": description,
-            "constraints": constraints or [],
+            "constraints": constraints or {},
             "state": initial_state or {},
             "created_by": self.agent_id,
         }
@@ -3580,8 +3593,8 @@ class AsyncOpenIntentClient:
             json={
                 "name": name,
                 "description": description,
-                "createdBy": self.agent_id,
-                "governancePolicy": governance_policy or {},
+                "created_by": self.agent_id,
+                "governance_policy": governance_policy or {},
                 "metadata": metadata or {},
             },
         )
@@ -3603,7 +3616,8 @@ class AsyncOpenIntentClient:
             params["created_by"] = created_by
         response = await self._client.get("/api/v1/portfolios", params=params)
         data = self._handle_response(response)
-        return [IntentPortfolio.from_dict(p) for p in data.get("portfolios", [])]
+        items = data if isinstance(data, list) else data.get("portfolios", [])
+        return [IntentPortfolio.from_dict(p) for p in items]
 
     async def update_portfolio_status(
         self, portfolio_id: str, status: PortfolioStatus
@@ -3651,15 +3665,20 @@ class AsyncOpenIntentClient:
         """Get all intents in a portfolio with aggregate status."""
         response = await self._client.get(f"/api/v1/portfolios/{portfolio_id}/intents")
         data = self._handle_response(response)
-        intents = [Intent.from_dict(i) for i in data.get("intents", [])]
-        agg = AggregateStatus.from_dict(data.get("aggregate_status", {}))
+        if isinstance(data, list):
+            intents = [Intent.from_dict(i) for i in data]
+            agg = AggregateStatus.from_dict({})
+        else:
+            intents = [Intent.from_dict(i) for i in data.get("intents", [])]
+            agg = AggregateStatus.from_dict(data.get("aggregate_status", {}))
         return intents, agg
 
     async def get_intent_portfolios(self, intent_id: str) -> list[IntentPortfolio]:
         """Get all portfolios containing an intent."""
         response = await self._client.get(f"/api/v1/intents/{intent_id}/portfolios")
         data = self._handle_response(response)
-        return [IntentPortfolio.from_dict(p) for p in data.get("portfolios", [])]
+        items = data if isinstance(data, list) else data.get("portfolios", [])
+        return [IntentPortfolio.from_dict(p) for p in items]
 
     # ==================== Attachments ====================
 
@@ -3688,7 +3707,8 @@ class AsyncOpenIntentClient:
         """Get all attachments for an intent."""
         response = await self._client.get(f"/api/v1/intents/{intent_id}/attachments")
         data = self._handle_response(response)
-        return [IntentAttachment.from_dict(a) for a in data.get("attachments", [])]
+        items = data if isinstance(data, list) else data.get("attachments", [])
+        return [IntentAttachment.from_dict(a) for a in items]
 
     async def delete_attachment(self, intent_id: str, attachment_id: str) -> None:
         """Delete an attachment."""
@@ -3727,8 +3747,12 @@ class AsyncOpenIntentClient:
         """Get all costs for an intent with summary."""
         response = await self._client.get(f"/api/v1/intents/{intent_id}/costs")
         data = self._handle_response(response)
-        costs = [IntentCost.from_dict(c) for c in data.get("costs", [])]
-        summary = CostSummary.from_dict(data.get("summary", {}))
+        if isinstance(data, list):
+            costs = [IntentCost.from_dict(c) for c in data]
+            summary = CostSummary.from_dict({})
+        else:
+            costs = [IntentCost.from_dict(c) for c in data.get("costs", [])]
+            summary = CostSummary.from_dict(data.get("summary", {}))
         return costs, summary
 
     # ==================== Retry Policies ====================
@@ -3789,7 +3813,8 @@ class AsyncOpenIntentClient:
         """Get all failures for an intent."""
         response = await self._client.get(f"/api/v1/intents/{intent_id}/failures")
         data = self._handle_response(response)
-        return [IntentFailure.from_dict(f) for f in data.get("failures", [])]
+        items = data if isinstance(data, list) else data.get("failures", [])
+        return [IntentFailure.from_dict(f) for f in items]
 
     # ==================== Subscriptions ====================
 
@@ -3832,7 +3857,8 @@ class AsyncOpenIntentClient:
 
         response = await self._client.get("/api/v1/subscriptions", params=params)
         data = self._handle_response(response)
-        return [IntentSubscription.from_dict(s) for s in data.get("subscriptions", [])]
+        items = data if isinstance(data, list) else data.get("subscriptions", [])
+        return [IntentSubscription.from_dict(s) for s in items]
 
     async def unsubscribe(self, subscription_id: str) -> None:
         """Unsubscribe from events."""
@@ -5073,7 +5099,7 @@ class AsyncOpenIntentClient:
             headers=headers,
         )
         data = self._handle_response(response)
-        agents: list[dict[str, Any]] = data.get("agents", [])
+        agents: list[dict[str, Any]] = data if isinstance(data, list) else data.get("agents", [])
         return agents
 
     async def federation_dispatch(

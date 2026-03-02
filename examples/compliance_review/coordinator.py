@@ -85,7 +85,7 @@ class ComplianceCoordinator(Coordinator):
                     title="Document Extraction",
                     description=f"Extract text and structure from: {document_name}",
                     assign="ocr-agent",
-                    constraints=["max_retries:3", "backoff:exponential"],
+                    constraints={"rules": ["max_retries:3", "backoff:exponential"]},
                     initial_state={
                         "phase": "extraction",
                         "retry_policy": {
@@ -101,7 +101,7 @@ class ComplianceCoordinator(Coordinator):
                     description="Analyze document clauses for compliance issues",
                     assign="analyzer-agent",
                     depends_on=["Document Extraction"],
-                    constraints=["lease_per_section:true"],
+                    constraints={"rules": ["lease_per_section:true"]},
                     initial_state={
                         "phase": "analysis",
                         "leasing_enabled": True,
@@ -113,7 +113,7 @@ class ComplianceCoordinator(Coordinator):
                     description="Assess overall document risk and compliance score",
                     assign="risk-agent",
                     depends_on=["Clause Analysis"],
-                    constraints=["track_costs:true", "budget_usd:1.00"],
+                    constraints={"rules": ["track_costs:true", "budget_usd:1.00"]},
                     initial_state={
                         "phase": "risk",
                         "cost_tracking": True,
@@ -125,7 +125,7 @@ class ComplianceCoordinator(Coordinator):
                     description="Generate comprehensive compliance report",
                     assign="report-agent",
                     depends_on=["Risk Assessment"],
-                    constraints=["output_formats:json,markdown"],
+                    constraints={"rules": ["output_formats:json,markdown"]},
                     initial_state={
                         "phase": "report",
                         "output_formats": ["json", "markdown"],

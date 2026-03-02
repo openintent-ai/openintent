@@ -148,7 +148,12 @@ Be concise but comprehensive. Focus on accuracy and clarity."""
 
     async def handle_intent(self, intent: Any) -> dict[str, Any]:
         topic = intent.description or intent.title
-        constraints = "\n".join(intent.constraints) if intent.constraints else ""
+        raw_constraints = intent.constraints or {}
+        if isinstance(raw_constraints, dict):
+            rules = raw_constraints.get("rules", [])
+            constraints = "\n".join(str(r) for r in rules) if rules else ""
+        else:
+            constraints = "\n".join(str(c) for c in raw_constraints) if raw_constraints else ""
 
         prompt = f"Research the following topic:\n\n{topic}"
         if constraints:

@@ -60,7 +60,7 @@ class ContentCoordinator(Coordinator):
                     title="Research Phase",
                     description=f"Research the topic: {topic}",
                     assign="research-agent",
-                    constraints=["max_cost_usd:0.50", "required_confidence:0.75"],
+                    constraints={"rules": ["max_cost_usd:0.50", "required_confidence:0.75"]},
                     initial_state={"phase": "research"},
                 ),
                 # Phase 2: Writing (depends on Research)
@@ -69,7 +69,7 @@ class ContentCoordinator(Coordinator):
                     description=f"Write a blog post about: {topic}",
                     assign="writing-agent",
                     depends_on=["Research Phase"],  # Waits for research
-                    constraints=["max_cost_usd:1.00", "style:engaging"],
+                    constraints={"rules": ["max_cost_usd:1.00", "style:engaging"]},
                     initial_state={"phase": "writing"},
                 ),
             ],

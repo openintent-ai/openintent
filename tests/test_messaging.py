@@ -30,6 +30,7 @@ def client():
         db_path = f.name
 
     db_module._database = None
+    db_module._database_url = None
     config = ServerConfig(
         database_url=f"sqlite:///{db_path}",
         api_keys={"dev-key-1", "dev-user-key"},
@@ -39,6 +40,7 @@ def client():
         yield c
 
     db_module._database = None
+    db_module._database_url = None
     os.unlink(db_path)
 
 
@@ -82,7 +84,6 @@ def _send_message(
 
 
 class TestChannelCRUD:
-
     def test_create_channel(self, client):
         intent_id = _create_intent(client)
         ch = _create_channel(client, intent_id, name="ops")
@@ -232,7 +233,6 @@ class TestChannelCRUD:
 
 
 class TestMessaging:
-
     def test_send_message(self, client):
         intent_id = _create_intent(client)
         ch = _create_channel(client, intent_id)
@@ -402,7 +402,6 @@ class TestMessaging:
 
 
 class TestRequestResponseCorrelation:
-
     def test_reply_to_message(self, client):
         intent_id = _create_intent(client)
         ch = _create_channel(client, intent_id)
@@ -496,7 +495,6 @@ class TestRequestResponseCorrelation:
 
 
 class TestAccessControl:
-
     def test_channels_scoped_to_intent(self, client):
         intent_1 = _create_intent(client)
         intent_2 = _create_intent(client)
