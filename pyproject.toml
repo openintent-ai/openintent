@@ -53,16 +53,15 @@ dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
-    "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
 ]
 docs = [
     "mkdocs>=1.5.0",
     "mkdocs-material>=9.5.0",
     "mkdocstrings[python]>=0.24.0",
     "pymdown-extensions>=10.0.0",
-    "black>=23.0.0",
 ]
 # LLM Provider Adapters (install only what you need)
 openai = [
@@ -103,10 +102,6 @@ Changelog = "https://github.com/openintent-ai/openintent/blob/main/CHANGELOG.md"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["openintent*"]
-
-[tool.black]
-line-length = 88
-target-version = ["py310", "py311", "py312"]
 
 [tool.ruff]
 line-length = 88

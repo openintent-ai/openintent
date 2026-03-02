@@ -714,7 +714,7 @@ pip install -e ".[dev,server]"
 
 pytest                  # Run tests
 ruff check openintent/  # Lint
-black openintent/       # Format
+ruff format openintent/ # Format
 mypy openintent/        # Type check
 openintent-server       # Start dev server
 ```

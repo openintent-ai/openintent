@@ -3018,7 +3018,9 @@ class OpenIntentClient:
             headers=headers,
         )
         data = self._handle_response(response)
-        agents: list[dict[str, Any]] = data if isinstance(data, list) else data.get("agents", [])
+        agents: list[dict[str, Any]] = (
+            data if isinstance(data, list) else data.get("agents", [])
+        )
         return agents
 
     def federation_dispatch(
@@ -5099,7 +5101,9 @@ class AsyncOpenIntentClient:
             headers=headers,
         )
         data = self._handle_response(response)
-        agents: list[dict[str, Any]] = data if isinstance(data, list) else data.get("agents", [])
+        agents: list[dict[str, Any]] = (
+            data if isinstance(data, list) else data.get("agents", [])
+        )
         return agents
 
     async def federation_dispatch(

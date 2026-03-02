@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`IntentLease.from_dict()` KeyError on server responses** — `acquire_lease()` threw `KeyError('status')` because the server's `LeaseResponse` model does not include a `status` field (it uses `acquired_at`, `expires_at`, and `released_at` to represent lease state). `IntentLease.from_dict()` now derives status from these fields: `RELEASED` if `released_at` is set, `EXPIRED` if `expires_at` is in the past, otherwise `ACTIVE`. Also handles the field name difference `acquired_at` (server) vs `created_at` (SDK). Backward compatible with the SDK's own serialization format.
 
+- **Stale database singleton after server restart** — `get_database()` cached the `Database` instance at module level and never checked whether `database_url` changed between calls. When the protocol server restarted on a different port (e.g., `openintent_server_8001.db` → `openintent_server_8002.db`), the singleton kept pointing at the old file. Writes went to the old database; reads came from the new (empty) one — intents appeared created but were invisible to `list_intents`. The singleton now tracks its URL and recreates the connection when the URL changes.
+
 - **Example and test updates** — All examples (`basic_usage.py`, `openai_multi_agent.py`, `multi_agent/coordinator.py`, `compliance_review/coordinator.py`) and tests updated to use dict-format constraints.
 
 ### Changed

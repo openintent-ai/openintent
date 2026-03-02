@@ -153,7 +153,9 @@ Be concise but comprehensive. Focus on accuracy and clarity."""
             rules = raw_constraints.get("rules", [])
             constraints = "\n".join(str(r) for r in rules) if rules else ""
         else:
-            constraints = "\n".join(str(c) for c in raw_constraints) if raw_constraints else ""
+            constraints = (
+                "\n".join(str(c) for c in raw_constraints) if raw_constraints else ""
+            )
 
         prompt = f"Research the following topic:\n\n{topic}"
         if constraints:

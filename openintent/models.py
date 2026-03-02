@@ -932,14 +932,20 @@ class IntentLease:
             if expires_str:
                 try:
                     expires = datetime.fromisoformat(expires_str)
-                    status = LeaseStatus.ACTIVE if datetime.now(expires.tzinfo) < expires else LeaseStatus.EXPIRED
+                    status = (
+                        LeaseStatus.ACTIVE
+                        if datetime.now(expires.tzinfo) < expires
+                        else LeaseStatus.EXPIRED
+                    )
                 except (ValueError, TypeError):
                     status = LeaseStatus.ACTIVE
             else:
                 status = LeaseStatus.ACTIVE
 
         created_at_str = data.get("created_at") or data.get("acquired_at")
-        created_at = datetime.fromisoformat(created_at_str) if created_at_str else datetime.now()
+        created_at = (
+            datetime.fromisoformat(created_at_str) if created_at_str else datetime.now()
+        )
 
         return cls(
             id=data["id"],
