@@ -318,13 +318,15 @@ def build_retry_failure_tools(
                 "failure_threshold": policy.get("failure_threshold", 3),
             },
         )
-        return _to_dict(result)
+        converted = _to_dict(result)
+        return converted if isinstance(converted, dict) else {"result": converted}
 
     def _get_retry_policy(intent_id: str, **_: Any) -> dict[str, Any]:
         result = _call(client.get_retry_policy, {"intent_id": intent_id})
         if result is None:
             return {"retry_policy": None}
-        return _to_dict(result)
+        converted = _to_dict(result)
+        return converted if isinstance(converted, dict) else {"result": converted}
 
     def _record_failure(
         intent_id: str,
@@ -353,7 +355,8 @@ def build_retry_failure_tools(
             "metadata": metadata,
         }
         result = _call(client.record_failure, kwargs)
-        return _to_dict(result)
+        converted = _to_dict(result)
+        return converted if isinstance(converted, dict) else {"result": converted}
 
     def _get_failures(
         intent_id: str,
@@ -365,7 +368,7 @@ def build_retry_failure_tools(
         if isinstance(failures, list):
             failures = failures[:limit]
             return {"failures": failures}
-        return failures
+        return failures if isinstance(failures, dict) else {"result": failures}
 
     return [
         {
