@@ -188,8 +188,46 @@ workflow:
 !!! warning "Idempotency"
     When using retry policies, ensure your agent handlers are idempotent — safe to call multiple times with the same input without side effects.
 
+## MCP Tool Access for Retry Policies
+
+The [MCP server](mcp.md) exposes 4 dedicated tools for retry policy management via the Model Context Protocol, allowing MCP clients like Claude Desktop and Cursor to manage retry policies and query failure history directly.
+
+| MCP Tool | Tier | Description |
+|----------|------|-------------|
+| `openintent_set_retry_policy` | `admin` | Configure retry policy for an intent (max attempts, backoff strategy, delays) |
+| `openintent_get_retry_policy` | `read` | Retrieve the current retry policy for an intent |
+| `openintent_record_failure` | `write` | Record a failure attempt against an intent for retry scheduling |
+| `openintent_get_failures` | `read` | Query failure history for an intent |
+
+These tools are available through the `@openintentai/mcp-server` package and follow the same RBAC model as all other MCP tools. The `build_retry_failure_tools()` function in the Python MCP bridge registers these tools automatically.
+
+```python
+from openintent import Agent, MCPTool, on_assignment
+
+@Agent("retry-manager", model="gpt-4o", tools=[
+    MCPTool(
+        server="npx",
+        args=["-y", "@openintentai/mcp-server"],
+        role="admin",
+        allowed_tools=[
+            "openintent_set_retry_policy",
+            "openintent_get_retry_policy",
+            "openintent_record_failure",
+            "openintent_get_failures",
+        ],
+    ),
+])
+class RetryManager:
+    @on_assignment
+    async def work(self, intent):
+        return await self.think(intent.description)
+```
+
+With these tools, the total MCP tool surface is 70 tools across all categories, with RBAC counts of reader=25, operator=43, admin=70.
+
 ## Next Steps
 
+- [MCP Integration](mcp.md) — Full MCP server and bridge documentation
 - [LLM Adapters](adapters.md) — Automatic cost tracking for LLM calls
 - [Governance & Arbitration](governance.md) — Budget enforcement and escalation
 - [YAML Workflows](workflows.md) — Declarative retry and cost configuration

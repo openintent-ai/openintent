@@ -1311,6 +1311,80 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     tier: "write" as ToolTier,
   },
 
+  // ── Retry Policy & Failures (RFC-0010) ──────────────────────────────
+  {
+    name: "openintent_set_retry_policy",
+    description:
+      "Set or update the retry policy for an intent (RFC-0010). Controls automatic " +
+      "retry behaviour including strategy, max attempts, backoff delays, and fallback agent.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        intent_id: { type: "string", description: "The intent to configure retry policy for" },
+        policy: {
+          type: "object",
+          description: "Retry policy configuration: { strategy: 'none'|'fixed'|'exponential'|'linear', max_retries: 3, base_delay_ms: 1000, max_delay_ms: 60000, fallback_agent_id: 'agent-backup'|null, failure_threshold: 3 }",
+          additionalProperties: true,
+        },
+      },
+      required: ["intent_id", "policy"],
+    },
+    tier: "admin" as ToolTier,
+  },
+  {
+    name: "openintent_get_retry_policy",
+    description:
+      "Retrieve the current retry policy configured for an intent. Returns " +
+      "the policy including max retries, backoff strategy, and retryable errors.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        intent_id: { type: "string", description: "The intent to query" },
+      },
+      required: ["intent_id"],
+    },
+    tier: "read" as ToolTier,
+  },
+  {
+    name: "openintent_record_failure",
+    description:
+      "Record a failure event against an intent (RFC-0010). The server evaluates the " +
+      "failure against the retry policy and may automatically schedule a retry.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        intent_id: { type: "string", description: "The intent that experienced a failure" },
+        agent_id: { type: "string", description: "ID of the agent reporting the failure" },
+        attempt_number: { type: "number", description: "Which retry attempt this failure represents (1-based)" },
+        error_code: { type: "string", description: "Error classification: RATE_LIMIT, TIMEOUT, NETWORK_ERROR, INVALID_OUTPUT, BUDGET_EXCEEDED, PERMISSION_DENIED" },
+        error_message: { type: "string", description: "Human-readable error message" },
+        retry_scheduled_at: { type: "string", description: "ISO 8601 timestamp for when the next retry is scheduled (optional)" },
+        metadata: {
+          type: "object",
+          description: "Additional failure context (e.g. { http_status: 429 })",
+          additionalProperties: true,
+        },
+      },
+      required: ["intent_id", "agent_id", "attempt_number"],
+    },
+    tier: "write" as ToolTier,
+  },
+  {
+    name: "openintent_get_failures",
+    description:
+      "Retrieve the failure history for an intent, ordered by most recent first. " +
+      "Useful for diagnosing recurring issues and reviewing retry attempts.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        intent_id: { type: "string", description: "The intent to query" },
+        limit: { type: "number", description: "Maximum number of failures to return (default 50)" },
+      },
+      required: ["intent_id"],
+    },
+    tier: "read" as ToolTier,
+  },
+
   // ── Federation (RFC-0022) ───────────────────────────────────────────
   {
     name: "openintent_federation_status",
@@ -1916,6 +1990,39 @@ export async function handleToolCall(
         result = await client.linkSpans({
           trace_id: args.trace_id as string,
           spans: args.spans as Array<{ span_id: string; parent_span_id?: string; operation: string; status?: string }>,
+        });
+        break;
+
+      // ── Retry Policy & Failures (RFC-0010) ──────────────────────────
+      case "openintent_set_retry_policy":
+        result = await client.setRetryPolicy({
+          intent_id: args.intent_id as string,
+          policy: args.policy as Record<string, unknown>,
+        });
+        break;
+
+      case "openintent_get_retry_policy":
+        result = await client.getRetryPolicy({
+          intent_id: args.intent_id as string,
+        });
+        break;
+
+      case "openintent_record_failure":
+        result = await client.recordFailure({
+          intent_id: args.intent_id as string,
+          agent_id: args.agent_id as string,
+          attempt_number: args.attempt_number as number,
+          error_code: args.error_code as string | undefined,
+          error_message: args.error_message as string | undefined,
+          retry_scheduled_at: args.retry_scheduled_at as string | undefined,
+          metadata: args.metadata as Record<string, unknown> | undefined,
+        });
+        break;
+
+      case "openintent_get_failures":
+        result = await client.getFailures({
+          intent_id: args.intent_id as string,
+          limit: args.limit as number | undefined,
         });
         break;
 
