@@ -11,9 +11,9 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import EventSourceResponse, JSONResponse
+from fastapi.sse import ServerSentEvent
 from pydantic import BaseModel, ConfigDict, Field
-from sse_starlette.sse import EventSourceResponse
 
 from .config import ServerConfig
 from .database import (  # noqa: F401
@@ -2752,7 +2752,10 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         finally:
             session.close()
 
-    @app.get("/api/v1/subscribe/intents/{intent_id}")
+    @app.get(
+        "/api/v1/subscribe/intents/{intent_id}",
+        response_class=EventSourceResponse,
+    )
     async def subscribe_intent(
         intent_id: str,
         request: Request,
@@ -2762,27 +2765,26 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         """SSE subscription for intent events."""
         queue: asyncio.Queue = asyncio.Queue(maxsize=100)
         _event_queues["intents"].append(queue)
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    if event.get("intent_id") == intent_id:
+                        yield ServerSentEvent(
+                            data=event.get("data", {}),
+                            event=event.get("type", "message"),
+                        )
+                except asyncio.TimeoutError:
+                    yield ServerSentEvent(comment="ping")
+        finally:
+            _event_queues["intents"].remove(queue)
 
-        async def event_generator():
-            try:
-                while True:
-                    if await request.is_disconnected():
-                        break
-                    try:
-                        event = await asyncio.wait_for(queue.get(), timeout=30.0)
-                        if event.get("intent_id") == intent_id:
-                            yield {
-                                "event": event.get("type", "message"),
-                                "data": str(event.get("data", {})),
-                            }
-                    except asyncio.TimeoutError:
-                        yield {"event": "ping", "data": ""}
-            finally:
-                _event_queues["intents"].remove(queue)
-
-        return EventSourceResponse(event_generator())
-
-    @app.get("/api/v1/subscribe/portfolios/{portfolio_id}")
+    @app.get(
+        "/api/v1/subscribe/portfolios/{portfolio_id}",
+        response_class=EventSourceResponse,
+    )
     async def subscribe_portfolio(
         portfolio_id: str,
         request: Request,
@@ -2792,27 +2794,26 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         """SSE subscription for portfolio events."""
         queue: asyncio.Queue = asyncio.Queue(maxsize=100)
         _event_queues["portfolios"].append(queue)
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    if event.get("portfolio_id") == portfolio_id:
+                        yield ServerSentEvent(
+                            data=event.get("data", {}),
+                            event=event.get("type", "message"),
+                        )
+                except asyncio.TimeoutError:
+                    yield ServerSentEvent(comment="ping")
+        finally:
+            _event_queues["portfolios"].remove(queue)
 
-        async def event_generator():
-            try:
-                while True:
-                    if await request.is_disconnected():
-                        break
-                    try:
-                        event = await asyncio.wait_for(queue.get(), timeout=30.0)
-                        if event.get("portfolio_id") == portfolio_id:
-                            yield {
-                                "event": event.get("type", "message"),
-                                "data": str(event.get("data", {})),
-                            }
-                    except asyncio.TimeoutError:
-                        yield {"event": "ping", "data": ""}
-            finally:
-                _event_queues["portfolios"].remove(queue)
-
-        return EventSourceResponse(event_generator())
-
-    @app.get("/api/v1/subscribe/agents/{agent_id}")
+    @app.get(
+        "/api/v1/subscribe/agents/{agent_id}",
+        response_class=EventSourceResponse,
+    )
     async def subscribe_agent(
         agent_id: str,
         request: Request,
@@ -2822,25 +2823,21 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         """SSE subscription for agent events."""
         queue: asyncio.Queue = asyncio.Queue(maxsize=100)
         _event_queues["agents"].append(queue)
-
-        async def event_generator():
-            try:
-                while True:
-                    if await request.is_disconnected():
-                        break
-                    try:
-                        event = await asyncio.wait_for(queue.get(), timeout=30.0)
-                        if event.get("agent_id") == agent_id:
-                            yield {
-                                "event": event.get("type", "message"),
-                                "data": str(event.get("data", {})),
-                            }
-                    except asyncio.TimeoutError:
-                        yield {"event": "ping", "data": ""}
-            finally:
-                _event_queues["agents"].remove(queue)
-
-        return EventSourceResponse(event_generator())
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    if event.get("agent_id") == agent_id:
+                        yield ServerSentEvent(
+                            data=event.get("data", {}),
+                            event=event.get("type", "message"),
+                        )
+                except asyncio.TimeoutError:
+                    yield ServerSentEvent(comment="ping")
+        finally:
+            _event_queues["agents"].remove(queue)
 
     @app.post("/api/v1/intents/{intent_id}/arbitrate")
     async def request_arbitration(
@@ -4621,7 +4618,10 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
         channel_messages.pop(channel_id, None)
         return {"status": "closed", "channel_id": channel_id}
 
-    @app.get("/api/v1/subscribe/channels/{channel_id}")
+    @app.get(
+        "/api/v1/subscribe/channels/{channel_id}",
+        response_class=EventSourceResponse,
+    )
     async def subscribe_channel(
         channel_id: str,
         request: Request,
@@ -4632,25 +4632,21 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Channel not found")
         queue: asyncio.Queue = asyncio.Queue(maxsize=100)
         _event_queues["channels"].append(queue)
-
-        async def event_generator():
-            try:
-                while True:
-                    if await request.is_disconnected():
-                        break
-                    try:
-                        event = await asyncio.wait_for(queue.get(), timeout=30.0)
-                        if event.get("channel_id") == channel_id:
-                            yield {
-                                "event": event.get("type", "message"),
-                                "data": str(event.get("data", {})),
-                            }
-                    except asyncio.TimeoutError:
-                        yield {"event": "ping", "data": ""}
-            finally:
-                _event_queues["channels"].remove(queue)
-
-        return EventSourceResponse(event_generator())
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    if event.get("channel_id") == channel_id:
+                        yield ServerSentEvent(
+                            data=event.get("data", {}),
+                            event=event.get("type", "message"),
+                        )
+                except asyncio.TimeoutError:
+                    yield ServerSentEvent(comment="ping")
+        finally:
+            _event_queues["channels"].remove(queue)
 
     @app.post(
         "/api/v1/channels/{channel_id}/messages",

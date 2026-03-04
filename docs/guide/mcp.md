@@ -120,7 +120,7 @@ class Researcher:
 ```
 
 !!! info "RBAC role determines tool visibility"
-    The `role` field on `MCPTool` maps directly to the RBAC system. When connecting to `@openintentai/mcp-server`, the server filters its tool listing based on the role: `reader` sees 4 read-only tools, `operator` sees 10 read+write tools, `admin` sees all 16 tools. The `allowed_tools` field further restricts within the role's permissions — both gates must pass.
+    The `role` field on `MCPTool` maps directly to the RBAC system. When connecting to `@openintentai/mcp-server`, the server filters its tool listing based on the role: `reader` sees 25 read-only tools, `operator` sees 43 read+write tools, `admin` sees all 70 tools. The `allowed_tools` field further restricts within the role's permissions — both gates must pass.
 
 !!! warning "Least-privilege by design"
     `MCPTool.role` defaults to `"reader"` — the most restrictive level. Each agent should declare exactly the minimum role it needs. In multi-agent topologies, each agent's MCP server runs as an isolated child process with its own explicit role, so one agent's privilege never leaks to another. Do **not** set `OPENINTENT_MCP_ROLE` as a global environment variable in multi-agent setups — declare the role per-agent on each `MCPTool` instead.
@@ -256,6 +256,10 @@ With the MCP server connected, Claude can interact with OpenIntent directly. Her
 | `openintent_assign_agent` | `admin` | Assign an agent to an intent |
 | `openintent_unassign_agent` | `admin` | Remove an agent assignment |
 | `openintent_create_channel` | `admin` | Create a messaging channel |
+| `openintent_set_retry_policy` | `admin` | Configure retry policy for an intent |
+| `openintent_get_retry_policy` | `read` | Retrieve the retry policy for an intent |
+| `openintent_record_failure` | `write` | Record a failure attempt for retry scheduling |
+| `openintent_get_failures` | `read` | Query failure history for an intent |
 
 ### Available Resources
 
@@ -287,9 +291,9 @@ Every tool belongs to a **permission tier** — `read`, `write`, or `admin`. Rol
 
 | Role | Tiers Granted | Tool Count | Use Case |
 |------|---------------|------------|----------|
-| **`reader`** | `read` | 4 | Dashboards, monitoring, auditing. The MCP client can observe but never modify protocol state. |
-| **`operator`** | `read` + `write` | 10 | Worker agents that create intents, update state, and communicate. Cannot change lifecycle status, manage leases, or restructure agent assignments. |
-| **`admin`** | `read` + `write` + `admin` | 16 | Trusted orchestrators with full control. Required for lifecycle management, lease coordination, and structural operations. |
+| **`reader`** | `read` | 25 | Dashboards, monitoring, auditing. The MCP client can observe but never modify protocol state. |
+| **`operator`** | `read` + `write` | 43 | Worker agents that create intents, update state, and communicate. Cannot change lifecycle status, manage leases, or restructure agent assignments. |
+| **`admin`** | `read` + `write` + `admin` | 70 | Trusted orchestrators with full control. Required for lifecycle management, lease coordination, and structural operations. |
 
 #### Tool Classification
 
@@ -301,6 +305,8 @@ Every tool belongs to a **permission tier** — `read`, `write`, or `admin`. Rol
 | `openintent_list_intents` | Query intents with status filters |
 | `openintent_get_events` | Read the immutable event log |
 | `openintent_get_messages` | Read channel message history |
+| `openintent_get_retry_policy` | Retrieve the retry policy for an intent |
+| `openintent_get_failures` | Query failure history for an intent |
 
 **Write tier** — bounded mutations with protocol safety:
 
@@ -312,6 +318,7 @@ Every tool belongs to a **permission tier** — `read`, `write`, or `admin`. Rol
 | `openintent_send_message` | Send a channel message | Scoped to channel membership |
 | `openintent_ask` | Request/reply on a channel | Scoped to channel membership |
 | `openintent_broadcast` | Broadcast to channel | Scoped to channel membership |
+| `openintent_record_failure` | Record a failure attempt | Append-only failure record for retry scheduling |
 
 **Admin tier** — structural and lifecycle operations:
 
@@ -323,6 +330,7 @@ Every tool belongs to a **permission tier** — `read`, `write`, or `admin`. Rol
 | `openintent_assign_agent` | Add agent to intent | Changes who can work on an intent. |
 | `openintent_unassign_agent` | Remove agent from intent | Removing an active agent disrupts in-progress work. |
 | `openintent_create_channel` | Create messaging channel | Establishes communication topology between agents. |
+| `openintent_set_retry_policy` | Configure retry policy for an intent | Controls retry behavior including max attempts, backoff strategy, and delay parameters. Misconfiguration can cause excessive retries. |
 
 #### Default Role
 
@@ -398,7 +406,7 @@ If the role is not set or is set to an unrecognized value, the server falls back
 The server logs its active role and tool count at startup:
 
 ```
-[openintent-mcp] Server started – role="operator", tools=10/16, connected to http://localhost:8000
+[openintent-mcp] Server started – role="operator", tools=43/70, connected to http://localhost:8000
 ```
 
 If the role is `admin`, a warning is emitted:

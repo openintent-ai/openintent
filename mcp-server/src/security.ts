@@ -121,6 +121,12 @@ export const TOOL_TIERS: Record<string, ToolTier> = {
   openintent_start_trace:  "write",
   openintent_link_spans:   "write",
 
+  // Retry Policy & Failures (RFC-0010)
+  openintent_set_retry_policy:  "admin",
+  openintent_get_retry_policy:  "read",
+  openintent_record_failure:    "write",
+  openintent_get_failures:      "read",
+
   // Federation (RFC-0022)
   openintent_federation_status:    "read",
   openintent_list_federated_agents: "read",

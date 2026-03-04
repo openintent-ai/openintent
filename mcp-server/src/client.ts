@@ -926,4 +926,51 @@ export class OpenIntentClient {
       trace_id: params.trace_id,
     });
   }
+
+  // ── Retry Policy & Failures (RFC-0010) ──────────────────────────────
+
+  async setRetryPolicy(params: {
+    intent_id: string;
+    policy: Record<string, unknown>;
+  }): Promise<unknown> {
+    return this.request("PUT", `/api/v1/intents/${params.intent_id}/retry-policy`, params.policy);
+  }
+
+  async getRetryPolicy(params: {
+    intent_id: string;
+  }): Promise<unknown> {
+    return this.request("GET", `/api/v1/intents/${params.intent_id}/retry-policy`);
+  }
+
+  async recordFailure(params: {
+    intent_id: string;
+    agent_id: string;
+    attempt_number: number;
+    error_code?: string;
+    error_message?: string;
+    retry_scheduled_at?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<unknown> {
+    return this.request("POST", `/api/v1/intents/${params.intent_id}/failures`, {
+      agent_id: params.agent_id,
+      attempt_number: params.attempt_number,
+      error_code: params.error_code,
+      error_message: params.error_message,
+      retry_scheduled_at: params.retry_scheduled_at,
+      metadata: params.metadata ?? {},
+    });
+  }
+
+  async getFailures(params: {
+    intent_id: string;
+    limit?: number;
+  }): Promise<unknown> {
+    const query = new URLSearchParams();
+    if (params.limit !== undefined) query.set("limit", String(params.limit));
+    const qs = query.toString();
+    return this.request(
+      "GET",
+      `/api/v1/intents/${params.intent_id}/failures${qs ? `?${qs}` : ""}`,
+    );
+  }
 }

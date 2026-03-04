@@ -5,6 +5,28 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-03-02
+
+### Added
+
+- **RFC-0010 Retry Policy MCP Tools** — 4 new MCP tools: `set_retry_policy` (admin), `get_retry_policy` (read), `record_failure` (write), `get_failures` (read). MCP tool surface expanded from 66 to 70 tools; RBAC counts: reader=25, operator=43, admin=70.
+- **`build_retry_failure_tools()`** — New helper in the Python MCP bridge (`openintent.mcp`) that constructs retry policy and failure-tracking tool definitions for MCP integration, enabling agents to manage retry policies and record/query failures through MCP.
+
+### Changed
+
+- **Native FastAPI SSE** — Replaced `sse-starlette` third-party dependency with FastAPI's built-in `EventSourceResponse` and `ServerSentEvent` (available since FastAPI 0.135.0). All four SSE subscription endpoints (`/api/v1/subscribe/intents/{id}`, `/api/v1/subscribe/portfolios/{id}`, `/api/v1/subscribe/agents/{id}`, `/api/v1/subscribe/channels/{id}`) now use native async generator pattern with `ServerSentEvent` objects instead of yielding raw dicts through `sse-starlette`'s `EventSourceResponse`. Keep-alive pings now use SSE comment format (`ServerSentEvent(comment="ping")`) per the SSE spec recommendation.
+
+### Removed
+
+- **`sse-starlette` dependency** — No longer required. The `server` optional dependency group now requires `fastapi>=0.135.0` (previously `>=0.104.0`) which includes native SSE support.
+
+### Updated
+
+- All version references updated to 0.15.0 across Python SDK, MCP server package, and changelog.
+- FastAPI minimum version bumped from `>=0.104.0` to `>=0.135.0` in server extras.
+
+---
+
 ## [0.14.1] - 2026-02-27
 
 ### Fixed

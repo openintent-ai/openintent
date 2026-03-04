@@ -70,9 +70,9 @@ The server enforces role-based access control with three tiers:
 
 | Role | Tools | Description |
 |---|---|---|
-| `reader` | 21 | Read-only observation: list/get intents, events, agents, costs |
-| `operator` | 38 | Bounded mutations: create intents, post events, manage leases |
-| `admin` | 62 | Full lifecycle: governance, identity, vaults, triggers, plans |
+| `reader` | 25 | Read-only observation: list/get intents, events, agents, costs, retry policies, failures |
+| `operator` | 43 | Bounded mutations: create intents, post events, manage leases, record failures |
+| `admin` | 70 | Full lifecycle: governance, identity, vaults, triggers, plans, retry policies |
 
 Tools not permitted by the assigned role are hidden from the MCP tool listing entirely.
 
@@ -93,6 +93,7 @@ The role gate works alongside the `allowed_tools` allowlist — both must pass f
 - **Verifiable Logs** (RFC-0019) — Hash chains, Merkle proofs
 - **Tracing** (RFC-0020) — Distributed trace propagation
 - **Messaging** (RFC-0021) — Agent-to-agent channels
+- **Retry Policies** (RFC-0010) — Set/get retry policies, record and query failures
 
 ## Resources
 

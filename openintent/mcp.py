@@ -264,6 +264,246 @@ class MCPToolExporter:
         return {"result": result}
 
 
+def build_retry_failure_tools(
+    client: Any,
+) -> list[dict[str, Any]]:
+    """Build MCP tool definitions for RFC-0010 Retry Policy & Failure tools.
+
+    Each tool delegates to the corresponding method on an
+    :class:`~openintent.client.OpenIntentClient` (sync) or
+    :class:`~openintent.client.AsyncOpenIntentClient` (async).
+
+    Args:
+        client: An ``OpenIntentClient`` or ``AsyncOpenIntentClient`` instance.
+
+    Returns:
+        A list of tool definition dicts ready for :class:`MCPToolExporter`.
+    """
+    import asyncio
+
+    def _call(method: Any, kwargs: dict[str, Any]) -> Any:
+        if asyncio.iscoroutinefunction(method):
+            return asyncio.get_event_loop().run_until_complete(method(**kwargs))
+        return method(**kwargs)
+
+    def _to_dict(obj: Any) -> Any:
+        if hasattr(obj, "to_dict"):
+            return obj.to_dict()
+        if isinstance(obj, list):
+            return [_to_dict(item) for item in obj]
+        return obj
+
+    def _set_retry_policy(
+        intent_id: str,
+        policy: Optional[dict[str, Any]] = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        from .models import RetryStrategy
+
+        policy = policy or kwargs
+        strategy_val = policy.get("strategy", "exponential")
+        try:
+            strategy = RetryStrategy(strategy_val)
+        except ValueError:
+            strategy = RetryStrategy.EXPONENTIAL
+        result = _call(
+            client.set_retry_policy,
+            {
+                "intent_id": intent_id,
+                "strategy": strategy,
+                "max_retries": policy.get("max_retries", 3),
+                "base_delay_ms": policy.get("base_delay_ms", 1000),
+                "max_delay_ms": policy.get("max_delay_ms", 60000),
+                "fallback_agent_id": policy.get("fallback_agent_id"),
+                "failure_threshold": policy.get("failure_threshold", 3),
+            },
+        )
+        converted = _to_dict(result)
+        return converted if isinstance(converted, dict) else {"result": converted}
+
+    def _get_retry_policy(intent_id: str, **_: Any) -> dict[str, Any]:
+        result = _call(client.get_retry_policy, {"intent_id": intent_id})
+        if result is None:
+            return {"retry_policy": None}
+        converted = _to_dict(result)
+        return converted if isinstance(converted, dict) else {"result": converted}
+
+    def _record_failure(
+        intent_id: str,
+        agent_id: str = "",
+        attempt_number: int = 1,
+        error_code: Optional[str] = None,
+        error_message: Optional[str] = None,
+        retry_scheduled_at: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
+        **_: Any,
+    ) -> dict[str, Any]:
+        from datetime import datetime as _dt
+
+        scheduled: Optional[Any] = None
+        if retry_scheduled_at:
+            try:
+                scheduled = _dt.fromisoformat(retry_scheduled_at)
+            except (ValueError, TypeError):
+                scheduled = None
+        kwargs: dict[str, Any] = {
+            "intent_id": intent_id,
+            "attempt_number": attempt_number,
+            "error_code": error_code,
+            "error_message": error_message,
+            "retry_scheduled_at": scheduled,
+            "metadata": metadata,
+        }
+        result = _call(client.record_failure, kwargs)
+        converted = _to_dict(result)
+        return converted if isinstance(converted, dict) else {"result": converted}
+
+    def _get_failures(
+        intent_id: str,
+        limit: int = 50,
+        **_: Any,
+    ) -> dict[str, Any]:
+        result = _call(client.get_failures, {"intent_id": intent_id})
+        failures = _to_dict(result)
+        if isinstance(failures, list):
+            failures = failures[:limit]
+            return {"failures": failures}
+        return failures if isinstance(failures, dict) else {"result": failures}
+
+    return [
+        {
+            "name": "openintent_set_retry_policy",
+            "description": (
+                "Set or update the retry policy for an intent (RFC-0010). Controls "
+                "automatic retry behaviour including strategy, max attempts, backoff "
+                "delays, and fallback agent."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "intent_id": {
+                        "type": "string",
+                        "description": "The intent to configure retry policy for",
+                    },
+                    "policy": {
+                        "type": "object",
+                        "description": (
+                            "Retry policy configuration: { strategy: "
+                            "'none'|'fixed'|'exponential'|'linear', "
+                            "max_retries: 3, base_delay_ms: 1000, "
+                            "max_delay_ms: 60000, "
+                            "fallback_agent_id: 'agent-backup'|null, "
+                            "failure_threshold: 3 }"
+                        ),
+                        "additionalProperties": True,
+                    },
+                },
+                "required": ["intent_id", "policy"],
+            },
+            "handler": _set_retry_policy,
+        },
+        {
+            "name": "openintent_get_retry_policy",
+            "description": (
+                "Retrieve the current retry policy configured for an "
+                "intent. Returns the policy including max retries, "
+                "backoff strategy, and retryable errors."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "intent_id": {
+                        "type": "string",
+                        "description": "The intent to get retry policy for",
+                    },
+                },
+                "required": ["intent_id"],
+            },
+            "handler": _get_retry_policy,
+        },
+        {
+            "name": "openintent_record_failure",
+            "description": (
+                "Record a failure event against an intent (RFC-0010). The server "
+                "evaluates the failure against the retry policy and may "
+                "automatically schedule a retry."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "intent_id": {
+                        "type": "string",
+                        "description": "The intent that experienced a failure",
+                    },
+                    "agent_id": {
+                        "type": "string",
+                        "description": "ID of the agent reporting the failure",
+                    },
+                    "attempt_number": {
+                        "type": "number",
+                        "description": (
+                            "Which retry attempt this failure represents (1-based)"
+                        ),
+                    },
+                    "error_code": {
+                        "type": "string",
+                        "description": (
+                            "Error classification: RATE_LIMIT, TIMEOUT, "
+                            "NETWORK_ERROR, INVALID_OUTPUT, BUDGET_EXCEEDED, "
+                            "PERMISSION_DENIED"
+                        ),
+                    },
+                    "error_message": {
+                        "type": "string",
+                        "description": "Human-readable error description",
+                    },
+                    "retry_scheduled_at": {
+                        "type": "string",
+                        "description": (
+                            "ISO 8601 timestamp for when the next retry is "
+                            "scheduled (optional)"
+                        ),
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "description": (
+                            "Additional failure context (e.g. { http_status: 429 })"
+                        ),
+                        "additionalProperties": True,
+                    },
+                },
+                "required": ["intent_id", "agent_id", "attempt_number"],
+            },
+            "handler": _record_failure,
+        },
+        {
+            "name": "openintent_get_failures",
+            "description": (
+                "Retrieve the failure history for an intent, ordered "
+                "by most recent first. Useful for diagnosing recurring "
+                "issues and reviewing retry attempts."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "intent_id": {
+                        "type": "string",
+                        "description": "The intent to get failure history for",
+                    },
+                    "limit": {
+                        "type": "number",
+                        "description": (
+                            "Maximum number of failures to return (default 50)"
+                        ),
+                    },
+                },
+                "required": ["intent_id"],
+            },
+            "handler": _get_failures,
+        },
+    ]
+
+
 class MCPBridge:
     """High-level bridge managing multiple MCP server connections."""
 
