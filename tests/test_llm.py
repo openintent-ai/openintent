@@ -26,8 +26,10 @@ from openintent.llm import (
     ProtocolToolExecutor,
     Tool,
     ToolDef,
+    _messages_to_gemini_contents,
     _resolve_provider,
     _tools_to_anthropic_format,
+    _tools_to_gemini_format,
     _tools_to_openai_format,
     define_tool,
     tool,
@@ -51,6 +53,9 @@ class TestProviderResolution:
     def test_gemini(self):
         assert _resolve_provider("gemini-pro") == "gemini"
         assert _resolve_provider("gemini-1.5-flash") == "gemini"
+        assert _resolve_provider("gemini-3-flash") == "gemini"
+        assert _resolve_provider("gemini-3-pro") == "gemini"
+        assert _resolve_provider("gemini-3.1-pro") == "gemini"
 
     def test_grok(self):
         assert _resolve_provider("grok-2") == "grok"
@@ -1669,3 +1674,102 @@ class TestMixedToolThinkLoop:
             "web_search",
             query="openintent protocol",
         )
+
+
+# ---------------------------------------------------------------------------
+# Gemini Message & Tool Conversion
+# ---------------------------------------------------------------------------
+
+
+class TestGeminiConversions:
+    def test_messages_to_gemini_system_extracted(self):
+        messages = [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Hello"},
+        ]
+        system_instruction, contents = _messages_to_gemini_contents(messages)
+        assert system_instruction == "You are helpful."
+        assert len(contents) == 1
+        assert contents[0]["role"] == "user"
+        assert contents[0]["parts"][0]["text"] == "Hello"
+
+    def test_messages_to_gemini_no_system(self):
+        messages = [
+            {"role": "user", "content": "Hi"},
+            {"role": "assistant", "content": "Hello!"},
+            {"role": "user", "content": "How are you?"},
+        ]
+        system_instruction, contents = _messages_to_gemini_contents(messages)
+        assert system_instruction is None
+        assert len(contents) == 3
+        assert contents[0]["role"] == "user"
+        assert contents[1]["role"] == "model"
+        assert contents[2]["role"] == "user"
+
+    def test_messages_to_gemini_multi_system(self):
+        messages = [
+            {"role": "system", "content": "Rule 1"},
+            {"role": "system", "content": "Rule 2"},
+            {"role": "user", "content": "Go"},
+        ]
+        system_instruction, contents = _messages_to_gemini_contents(messages)
+        assert "Rule 1" in system_instruction
+        assert "Rule 2" in system_instruction
+        assert len(contents) == 1
+
+    def test_messages_to_gemini_empty(self):
+        system_instruction, contents = _messages_to_gemini_contents([])
+        assert system_instruction is None
+        assert contents == []
+
+    def test_tools_to_gemini_format(self):
+        tools = [
+            {
+                "name": "search",
+                "description": "Search the web.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"q": {"type": "string"}},
+                    "required": ["q"],
+                },
+            },
+            {
+                "name": "calc",
+                "description": "Do math.",
+            },
+        ]
+        result = _tools_to_gemini_format(tools)
+        assert len(result) == 1
+        declarations = result[0]["function_declarations"]
+        assert len(declarations) == 2
+        assert declarations[0]["name"] == "search"
+        assert declarations[0]["description"] == "Search the web."
+        assert "parameters" in declarations[0]
+        assert declarations[1]["name"] == "calc"
+        assert "parameters" not in declarations[1]
+
+    def test_tools_to_gemini_format_empty(self):
+        result = _tools_to_gemini_format([])
+        assert result == []
+
+
+class TestGeminiToolFormatConversion:
+    def test_gemini_format_from_protocol_tools(self):
+        result = _tools_to_gemini_format(PROTOCOL_TOOLS_AGENT)
+        assert len(result) == 1
+        declarations = result[0]["function_declarations"]
+        assert len(declarations) == len(PROTOCOL_TOOLS_AGENT)
+        names = {d["name"] for d in declarations}
+        assert "remember" in names
+        assert "recall" in names
+
+    def test_format_tools_for_gemini_provider(self):
+        agent = MagicMock()
+        agent._agent_id = "test"
+        agent._config = AgentConfig()
+        agent._agents_list = None
+        config = LLMConfig(model="gemini-3-flash", provider="gemini")
+        engine = LLMEngine(agent, config)
+        formatted = engine._format_tools_for_provider()
+        assert len(formatted) == 1
+        assert "function_declarations" in formatted[0]

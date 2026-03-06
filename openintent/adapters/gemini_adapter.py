@@ -1,21 +1,21 @@
 """Google Gemini provider adapter for automatic OpenIntent coordination.
 
-This adapter wraps the Google Generative AI client to automatically log intent events
-for content generation, tool calls, and streaming responses.
+This adapter wraps the Google GenAI client (``google-genai`` SDK) to
+automatically log intent events for content generation, tool calls, and
+streaming responses.
 
 Installation:
     pip install openintent[gemini]
 
 Example:
-    import google.generativeai as genai
+    from google import genai
     from openintent import OpenIntentClient
     from openintent.adapters import GeminiAdapter
 
     openintent = OpenIntentClient(base_url="...", api_key="...")
-    genai.configure(api_key="...")
-    model = genai.GenerativeModel("gemini-1.5-pro")
+    gemini = genai.Client(api_key="...")
 
-    adapter = GeminiAdapter(model, openintent, intent_id="...")
+    adapter = GeminiAdapter(gemini, openintent, intent_id="...", model="gemini-3-flash")
 
     # Regular generation - automatically logs request events
     response = adapter.generate_content("Hello, how are you?")
@@ -35,26 +35,26 @@ if TYPE_CHECKING:
 
 
 def _check_gemini_installed() -> None:
-    """Check if the google-generativeai package is installed."""
+    """Check if the google-genai package is installed."""
     try:
-        import google.generativeai  # noqa: F401
+        from google import genai  # noqa: F401
     except ImportError:
         raise ImportError(
-            "GeminiAdapter requires the 'google-generativeai' package. "
+            "GeminiAdapter requires the 'google-genai' package. "
             "Install it with: pip install openintent[gemini]"
         ) from None
 
 
 class GeminiAdapter(BaseAdapter):
-    """Adapter for the Google Generative AI (Gemini) Python client.
+    """Adapter for the Google GenAI (Gemini) Python client.
 
-    Wraps a GenerativeModel instance to automatically log OpenIntent events
+    Wraps a ``genai.Client`` instance to automatically log OpenIntent events
     for all content generation, tool calls, and streaming responses.
 
-    The adapter exposes the same interface as the GenerativeModel, so you can
-    use it as a drop-in replacement:
+    The adapter provides the same high-level interface as the underlying SDK
+    while transparently recording protocol events:
 
-        adapter = GeminiAdapter(model, openintent, intent_id)
+        adapter = GeminiAdapter(client, openintent, intent_id, model="gemini-3-flash")
         response = adapter.generate_content("Hello")
 
     Events logged:
@@ -70,31 +70,38 @@ class GeminiAdapter(BaseAdapter):
 
     def __init__(
         self,
-        gemini_model: Any,
+        gemini_client: Any,
         openintent_client: "OpenIntentClient",
         intent_id: str,
+        model: str = "gemini-3-flash",
         config: Optional[AdapterConfig] = None,
     ):
         """Initialize the Gemini adapter.
 
         Args:
-            gemini_model: The GenerativeModel instance to wrap.
+            gemini_client: A ``genai.Client`` instance.
             openintent_client: The OpenIntent client for logging events.
             intent_id: The intent ID to associate events with.
+            model: The Gemini model name to use (e.g. ``"gemini-3-flash"``).
             config: Optional adapter configuration.
 
         Raises:
-            ImportError: If the google-generativeai package is not installed.
+            ImportError: If the google-genai package is not installed.
         """
         _check_gemini_installed()
         super().__init__(openintent_client, intent_id, config)
-        self._model = gemini_model
-        self._model_name = getattr(gemini_model, "model_name", "gemini")
+        self._gemini = gemini_client
+        self._model_name = model
 
     @property
-    def model(self) -> Any:
-        """The wrapped GenerativeModel."""
-        return self._model
+    def gemini_client(self) -> Any:
+        """The wrapped genai.Client."""
+        return self._gemini
+
+    @property
+    def model_name(self) -> str:
+        """The model name used for generation."""
+        return self._model_name
 
     def generate_content(
         self,
@@ -106,9 +113,11 @@ class GeminiAdapter(BaseAdapter):
         """Generate content with automatic event logging.
 
         Args:
-            contents: The prompt or conversation contents.
+            contents: The prompt string, Content object, or list of contents.
             stream: Whether to stream the response.
-            **kwargs: Additional arguments passed to generate_content.
+            **kwargs: Additional arguments passed to the GenAI client.
+                Supports ``config`` (generation config dict or object),
+                ``tools``, and any other ``generate_content`` parameters.
 
         Returns:
             GenerateContentResponse or iterator of chunks if streaming.
@@ -116,13 +125,12 @@ class GeminiAdapter(BaseAdapter):
         request_id = self._generate_id()
         model = self._model_name
         tools = kwargs.get("tools", [])
-        temperature = kwargs.get("generation_config", {})
-        if hasattr(temperature, "temperature"):
-            temperature = temperature.temperature
-        elif isinstance(temperature, dict):
-            temperature = temperature.get("temperature")
-        else:
-            temperature = None
+        gen_config = kwargs.get("config", {})
+        temperature = None
+        if isinstance(gen_config, dict):
+            temperature = gen_config.get("temperature")
+        elif hasattr(gen_config, "temperature"):
+            temperature = gen_config.temperature
 
         messages_count = (
             1
@@ -136,10 +144,20 @@ class GeminiAdapter(BaseAdapter):
             try:
                 tool_names = []
                 if tools:
-                    for tool in tools:
-                        if hasattr(tool, "function_declarations"):
-                            for fd in tool.function_declarations:
+                    for t in tools if isinstance(tools, list) else [tools]:
+                        if hasattr(t, "function_declarations"):
+                            for fd in t.function_declarations:
                                 tool_names.append(getattr(fd, "name", "unknown"))
+                        elif isinstance(t, dict) and "function_declarations" in t:
+                            for fd in t["function_declarations"]:
+                                name = (
+                                    fd.get("name", "unknown")
+                                    if isinstance(fd, dict)
+                                    else getattr(fd, "name", "unknown")
+                                )
+                                tool_names.append(name)
+                        elif callable(t):
+                            tool_names.append(getattr(t, "__name__", "unknown"))
 
                 self._client.log_llm_request_started(
                     self._intent_id,
@@ -196,23 +214,26 @@ class GeminiAdapter(BaseAdapter):
         start_time: float,
     ) -> Any:
         """Handle a non-streaming completion."""
-        response = self._model.generate_content(contents, **kwargs)
+        response = self._gemini.models.generate_content(
+            model=model, contents=contents, **kwargs
+        )
         duration_ms = int((time.time() - start_time) * 1000)
 
         if self._config.log_requests:
             try:
                 usage = getattr(response, "usage_metadata", None)
                 text_content = ""
-                if response.candidates:
+                if hasattr(response, "candidates") and response.candidates:
                     candidate = response.candidates[0]
-                    if hasattr(candidate, "content") and candidate.content.parts:
-                        for part in candidate.content.parts:
-                            if hasattr(part, "text"):
+                    if hasattr(candidate, "content") and candidate.content:
+                        for part in candidate.content.parts or []:
+                            if hasattr(part, "text") and part.text:
                                 text_content += part.text
 
                 finish_reason = None
-                if response.candidates:
-                    finish_reason = str(response.candidates[0].finish_reason)
+                if hasattr(response, "candidates") and response.candidates:
+                    fr = response.candidates[0].finish_reason
+                    finish_reason = str(fr) if fr is not None else None
 
                 self._client.log_llm_request_completed(
                     self._intent_id,
@@ -272,7 +293,9 @@ class GeminiAdapter(BaseAdapter):
 
         self._invoke_stream_start(stream_id, model, "google")
 
-        stream = self._model.generate_content(contents, stream=True, **kwargs)
+        stream = self._gemini.models.generate_content_stream(
+            model=model, contents=contents, **kwargs
+        )
         return self._stream_wrapper(
             stream,
             stream_id,
@@ -320,22 +343,25 @@ class GeminiAdapter(BaseAdapter):
                 if getattr(chunk, "usage_metadata", None) is not None:
                     usage_metadata = chunk.usage_metadata
 
-                if chunk.candidates:
+                if hasattr(chunk, "candidates") and chunk.candidates:
                     candidate = chunk.candidates[0]
-                    if hasattr(candidate, "content") and candidate.content.parts:
-                        for part in candidate.content.parts:
+                    if hasattr(candidate, "content") and candidate.content:
+                        for part in candidate.content.parts or []:
                             if hasattr(part, "text") and part.text:
                                 content_parts.append(part.text)
                                 self._invoke_on_token(part.text, stream_id)
-                            if hasattr(part, "function_call"):
+                            if hasattr(part, "function_call") and part.function_call:
                                 fc = part.function_call
                                 function_calls.append(
                                     {
-                                        "name": fc.name,
-                                        "args": dict(fc.args) if fc.args else {},
+                                        "name": getattr(fc, "name", "unknown"),
+                                        "args": dict(fc.args)
+                                        if getattr(fc, "args", None)
+                                        else {},
+                                        "id": getattr(fc, "id", None),
                                     }
                                 )
-                    if candidate.finish_reason:
+                    if hasattr(candidate, "finish_reason") and candidate.finish_reason:
                         finish_reason = str(candidate.finish_reason)
 
                 yield chunk
@@ -407,7 +433,7 @@ class GeminiAdapter(BaseAdapter):
                         self._client.log_tool_call_started(
                             self._intent_id,
                             tool_name=fc["name"],
-                            tool_id=self._generate_id(),
+                            tool_id=fc["id"] or self._generate_id(),
                             arguments=fc["args"],
                             provider="google",
                             model=model,
@@ -455,26 +481,28 @@ class GeminiAdapter(BaseAdapter):
 
     def _log_function_calls(self, response: Any, model: str) -> None:
         """Log function calls from a response."""
-        if not response.candidates:
+        if not hasattr(response, "candidates") or not response.candidates:
             return
 
         candidate = response.candidates[0]
-        if not hasattr(candidate, "content") or not candidate.content.parts:
+        if not hasattr(candidate, "content") or not candidate.content:
+            return
+        if not candidate.content.parts:
             return
 
         for part in candidate.content.parts:
-            if not hasattr(part, "function_call"):
+            fc = getattr(part, "function_call", None)
+            if not fc:
                 continue
 
-            fc = part.function_call
-            tool_id = self._generate_id()
+            tool_id = getattr(fc, "id", None) or self._generate_id()
 
             try:
                 self._client.log_tool_call_started(
                     self._intent_id,
-                    tool_name=fc.name,
+                    tool_name=getattr(fc, "name", "unknown"),
                     tool_id=tool_id,
-                    arguments=dict(fc.args) if fc.args else {},
+                    arguments=dict(fc.args) if getattr(fc, "args", None) else {},
                     provider="google",
                     model=model,
                 )
@@ -488,27 +516,43 @@ class GeminiAdapter(BaseAdapter):
 
         Returns a wrapped chat session that logs events for each message.
         """
-        chat = self._model.start_chat(**kwargs)
-        return GeminiChatSession(self, chat)
+        return GeminiChatSession(self, kwargs.get("history"))
 
 
 class GeminiChatSession:
-    """Wrapped chat session for event tracking."""
+    """Wrapped chat session for event tracking.
 
-    def __init__(self, adapter: GeminiAdapter, chat: Any):
+    Maintains a conversation history and delegates generation to the
+    adapter while preserving multi-turn context.
+    """
+
+    def __init__(self, adapter: GeminiAdapter, history: Any = None):
         self._adapter = adapter
-        self._chat = chat
+        self._history: list[Any] = list(history) if history else []
 
     @property
     def history(self) -> list[Any]:
         """The chat history."""
-        return self._chat.history
+        return list(self._history)
 
     def send_message(self, content: Any, *, stream: bool = False, **kwargs: Any) -> Any:
         """Send a message with automatic event logging."""
+        from google.genai import types
+
+        user_content = types.Content(
+            role="user",
+            parts=[
+                types.Part.from_text(text=content)
+                if isinstance(content, str)
+                else content
+            ],
+        )
+
+        contents = list(self._history) + [user_content]
+
         request_id = self._adapter._generate_id()
         model = self._adapter._model_name
-        messages_count = len(self._chat.history) + 1
+        messages_count = len(contents)
 
         if self._adapter._config.log_requests:
             try:
@@ -530,24 +574,59 @@ class GeminiChatSession:
         try:
             if stream:
                 return self._handle_stream(
-                    content, kwargs, request_id, model, messages_count, start_time
+                    contents,
+                    kwargs,
+                    request_id,
+                    model,
+                    messages_count,
+                    start_time,
+                    user_content,
                 )
             else:
-                response = self._chat.send_message(content, **kwargs)
+                response = self._adapter._gemini.models.generate_content(
+                    model=model, contents=contents, **kwargs
+                )
                 duration_ms = int((time.time() - start_time) * 1000)
+
+                self._history.append(user_content)
+                if hasattr(response, "candidates") and response.candidates:
+                    candidate = response.candidates[0]
+                    if hasattr(candidate, "content") and candidate.content:
+                        self._history.append(candidate.content)
 
                 if self._adapter._config.log_requests:
                     try:
-                        text_content = (
-                            response.text if hasattr(response, "text") else ""
-                        )
+                        text_content = ""
+                        usage = getattr(response, "usage_metadata", None)
+                        if hasattr(response, "candidates") and response.candidates:
+                            cand = response.candidates[0]
+                            if hasattr(cand, "content") and cand.content:
+                                for part in cand.content.parts or []:
+                                    if hasattr(part, "text") and part.text:
+                                        text_content += part.text
+
                         self._adapter._client.log_llm_request_completed(
                             self._adapter._intent_id,
                             request_id=request_id,
                             provider="google",
                             model=model,
                             messages_count=messages_count,
-                            response_content=text_content,
+                            response_content=text_content if text_content else None,
+                            prompt_tokens=(
+                                getattr(usage, "prompt_token_count", None)
+                                if usage
+                                else None
+                            ),
+                            completion_tokens=(
+                                getattr(usage, "candidates_token_count", None)
+                                if usage
+                                else None
+                            ),
+                            total_tokens=(
+                                getattr(usage, "total_token_count", None)
+                                if usage
+                                else None
+                            ),
                             duration_ms=duration_ms,
                         )
                     except Exception as e:
@@ -578,12 +657,13 @@ class GeminiChatSession:
 
     def _handle_stream(
         self,
-        content: Any,
+        contents: list[Any],
         kwargs: dict[str, Any],
         request_id: str,
         model: str,
         messages_count: int,
         start_time: float,
+        user_content: Any,
     ) -> Iterator[Any]:
         """Handle streaming chat response."""
         stream_id = self._adapter._generate_id()
@@ -601,7 +681,30 @@ class GeminiChatSession:
                     e, {"phase": "stream_started", "stream_id": stream_id}
                 )
 
-        response = self._chat.send_message(content, stream=True, **kwargs)
-        return self._adapter._stream_wrapper(
-            response, stream_id, request_id, model, messages_count, start_time
+        self._history.append(user_content)
+
+        response = self._adapter._gemini.models.generate_content_stream(
+            model=model, contents=contents, **kwargs
         )
+        return self._chat_stream_wrapper(
+            self._adapter._stream_wrapper(
+                response, stream_id, request_id, model, messages_count, start_time
+            ),
+        )
+
+    def _chat_stream_wrapper(self, inner: Iterator[Any]) -> Iterator[Any]:
+        """Wrap stream to capture assistant content for chat history."""
+        collected_text: list[str] = []
+        for chunk in inner:
+            if hasattr(chunk, "candidates") and chunk.candidates:
+                cand = chunk.candidates[0]
+                if hasattr(cand, "content") and cand.content:
+                    for part in cand.content.parts or []:
+                        if hasattr(part, "text") and part.text:
+                            collected_text.append(part.text)
+            yield chunk
+
+        if collected_text:
+            self._history.append(
+                {"role": "model", "parts": [{"text": "".join(collected_text)}]}
+            )

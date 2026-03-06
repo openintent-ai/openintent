@@ -6,7 +6,7 @@ intent events for tool calls, LLM requests, and streaming responses.
 Supported providers:
 - OpenAI (GPT-4, GPT-4o, GPT-5.2, codex models like gpt-5.2-codex, etc.)
 - Anthropic (Claude 3, Claude 4, etc.)
-- Google Gemini (Gemini 1.5, Gemini 2, etc.)
+- Google Gemini (Gemini 3 Flash, Gemini 3 Pro, Gemini 3.1 Pro, etc.)
 - xAI Grok (Grok-beta, etc.)
 - DeepSeek (DeepSeek-chat, DeepSeek-coder, etc.)
 - Azure OpenAI (GPT-4, GPT-4o via Azure endpoints)
@@ -58,15 +58,14 @@ Example usage with streaming hooks:
 
 Example usage with Google Gemini:
 
-    import google.generativeai as genai
+    from google import genai
     from openintent import OpenIntentClient
     from openintent.adapters import GeminiAdapter
 
-    genai.configure(api_key="...")
-    model = genai.GenerativeModel("gemini-1.5-pro")
-
     client = OpenIntentClient(base_url="...", api_key="...")
-    adapter = GeminiAdapter(model, client, intent_id="...")
+    gemini = genai.Client(api_key="...")
+
+    adapter = GeminiAdapter(gemini, client, intent_id="...", model="gemini-3-flash")
 
     response = adapter.generate_content("Hello, how are you?")
 """

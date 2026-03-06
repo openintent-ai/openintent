@@ -5,6 +5,23 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.1] - 2026-03-06
+
+### Changed
+
+- **Gemini SDK Migration** — Replaced deprecated `google-generativeai` SDK with `google-genai` (v1.0+). The `GeminiAdapter` now uses the modern `genai.Client` pattern (`client.models.generate_content` / `client.models.generate_content_stream`) instead of the legacy `genai.configure()` + `GenerativeModel()` approach.
+- **GeminiAdapter Rewrite** — Full protocol parity with OpenAI/Anthropic adapters: prompt/completion/total token counts from `usage_metadata`, finish reason mapping from candidates, function call tracking with provider-native IDs, streaming usage metadata from final chunks, and multi-turn `GeminiChatSession` with proper history management (including during streaming).
+- **LLMEngine Gemini Integration** — Added `_messages_to_gemini_contents()` for proper message conversion (system messages become `system_instruction`, assistant messages use `model` role), `_tools_to_gemini_format()` for tool schema conversion to Gemini function declarations, and raw provider fallback paths for Gemini in both `_call_raw_provider` and `_stream_raw_provider`.
+- **Default model names** updated from `gemini-1.5-pro` / `gemini-2.0-flash` to `gemini-3-flash` across SDK, docs, and frontend.
+- **Dependency** — `google-generativeai>=0.4.0` replaced with `google-genai>=1.0.0` in `gemini` and `all-adapters` optional extras.
+
+### Updated
+
+- All version references updated to 0.15.1 across Python SDK, MCP server package, documentation, and changelog.
+- Documentation and examples updated to reflect new SDK patterns and model names.
+
+---
+
 ## [0.15.0] - 2026-03-02
 
 ### Added

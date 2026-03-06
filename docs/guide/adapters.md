@@ -97,14 +97,13 @@ pip install openintent[all-adapters]   # All adapters
 === "Gemini"
 
     ```python
+    from google import genai
     from openintent.adapters import GeminiAdapter
 
-    adapter = GeminiAdapter(gemini_client, oi_client, intent_id)
+    gemini = genai.Client(api_key="...")
+    adapter = GeminiAdapter(gemini, oi_client, intent_id, model="gemini-3-flash")
 
-    response = adapter.generate_content(
-        model="gemini-pro",
-        contents=[{"role": "user", "parts": [{"text": "Hello"}]}]
-    )
+    response = adapter.generate_content("Hello")
     ```
 
 === "Grok / DeepSeek"
