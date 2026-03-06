@@ -174,7 +174,7 @@ The `model=` parameter accepts any model supported by the [LLM adapters](../../g
 @Agent("researcher", model="claude-sonnet-4-20250514")
 
 # Google Gemini
-@Agent("researcher", model="gemini-2.0-flash")
+@Agent("researcher", model="gemini-3-flash")
 
 # DeepSeek
 @Agent("researcher", model="deepseek-chat")

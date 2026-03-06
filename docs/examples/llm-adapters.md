@@ -68,16 +68,18 @@ for chunk in adapter.chat_complete_stream(
 ## Google Gemini
 
 ```python
-import google.generativeai as genai
+from google import genai
 from openintent.adapters import GeminiAdapter
 
-genai.configure(api_key="...")
-model = genai.GenerativeModel("gemini-pro")
+gemini = genai.Client(api_key="...")
 
-adapter = GeminiAdapter(model, client, intent.id)
-response = adapter.chat_complete(
-    messages=[{"role": "user", "content": "Explain machine learning"}]
-)
+adapter = GeminiAdapter(gemini, client, intent.id, model="gemini-3-flash")
+response = adapter.generate_content("Explain machine learning")
+print(response.text)
+
+# Streaming
+for chunk in adapter.generate_content("Explain in detail", stream=True):
+    print(chunk.text, end="", flush=True)
 ```
 
 ## DeepSeek

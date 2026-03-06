@@ -39,6 +39,47 @@ ANTHROPIC_STYLE_PROVIDERS = {"anthropic"}
 GEMINI_STYLE_PROVIDERS = {"gemini"}
 
 
+def _messages_to_gemini_contents(
+    messages: list[dict[str, Any]],
+) -> tuple[Optional[str], list[Any]]:
+    """Convert OpenIntent-style messages to Gemini contents.
+
+    Returns (system_instruction, contents) where system_instruction is
+    extracted from any ``system`` role messages and contents is a list
+    of dicts compatible with the ``google-genai`` SDK.
+    """
+    system_parts: list[str] = []
+    contents: list[dict[str, Any]] = []
+    for msg in messages:
+        role = msg.get("role", "user")
+        text = msg.get("content", "")
+        if role == "system":
+            system_parts.append(text)
+        elif role == "assistant":
+            contents.append({"role": "model", "parts": [{"text": text}]})
+        else:
+            contents.append({"role": "user", "parts": [{"text": text}]})
+    system_instruction = "\n".join(system_parts) if system_parts else None
+    return system_instruction, contents
+
+
+def _tools_to_gemini_format(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Convert OpenIntent-style tool schemas to Gemini function declarations."""
+    if not tools:
+        return []
+    declarations: list[dict[str, Any]] = []
+    for t in tools:
+        decl: dict[str, Any] = {
+            "name": t["name"],
+            "description": t.get("description", ""),
+        }
+        params = t.get("parameters")
+        if params:
+            decl["parameters"] = params
+        declarations.append(decl)
+    return [{"function_declarations": declarations}]
+
+
 def _is_codex_model(model: str) -> bool:
     """Check if a model name indicates a codex/completions-only model."""
     from openintent.adapters.codex_utils import is_codex_model
@@ -1071,6 +1112,8 @@ class LLMEngine:
             return []
         if self._provider in ANTHROPIC_STYLE_PROVIDERS:
             return _tools_to_anthropic_format(tools)
+        if self._provider in GEMINI_STYLE_PROVIDERS:
+            return _tools_to_gemini_format(tools)
         return _tools_to_openai_format(tools)
 
     async def _call_llm(
@@ -1099,8 +1142,30 @@ class LLMEngine:
             if self._provider in ANTHROPIC_STYLE_PROVIDERS:
                 response = adapter.messages.create(**call_kwargs)
             elif self._provider in GEMINI_STYLE_PROVIDERS:
+                system_instruction, gemini_contents = _messages_to_gemini_contents(
+                    messages
+                )
+                gemini_kwargs: dict[str, Any] = {}
+                gen_config: dict[str, Any] = {}
+                if call_kwargs.get("temperature") is not None:
+                    gen_config["temperature"] = call_kwargs["temperature"]
+                if call_kwargs.get("max_tokens") is not None:
+                    gen_config["max_output_tokens"] = call_kwargs["max_tokens"]
+                if system_instruction:
+                    gen_config["system_instruction"] = system_instruction
+                if gen_config:
+                    gemini_kwargs["config"] = gen_config
+                if tools:
+                    gemini_kwargs["tools"] = _tools_to_gemini_format(
+                        tools
+                        if not isinstance(tools[0], dict) or "type" not in tools[0]
+                        else [
+                            t["function"] for t in tools if t.get("type") == "function"
+                        ]
+                    )
                 response = adapter.generate_content(
-                    messages[-1]["content"] if messages else "",
+                    gemini_contents if gemini_contents else "",
+                    **gemini_kwargs,
                 )
             elif _is_codex_model(self._config.model):
                 call_kwargs.pop("system", None)
@@ -1148,6 +1213,43 @@ class LLMEngine:
                     "anthropic package required. Install with: pip install anthropic"
                 )
 
+        elif self._provider in GEMINI_STYLE_PROVIDERS:
+            try:
+                from google import genai
+
+                client = genai.Client(api_key=self._config.api_key)
+                system_instruction, gemini_contents = _messages_to_gemini_contents(
+                    call_kwargs.get("messages", [])
+                )
+                gen_config: dict[str, Any] = {}
+                if call_kwargs.get("temperature") is not None:
+                    gen_config["temperature"] = call_kwargs["temperature"]
+                if call_kwargs.get("max_tokens") is not None:
+                    gen_config["max_output_tokens"] = call_kwargs["max_tokens"]
+                if system_instruction:
+                    gen_config["system_instruction"] = system_instruction
+                gkw: dict[str, Any] = {}
+                if gen_config:
+                    gkw["config"] = gen_config
+                tools = call_kwargs.get("tools")
+                if tools:
+                    gkw["tools"] = _tools_to_gemini_format(
+                        tools
+                        if not isinstance(tools[0], dict) or "type" not in tools[0]
+                        else [
+                            t["function"] for t in tools if t.get("type") == "function"
+                        ]
+                    )
+                return client.models.generate_content(
+                    model=call_kwargs.get("model", "gemini-3-flash"),
+                    contents=gemini_contents if gemini_contents else "",
+                    **gkw,
+                )
+            except ImportError:
+                raise ImportError(
+                    "google-genai package required. Install with: pip install google-genai"
+                )
+
         raise ValueError(f"Unsupported provider: {self._provider}")
 
     async def _stream_llm(
@@ -1174,13 +1276,33 @@ class LLMEngine:
                 async for token in self._iter_anthropic_stream(stream):
                     yield token
             elif self._provider in GEMINI_STYLE_PROVIDERS:
+                system_instruction, gemini_contents = _messages_to_gemini_contents(
+                    messages
+                )
+                gemini_kwargs: dict[str, Any] = {}
+                gen_config: dict[str, Any] = {}
+                if call_kwargs.get("temperature") is not None:
+                    gen_config["temperature"] = call_kwargs["temperature"]
+                if call_kwargs.get("max_tokens") is not None:
+                    gen_config["max_output_tokens"] = call_kwargs["max_tokens"]
+                if system_instruction:
+                    gen_config["system_instruction"] = system_instruction
+                if gen_config:
+                    gemini_kwargs["config"] = gen_config
                 response = adapter.generate_content(
-                    messages[-1]["content"] if messages else "",
+                    gemini_contents if gemini_contents else "",
                     stream=True,
+                    **gemini_kwargs,
                 )
                 for chunk in response:
                     if hasattr(chunk, "text") and chunk.text:
                         yield chunk.text
+                    elif hasattr(chunk, "candidates") and chunk.candidates:
+                        cand = chunk.candidates[0]
+                        if hasattr(cand, "content") and cand.content:
+                            for part in cand.content.parts or []:
+                                if hasattr(part, "text") and part.text:
+                                    yield part.text
             elif _is_codex_model(self._config.model):
                 call_kwargs.pop("system", None)
                 stream = adapter.completions.create(**call_kwargs)
@@ -1238,6 +1360,43 @@ class LLMEngine:
                         pass
             except ImportError:
                 raise ImportError("anthropic package required.")
+        elif self._provider in GEMINI_STYLE_PROVIDERS:
+            try:
+                from google import genai
+
+                client = genai.Client(api_key=self._config.api_key)
+                system_instruction, gemini_contents = _messages_to_gemini_contents(
+                    call_kwargs.get("messages", [])
+                )
+                gen_config: dict[str, Any] = {}
+                temp = call_kwargs.get("temperature")
+                if temp is not None:
+                    gen_config["temperature"] = temp
+                max_tok = call_kwargs.get("max_tokens")
+                if max_tok is not None:
+                    gen_config["max_output_tokens"] = max_tok
+                if system_instruction:
+                    gen_config["system_instruction"] = system_instruction
+                gkw: dict[str, Any] = {}
+                if gen_config:
+                    gkw["config"] = gen_config
+                for chunk in client.models.generate_content_stream(
+                    model=call_kwargs.get("model", "gemini-3-flash"),
+                    contents=gemini_contents if gemini_contents else "",
+                    **gkw,
+                ):
+                    if hasattr(chunk, "text") and chunk.text:
+                        yield chunk.text
+                    elif hasattr(chunk, "candidates") and chunk.candidates:
+                        cand = chunk.candidates[0]
+                        if hasattr(cand, "content") and cand.content:
+                            for part in cand.content.parts or []:
+                                if hasattr(part, "text") and part.text:
+                                    yield part.text
+            except ImportError:
+                raise ImportError(
+                    "google-genai package required. Install with: pip install google-genai"
+                )
 
     async def _iter_openai_stream(self, stream: Any) -> AsyncIterator[str]:
         """Iterate an OpenAI-style stream (sync iterator) yielding tokens."""
