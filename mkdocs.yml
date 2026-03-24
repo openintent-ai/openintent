@@ -1,5 +1,5 @@
 site_name: OpenIntent SDK
-site_description: "The Python SDK for structured multi-agent coordination. 23 RFCs. Decorator-first agents. Built-in server. Federation. MCP integration."
+site_description: "The Python SDK for structured multi-agent coordination. 25 RFCs. Decorator-first agents. Built-in server. Federation. MCP integration."
 site_url: https://openintent-ai.github.io/openintent/
 repo_url: https://github.com/openintent-ai/openintent
 repo_name: openintent-ai/openintent
@@ -127,6 +127,7 @@ nav:
     - Verifiable Event Logs: guide/verifiable-logs.md
     - Distributed Tracing: guide/distributed-tracing.md
     - Agent-to-Agent Messaging: guide/messaging.md
+    - Human-in-the-Loop: guide/human-in-the-loop.md
     - Federation: guide/federation.md
     - MCP Integration: guide/mcp.md
     - YAML Workflows: guide/workflows.md
@@ -169,6 +170,8 @@ nav:
     - "0021 \u2014 Agent-to-Agent Messaging": rfcs/0021-agent-to-agent-messaging.md
     - "0022 \u2014 Federation Protocol": rfcs/0022-federation-protocol.md
     - "0023 \u2014 Federation Security": rfcs/0023-federation-security.md
+    - "0024 \u2014 Workflow I/O Contracts": rfcs/0024-workflow-io-contracts.md
+    - "0025 \u2014 Human-in-the-Loop": rfcs/0025-human-in-the-loop.md
   - Changelog: changelog.md
   - Examples:
     - Multi-Agent Workflow: examples/multi-agent.md
@@ -204,14 +207,14 @@ extra:
       link: https://pypi.org/project/openintent/
   version:
     provider: mike
-  announcement: "<strong>v0.15.1</strong> is here &mdash; Gemini adapter rebuilt for google-genai SDK v1.0+, full LLMEngine Gemini integration. <a href='changelog/'>Read the changelog &rarr;</a>"
+  announcement: "<strong>v0.16.0</strong> is here &mdash; RFC-0025 Human-in-the-Loop intent suspension: request_input(), engagement decisions, fallback policies, and lifecycle hooks. <a href='changelog/'>Read the changelog &rarr;</a>"
   meta:
     - name: description
-      content: "OpenIntent Python SDK — structured multi-agent coordination protocol with decorator-first agents, 23 RFCs, 7 LLM adapters, federation, MCP integration, and built-in FastAPI server."
+      content: "OpenIntent Python SDK — structured multi-agent coordination protocol with decorator-first agents, 25 RFCs, 7 LLM adapters, HITL suspension, federation, MCP integration, and built-in FastAPI server."
     - name: og:title
       content: "OpenIntent SDK — Multi-Agent Coordination Protocol"
     - name: og:description
-      content: "Production-ready Python SDK for structured multi-agent coordination. Decorator-first agents, YAML workflows, 7 LLM adapters, MCP integration, built-in server."
+      content: "Production-ready Python SDK for structured multi-agent coordination. Decorator-first agents, YAML workflows, HITL suspension, 7 LLM adapters, MCP integration, built-in server."
     - name: og:type
       content: website
     - name: og:url
@@ -221,7 +224,7 @@ extra:
     - name: twitter:title
       content: "OpenIntent SDK"
     - name: twitter:description
-      content: "The Python SDK for structured multi-agent coordination. 23 RFCs. Decorator-first agents. Federation. MCP integration. Built-in server."
+      content: "The Python SDK for structured multi-agent coordination. 25 RFCs. Decorator-first agents. Federation. MCP integration. Built-in server."
 
 extra_css:
   - stylesheets/extra.css

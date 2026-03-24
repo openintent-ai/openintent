@@ -5,6 +5,54 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-03-23
+
+### Added
+
+- **RFC-0024: Workflow I/O Contracts** — Typed input/output contracts at the task and phase level, with executor-owned wiring (resolves RFC-0012 Open Question #4).
+
+  - **`outputs` schema on `PhaseConfig`** — Each phase can declare `outputs` as a mapping from key name to type (`string`, `number`, `boolean`, `object`, `array`, a named type from the `types` block, or an inline `{type, required}` dict for optional fields). Legacy list-of-strings form is normalised automatically.
+  - **`inputs` wiring on `PhaseConfig`** — Each phase can declare `inputs` as a mapping from local key name to a mapping expression: `phase_name.key`, `$trigger.key`, or `$initial_state.key`. The executor resolves these before invoking the agent handler and places the resolved dict in `ctx.input`.
+  - **Parse-time validation** — `WorkflowSpec._validate_io_wiring()` is called on every `from_yaml()` / `from_string()`. Checks that every `phase_name.key` reference names a phase in `depends_on`, that the phase exists, and that the key appears in the upstream phase's declared outputs (if it has any). Raises `InputWiringError` on failure.
+  - **`WorkflowSpec.resolve_task_inputs()`** — Executor pre-handoff step. Pre-populates `ctx.input` from upstream phase outputs, trigger payload, or initial state. Raises `UnresolvableInputError` if any declared input cannot be resolved.
+  - **`WorkflowSpec.validate_claim_inputs()`** — Executor claim-time gate. Rejects a task claim early if declared inputs are not yet resolvable from completed upstream phases.
+  - **`WorkflowSpec.validate_task_outputs()`** — Executor completion-time gate. Validates the agent's return dict against declared `outputs`. Raises `MissingOutputError` for absent required keys; raises `OutputTypeMismatchError` for type mismatches. Supports primitive types, named struct types (top-level key presence), and enum types (`{enum: [...]}`).
+  - **`MissingOutputError`** — Raised when one or more required output keys are absent. Carries `task_id`, `phase_name`, `missing_keys`.
+  - **`OutputTypeMismatchError`** — Raised when an output value does not match its declared type. Carries `task_id`, `phase_name`, `key`, `expected_type`, `actual_type`.
+  - **`UnresolvableInputError`** — Raised when one or more declared inputs cannot be resolved from available upstream outputs. Carries `task_id`, `phase_name`, `unresolvable_refs`.
+  - **`InputWiringError`** — Raised at parse time when an input mapping expression is structurally invalid. Subclass of `WorkflowValidationError`. Carries `phase_name`, `invalid_refs`, `suggestion`.
+  - **`types` block in YAML** — Top-level `types:` map defines named struct and enum types reusable across output schemas. Persisted into `intent.state._io_types` so agent-side validation works without a `WorkflowSpec` reference at runtime.
+  - **Incremental adoption** — Phases without `outputs` or `inputs` are fully unaffected. Parse-time and runtime validation only applies to phases that declare contracts.
+  - **Package exports** — `MissingOutputError`, `OutputTypeMismatchError`, `UnresolvableInputError`, `InputWiringError` all exported from `openintent` top-level.
+  - **RFC-0024 protocol document** — `docs/rfcs/0024-workflow-io-contracts.md` covering output schema declaration, input wiring, executor semantics, named error types, `TaskContext` API, parse-time validation, incremental adoption, and a complete example.
+
+- **RFC-0025: Human-in-the-Loop Intent Suspension** — First-class protocol primitive for suspending an intent mid-execution and awaiting operator input before proceeding.
+
+  - **`suspended_awaiting_input` lifecycle state** — New `IntentStatus` value. Reaper and lease-expiry workers skip intents in this state; lease renewal succeeds for suspended intents so agents retain ownership across the suspension period.
+  - **Four new `EventType` constants** — `intent.suspended`, `intent.resumed`, `intent.suspension_expired`, `engagement.decision`. All events are stored in the intent event log and emitted via the SSE bus.
+  - **`ResponseType` enum** — `choice`, `confirm`, `text`, `form` — specifies what kind of response is expected from the operator. Agents set this when calling `request_input()`.
+  - **`SuspensionChoice` dataclass** — A single operator-facing option with `value` (machine-readable), `label` (human-readable), optional `description`, `style` hint (`"primary"` / `"danger"` / `"default"`), and arbitrary `metadata`. Channels render these as buttons, dropdowns, or radio options.
+  - **`SuspensionRecord` dataclass** — Captures the full context of a suspension: question, `response_type`, list of `SuspensionChoice` objects, structured context, channel hint, timeout, fallback policy, confidence at suspension time, and response metadata. Stored in `intent.state._suspension`. Includes `valid_values()` helper that returns the allowed values for `choice`/`confirm` types.
+  - **`EngagementSignals` dataclass** — Carries `confidence`, `risk`, and `reversibility` scores (all float [0, 1]) used by the engagement-decision engine.
+  - **`EngagementDecision` dataclass** — Output of `should_request_input()`. Has `mode` (one of `autonomous`, `request_input`, `require_input`, `defer`), `should_ask` bool, `rationale` string, and embedded `EngagementSignals`.
+  - **`InputResponse` dataclass** — Represents an operator's response: `suspension_id`, `value`, `responded_by`, `responded_at`, and optional `metadata`.
+  - **`InputTimeoutError` exception** — Raised when `fallback_policy="fail"` and the suspension expires. Carries `suspension_id` and `fallback_policy` attributes.
+  - **`InputCancelledError` exception** — Raised when a suspension is explicitly cancelled. Carries `suspension_id`.
+  - **`BaseAgent.request_input()`** — Suspends the intent, fires `@on_input_requested` hooks, polls `intent.state._suspension.resolution` every 2 seconds, and returns the operator's response value. Accepts `response_type` and `choices` parameters; for `confirm` type auto-populates yes/no choices if none are supplied. Also supports `timeout_seconds`, `fallback_policy`, `fallback_value`, `channel_hint`, and `confidence`.
+  - **`BaseAgent.should_request_input()`** — Implements the default rule-based engagement-decision logic (high-confidence/low-risk → autonomous; moderate uncertainty → request_input; low confidence or high risk → require_input; extreme risk/irreversibility → defer). Emits `engagement.decision` event and fires `@on_engagement_decision` hooks.
+  - **Four new lifecycle decorators** — `@on_input_requested`, `@on_input_received`, `@on_suspension_expired`, `@on_engagement_decision`. Auto-discovered by `_discover_handlers()` and routed via `_on_generic_event()`.
+  - **`POST /api/v1/intents/{id}/suspend/respond`** — REST endpoint for operators (or bots) to submit a response. Validates `suspension_id` matches the active suspension, validates response value against defined choices (for `choice`/`confirm` types — returns 422 with `valid_choices` on mismatch), patches `state._suspension` with the response, transitions the intent to `active`, emits `intent.resumed`, and broadcasts via SSE. Response includes `choice_label` and `choice_description` for matched choices.
+  - **RFC-0025 protocol document** — `docs/rfcs/0025-human-in-the-loop.md` covering lifecycle state, event types, SuspensionRecord schema, fallback policies, engagement decision modes, REST endpoint, and security considerations.
+  - **HITL user guide** — `docs/guide/human-in-the-loop.md` with quick-start, `request_input()` reference, fallback policies, engagement decisions, decorator reference, operator response example, exception reference, and a full refund-agent example.
+  - **62 new tests** — `tests/test_hitl.py` covers all new models, exceptions, decorators, engagement-decision modes, and the suspend/respond endpoint.
+
+### Updated
+
+- `mkdocs.yml` — RFC-0024 and RFC-0025 entries added to the RFCs nav; Human-in-the-Loop guide added to the User Guide nav; announcement bar updated to v0.16.0.
+- All version references updated to 0.16.0 across Python SDK and changelog.
+
+---
+
 ## [0.15.1] - 2026-03-06
 
 ### Changed
