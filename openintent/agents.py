@@ -27,11 +27,16 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, TypeVar, Union
 
 from .client import AsyncOpenIntentClient, OpenIntentClient
+from .exceptions import InputCancelledError, InputTimeoutError
 from .models import (
     AccessRequest,
     ACLEntry,
+    EngagementDecision,
+    EngagementSignals,
     Escalation,
     EventType,
+    HumanRetryPolicy,
+    InputResponse,
     Intent,
     IntentContext,
     IntentPortfolio,
@@ -39,6 +44,9 @@ from .models import (
     MembershipRole,
     PeerInfo,
     Permission,
+    ResponseType,
+    SuspensionChoice,
+    SuspensionRecord,
 )
 from .streaming import SSEEvent, SSEEventType, SSEStream, SSESubscription
 
@@ -389,6 +397,78 @@ def on_drain(func: Callable) -> Callable:
     return func
 
 
+def on_input_requested(func: Callable) -> Callable:
+    """
+    Decorator: Called after suspension is written, before the agent blocks on input (RFC-0025).
+
+    The handler receives the SuspensionRecord. Use this to route the question
+    to an operator (e.g. send a Slack message, email, or dashboard notification).
+
+    Example:
+        ```python
+        @on_input_requested
+        async def notify_operator(self, intent, suspension):
+            await send_slack(suspension.question, channel=suspension.channel_hint)
+        ```
+    """
+    func._openintent_handler = "input_requested"
+    return func
+
+
+def on_input_received(func: Callable) -> Callable:
+    """
+    Decorator: Called when operator input arrives, before the awaiting call unblocks (RFC-0025).
+
+    The handler receives the InputResponse. Use this to log the response or
+    route it before it reaches the suspended agent.
+
+    Example:
+        ```python
+        @on_input_received
+        async def log_response(self, intent, response):
+            await self.log(intent.id, f"Operator responded: {response.value}")
+        ```
+    """
+    func._openintent_handler = "input_received"
+    return func
+
+
+def on_suspension_expired(func: Callable) -> Callable:
+    """
+    Decorator: Called when a suspension times out before the fallback policy is applied (RFC-0025).
+
+    The handler receives the SuspensionRecord. Use this to send alerts or
+    adjust state before the fallback kicks in.
+
+    Example:
+        ```python
+        @on_suspension_expired
+        async def alert_timeout(self, intent, suspension):
+            await send_alert(f"Suspension {suspension.id} expired — applying fallback")
+        ```
+    """
+    func._openintent_handler = "suspension_expired"
+    return func
+
+
+def on_engagement_decision(func: Callable) -> Callable:
+    """
+    Decorator: Called after should_request_input() returns an EngagementDecision (RFC-0025).
+
+    The handler receives the EngagementDecision. Use this to audit the
+    engagement mode chosen by the agent or to override it.
+
+    Example:
+        ```python
+        @on_engagement_decision
+        async def audit_decision(self, intent, decision):
+            await self.log(intent.id, f"Engagement mode: {decision.mode}")
+        ```
+    """
+    func._openintent_handler = "engagement_decision"
+    return func
+
+
 def on_identity_registered(func: Callable) -> Callable:
     """
     Decorator: Called when the agent's cryptographic identity is registered.
@@ -636,6 +716,13 @@ class IntentSpec:
     depends_on: Optional[list[str]] = None
     constraints: dict[str, Any] = field(default_factory=dict)
     initial_state: dict[str, Any] = field(default_factory=dict)
+    # RFC-0024: I/O contracts preserved from WorkflowSpec phases.
+    # inputs: mapping from local key name -> upstream reference expression.
+    # outputs: mapping from output key name -> type declaration.
+    # The executor uses these to pre-populate ctx.input and validate
+    # completions; they are not consumed by IntentSpec itself.
+    inputs: dict[str, str] = field(default_factory=dict)
+    outputs: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.depends_on is None:
@@ -704,6 +791,57 @@ class AgentConfig:
 
 T = TypeVar("T", bound="BaseAgent")
 
+_SENTINEL = object()
+
+
+def _merge_retry_policies(
+    *,
+    call_site: "Optional[HumanRetryPolicy]",
+    agent_default: "Optional[HumanRetryPolicy]",
+    platform_default: "Optional[HumanRetryPolicy]",
+) -> "Optional[HumanRetryPolicy]":
+    """RFC-0026 §5.3: field-level merge of retry policy levels.
+
+    Merge precedence: call_site overrides agent_default overrides platform_default.
+    Each level only contributes a field when its value differs from the HumanRetryPolicy
+    class default, so the highest-priority level that explicitly sets a field wins.
+
+    If all three are ``None``, returns ``None`` (single-attempt semantics).
+    """
+    levels = [p for p in (platform_default, agent_default, call_site) if p is not None]
+    if not levels:
+        return None
+    if len(levels) == 1:
+        return levels[0]
+
+    _class_defaults = HumanRetryPolicy()
+    _scalar_fields = (
+        "max_attempts",
+        "interval_seconds",
+        "strategy",
+        "final_fallback_policy",
+    )
+
+    merged: dict = {}
+    merged_ladder: list | None = None
+
+    for policy in levels:
+        for field_name in _scalar_fields:
+            val = getattr(policy, field_name)
+            class_default = getattr(_class_defaults, field_name)
+            if val != class_default:
+                merged[field_name] = val
+        if policy.escalation_ladder:
+            merged_ladder = [s.to_dict() for s in policy.escalation_ladder]
+
+    for field_name in _scalar_fields:
+        merged.setdefault(field_name, getattr(_class_defaults, field_name))
+
+    if merged_ladder:
+        merged["escalation_ladder"] = merged_ladder
+
+    return HumanRetryPolicy.from_dict(merged)
+
 
 class BaseAgent(ABC):
     """
@@ -716,6 +854,24 @@ class BaseAgent(ABC):
     _agent_id: str = ""
     _config: AgentConfig = field(default_factory=AgentConfig)
     _handlers: dict[str, list[Callable]] = field(default_factory=dict)
+
+    default_human_retry_policy: Optional["HumanRetryPolicy"] = None
+    """Class-level or instance-level default re-notification policy (RFC-0026).
+
+    When set, this policy is applied to all ``request_input()`` calls that do
+    not supply an explicit ``retry_policy`` argument.  Subclasses may override
+    at class level:
+
+    .. code-block:: python
+
+        class MyAgent(BaseAgent):
+            default_human_retry_policy = HumanRetryPolicy(
+                max_attempts=3,
+                interval_seconds=900,
+                strategy="linear",
+                final_fallback_policy="complete_with_fallback",
+            )
+    """
 
     def __init__(
         self,
@@ -734,6 +890,9 @@ class BaseAgent(ABC):
         self._subscription: Optional[SSESubscription] = None
         self._running = False
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._platform_retry_policy_cache: Optional["HumanRetryPolicy | None"] = (
+            _SENTINEL
+        )
 
         self._discover_handlers()
 
@@ -769,6 +928,11 @@ class BaseAgent(ABC):
             "governance_blocked": [],
             "approval_granted": [],
             "approval_denied": [],
+            # RFC-0025: HITL lifecycle hooks
+            "input_requested": [],
+            "input_received": [],
+            "suspension_expired": [],
+            "engagement_decision": [],
         }
 
         for name in dir(self):
@@ -901,6 +1065,12 @@ class BaseAgent(ABC):
         """
         Build an IntentContext for an intent, auto-populating based on
         this agent's permission level.
+
+        RFC-0024: If the intent's state contains ``_io_inputs`` (set by the
+        executor via ``to_portfolio_spec``), the declared input mappings are
+        resolved from completed upstream dependency outputs and placed in
+        ``ctx.input`` before the handler is called.  Agents should read
+        ``intent.ctx.input`` rather than probing dependency state directly.
         """
         ctx = IntentContext()
 
@@ -910,13 +1080,84 @@ class BaseAgent(ABC):
         except Exception:
             pass
 
+        dep_outputs: dict[str, dict[str, Any]] = {}
         if intent.depends_on:
             for dep_id in intent.depends_on:
                 try:
                     dep = await self.async_client.get_intent(dep_id)
-                    ctx.dependencies[dep.title] = dep.state.to_dict()
+                    dep_state = dep.state.to_dict()
+                    ctx.dependencies[dep.title] = dep_state
+                    dep_outputs[dep.title] = dep_state
                 except Exception:
                     pass
+
+        # RFC-0024: resolve ctx.input from declared _io_inputs mapping stored
+        # in the intent's initial state.  Input mapping expressions use phase
+        # names (YAML keys), but dependency intents are indexed by title.
+        # _io_dep_title_to_name provides the title→name mapping so we can
+        # resolve "phase_name.key" correctly even when title != phase name.
+        try:
+            intent_state_dict = intent.state.to_dict()
+        except Exception:
+            intent_state_dict = {}
+
+        io_inputs: dict[str, str] = intent_state_dict.get("_io_inputs") or {}
+        dep_title_to_name: dict[str, str] = (
+            intent_state_dict.get("_io_dep_title_to_name") or {}
+        )
+        # Build a phase-name-keyed view of dep outputs for input resolution
+        dep_outputs_by_name: dict[str, dict[str, Any]] = {}
+        for dep_title, dep_name in dep_title_to_name.items():
+            if dep_title in dep_outputs:
+                dep_outputs_by_name[dep_name] = dep_outputs[dep_title]
+
+        if io_inputs:
+            resolved_input: dict[str, Any] = {}
+            unresolvable: list[str] = []
+
+            for local_key, mapping_expr in io_inputs.items():
+                if not isinstance(mapping_expr, str):
+                    continue
+                try:
+                    if mapping_expr.startswith("$trigger."):
+                        key = mapping_expr[len("$trigger.") :]
+                        if key in intent_state_dict:
+                            resolved_input[local_key] = intent_state_dict[key]
+                        else:
+                            unresolvable.append(mapping_expr)
+                    elif mapping_expr.startswith("$initial_state."):
+                        key = mapping_expr[len("$initial_state.") :]
+                        if key in intent_state_dict:
+                            resolved_input[local_key] = intent_state_dict[key]
+                        else:
+                            unresolvable.append(mapping_expr)
+                    else:
+                        parts = mapping_expr.split(".", 1)
+                        if len(parts) == 2:
+                            ref_phase, ref_key = parts[0], parts[1]
+                            # Try phase-name index first, fall back to title
+                            phase_out = dep_outputs_by_name.get(
+                                ref_phase, dep_outputs.get(ref_phase, {})
+                            )
+                            if ref_key in phase_out:
+                                resolved_input[local_key] = phase_out[ref_key]
+                            else:
+                                unresolvable.append(mapping_expr)
+                        else:
+                            unresolvable.append(mapping_expr)
+                except Exception:
+                    pass
+
+            if unresolvable:
+                from .workflow import UnresolvableInputError
+
+                raise UnresolvableInputError(
+                    task_id=intent.id,
+                    phase_name=getattr(intent, "title", intent.id),
+                    unresolvable_refs=unresolvable,
+                )
+
+            ctx.input = resolved_input
 
         try:
             events = await self.async_client.get_events(intent.id, limit=20)
@@ -1024,6 +1265,509 @@ class BaseAgent(ABC):
             context=data or {},
         )
 
+    # ==================== HITL: Human-in-the-Loop (RFC-0025) ====================
+
+    async def request_input(
+        self,
+        intent_id: str,
+        question: str,
+        response_type: str = "choice",
+        choices: Optional[list[Union[dict[str, Any], "SuspensionChoice"]]] = None,
+        context: Optional[dict[str, Any]] = None,
+        channel_hint: Optional[str] = None,
+        timeout_seconds: Optional[int] = None,
+        fallback_policy: str = "fail",
+        fallback_value: Optional[Any] = None,
+        confidence: Optional[float] = None,
+        retry_policy: Optional["HumanRetryPolicy"] = None,
+    ) -> Any:
+        """
+        Suspend the intent and request operator input (RFC-0025 / RFC-0026).
+
+        Transitions the intent to ``suspended_awaiting_input``, fires
+        ``@on_input_requested`` hooks, and polls for a response. When the
+        operator responds (via POST /intents/{id}/suspend/respond), the
+        suspension is resolved and the operator's response value is returned.
+
+        When ``retry_policy`` is supplied (RFC-0026), the agent re-notifies the
+        operator up to ``retry_policy.max_attempts`` times, waiting
+        ``retry_policy.interval_seconds`` between each attempt, firing
+        ``@on_input_requested`` hooks and emitting
+        ``intent.suspension_renotified`` events on each re-attempt.
+        Escalation steps in ``retry_policy.escalation_ladder`` cause an
+        ``intent.suspension_escalated`` event to be emitted. After all
+        attempts are exhausted, ``retry_policy.final_fallback_policy`` is
+        applied.
+
+        If ``retry_policy`` is omitted, single-attempt behaviour is preserved
+        (original RFC-0025 semantics).
+
+        The class attribute ``default_human_retry_policy`` can be set on a
+        ``BaseAgent`` subclass or instance to apply a retry policy to all
+        ``request_input()`` calls that do not supply an explicit one.
+
+        Args:
+            intent_id: The intent to suspend.
+            question: The question or prompt for the operator.
+            response_type: Expected response type — ``"choice"`` (default),
+                ``"confirm"``, ``"text"``, or ``"form"``.
+            choices: List of ``SuspensionChoice`` objects or plain dicts with
+                ``value`` and ``label`` keys. For ``response_type="confirm"``
+                and no explicit choices, defaults to yes/no. For ``"choice"``
+                the operator must select one of these values.
+            context: Structured context to help the operator decide.
+            channel_hint: Preferred delivery channel (e.g. ``"slack"``).
+            timeout_seconds: Seconds before the suspension expires.
+            fallback_policy: What to do on timeout: ``"fail"``,
+                ``"complete_with_fallback"``, or ``"use_default_and_continue"``.
+            fallback_value: Value to use for ``"complete_with_fallback"`` policy.
+            confidence: Agent confidence score at suspension time (0.0–1.0).
+            retry_policy: Optional re-notification / escalation policy
+                (RFC-0026). When omitted, falls back to
+                ``self.default_human_retry_policy`` (if set), then single-attempt.
+
+        Returns:
+            The operator's response value.
+
+        Raises:
+            InputTimeoutError: If the suspension expires without a response
+                and fallback_policy is ``"fail"``.
+            InputCancelledError: If the suspension is cancelled.
+        """
+        from datetime import datetime, timedelta
+        from uuid import uuid4
+
+        # RFC-0026 §5.3: three-level cascade with field-level merge.
+        # Fetch platform default once per agent instance (_SENTINEL = not yet fetched).
+        if self._platform_retry_policy_cache is _SENTINEL:
+            try:
+                cfg = await self.async_client.get_server_config()
+                policy_dict = (cfg.get("suspension") or {}).get("default_retry_policy")
+                if policy_dict:
+                    self._platform_retry_policy_cache = HumanRetryPolicy.from_dict(
+                        policy_dict
+                    )
+                else:
+                    self._platform_retry_policy_cache = None
+            except Exception:
+                self._platform_retry_policy_cache = None
+
+        effective_retry_policy = _merge_retry_policies(
+            call_site=retry_policy,
+            agent_default=getattr(self, "default_human_retry_policy", None),
+            platform_default=self._platform_retry_policy_cache,
+        )
+
+        suspension_id = str(uuid4())
+        now = datetime.utcnow()
+        expires_at = None
+        if effective_retry_policy is not None:
+            # RFC-0026: total expiry = interval_seconds × max_attempts.
+            # Safeguard: if interval_seconds is 0 (e.g. max_attempts=1 single-shot)
+            # fall back to timeout_seconds so the suspension doesn't hang indefinitely.
+            total_seconds = (
+                effective_retry_policy.interval_seconds
+                * effective_retry_policy.max_attempts
+            )
+            if total_seconds > 0:
+                expires_at = now + timedelta(seconds=total_seconds)
+            elif timeout_seconds is not None:
+                expires_at = now + timedelta(seconds=timeout_seconds)
+        elif timeout_seconds is not None:
+            expires_at = now + timedelta(seconds=timeout_seconds)
+
+        resolved_choices: list[SuspensionChoice] = []
+        if choices:
+            for c in choices:
+                if isinstance(c, SuspensionChoice):
+                    resolved_choices.append(c)
+                elif isinstance(c, dict):
+                    resolved_choices.append(SuspensionChoice.from_dict(c))
+        elif response_type == ResponseType.CONFIRM.value:
+            resolved_choices = [
+                SuspensionChoice(value="yes", label="Yes", style="primary"),
+                SuspensionChoice(value="no", label="No", style="default"),
+            ]
+
+        suspension = SuspensionRecord(
+            id=suspension_id,
+            question=question,
+            response_type=response_type,
+            choices=resolved_choices,
+            context=context or {},
+            channel_hint=channel_hint,
+            suspended_at=now,
+            timeout_seconds=timeout_seconds,
+            expires_at=expires_at,
+            fallback_value=fallback_value,
+            fallback_policy=fallback_policy,
+            retry_policy=effective_retry_policy,
+            confidence_at_suspension=confidence,
+        )
+
+        intent = await self.async_client.get_intent(intent_id)
+
+        # Transition to suspended_awaiting_input
+        await self.async_client.set_status(
+            intent_id,
+            IntentStatus.SUSPENDED_AWAITING_INPUT,
+            intent.version,
+        )
+
+        # Persist suspension record in state
+        updated = await self.async_client.get_intent(intent_id)
+        await self.async_client.update_state(
+            intent_id,
+            updated.version,
+            {"_suspension": suspension.to_dict()},
+        )
+
+        # Emit intent_suspended event
+        await self.async_client.log_event(
+            intent_id,
+            EventType.INTENT_SUSPENDED,
+            {
+                "suspension_id": suspension_id,
+                "question": question,
+                "response_type": response_type,
+                "choices": [c.to_dict() for c in resolved_choices],
+                "channel_hint": channel_hint,
+                "timeout_seconds": timeout_seconds,
+                "fallback_policy": fallback_policy,
+                "confidence_at_suspension": confidence,
+                "retry_policy": effective_retry_policy.to_dict()
+                if effective_retry_policy
+                else None,
+            },
+        )
+
+        # Fire @on_input_requested hooks
+        current_intent = await self.async_client.get_intent(intent_id)
+        for handler in self._handlers.get("input_requested", []):
+            try:
+                await self._call_handler(handler, current_intent, suspension)
+            except Exception as e:
+                logger.exception(f"on_input_requested handler error: {e}")
+
+        # Resolve effective fallback policy (RFC-0026: retry_policy takes precedence)
+        effective_fallback = fallback_policy
+        if effective_retry_policy is not None:
+            effective_fallback = effective_retry_policy.final_fallback_policy
+
+        # Poll for operator response, with optional re-notification (RFC-0026)
+        poll_interval = 2.0
+        attempt = 1
+        max_attempts = 1
+        interval_seconds = 0
+        if effective_retry_policy is not None:
+            max_attempts = effective_retry_policy.max_attempts
+            interval_seconds = effective_retry_policy.interval_seconds
+
+        next_renotify_at: Optional[datetime] = None
+        if (
+            effective_retry_policy is not None
+            and interval_seconds > 0
+            and max_attempts > 1
+        ):
+            next_renotify_at = now + timedelta(seconds=interval_seconds)
+
+        while True:
+            await asyncio.sleep(poll_interval)
+            try:
+                current = await self.async_client.get_intent(intent_id)
+            except Exception:
+                continue
+
+            state = current.state.to_dict() if current.state else {}
+            susp_data = state.get("_suspension", {})
+
+            resolution = susp_data.get("resolution")
+            if resolution == "responded":
+                response_value = susp_data.get("response")
+                responded_at_str = susp_data.get("responded_at")
+                responded_at = None
+                if responded_at_str:
+                    try:
+                        responded_at = datetime.fromisoformat(responded_at_str)
+                    except Exception:
+                        pass
+
+                input_response = InputResponse(
+                    suspension_id=suspension_id,
+                    value=response_value,
+                    responded_by=susp_data.get("responded_by", ""),
+                    responded_at=responded_at,
+                )
+
+                # Fire @on_input_received hooks
+                for handler in self._handlers.get("input_received", []):
+                    try:
+                        await self._call_handler(handler, current, input_response)
+                    except Exception as e:
+                        logger.exception(f"on_input_received handler error: {e}")
+
+                return response_value
+
+            elif resolution == "expired":
+                # Fire @on_suspension_expired hooks before applying fallback
+                for handler in self._handlers.get("suspension_expired", []):
+                    try:
+                        await self._call_handler(handler, current, suspension)
+                    except Exception as e:
+                        logger.exception(f"on_suspension_expired handler error: {e}")
+
+                if effective_fallback == "fail":
+                    raise InputTimeoutError(
+                        f"Suspension {suspension_id} expired without operator response",
+                        suspension_id=suspension_id,
+                        fallback_policy=effective_fallback,
+                    )
+                elif effective_fallback == "complete_with_fallback":
+                    return fallback_value
+                else:
+                    return fallback_value
+
+            elif resolution == "cancelled":
+                raise InputCancelledError(
+                    f"Suspension {suspension_id} was cancelled",
+                    suspension_id=suspension_id,
+                )
+
+            # RFC-0026: re-notification loop
+            if (
+                effective_retry_policy is not None
+                and next_renotify_at is not None
+                and datetime.utcnow() >= next_renotify_at
+            ):
+                if attempt < max_attempts:
+                    attempt += 1
+                    logger.info(
+                        f"Re-notifying operator for suspension {suspension_id} "
+                        f"(attempt {attempt}/{max_attempts})"
+                    )
+
+                    # Check escalation ladder for this attempt
+                    escalation_steps = effective_retry_policy.escalation_ladder
+                    triggered_steps = [
+                        s for s in escalation_steps if s.attempt == attempt
+                    ]
+                    escalation_channel_hint: Optional[str] = None
+                    escalation_notify_to: Optional[str] = None
+                    for step in triggered_steps:
+                        escalation_channel_hint = (
+                            step.channel_hint or escalation_channel_hint
+                        )
+                        escalation_notify_to = step.notify_to or escalation_notify_to
+                        try:
+                            await self.async_client.log_event(
+                                intent_id,
+                                EventType.INTENT_SUSPENSION_ESCALATED,
+                                {
+                                    "suspension_id": suspension_id,
+                                    "attempt": attempt,
+                                    "escalated_to": step.notify_to or None,
+                                    "channel_hint": step.channel_hint or None,
+                                },
+                            )
+                        except Exception as e:
+                            logger.exception(f"suspension_escalated event error: {e}")
+
+                    # Compute when the next attempt fires (for telemetry)
+                    next_attempt_at = (
+                        datetime.utcnow() + timedelta(seconds=interval_seconds)
+                    ).isoformat() + "Z"
+
+                    # Emit re-notification event with RFC-0026 field names
+                    try:
+                        await self.async_client.log_event(
+                            intent_id,
+                            EventType.INTENT_SUSPENSION_RENOTIFIED,
+                            {
+                                "suspension_id": suspension_id,
+                                "attempt": attempt,
+                                "max_attempts": max_attempts,
+                                "channel_hint": escalation_channel_hint
+                                or suspension.channel_hint,
+                                "notify_to": escalation_notify_to,
+                                "next_attempt_at": next_attempt_at
+                                if attempt < max_attempts
+                                else None,
+                            },
+                        )
+                    except Exception as e:
+                        logger.exception(f"suspension_renotified event error: {e}")
+
+                    # Build a re-notification SuspensionRecord that carries attempt
+                    # metadata in its context using RFC-0026 key names (_attempt,
+                    # _max_attempts) so @on_input_requested handlers can read them
+                    # without a signature change.
+                    import dataclasses
+
+                    renotify_context = dict(suspension.context)
+                    renotify_context["_attempt"] = attempt
+                    renotify_context["_max_attempts"] = max_attempts
+                    if escalation_notify_to:
+                        renotify_context["_notify_to"] = escalation_notify_to
+
+                    renotify_suspension = dataclasses.replace(
+                        suspension,
+                        context=renotify_context,
+                        channel_hint=escalation_channel_hint or suspension.channel_hint,
+                    )
+
+                    # Re-fire @on_input_requested hooks with the enriched suspension
+                    for handler in self._handlers.get("input_requested", []):
+                        try:
+                            await self._call_handler(
+                                handler, current, renotify_suspension
+                            )
+                        except Exception as e:
+                            logger.exception(
+                                f"on_input_requested (renotify) handler error: {e}"
+                            )
+
+                    next_renotify_at = datetime.utcnow() + timedelta(
+                        seconds=interval_seconds
+                    )
+                else:
+                    # All attempts exhausted — apply final fallback
+                    for handler in self._handlers.get("suspension_expired", []):
+                        try:
+                            await self._call_handler(handler, current, suspension)
+                        except Exception as e:
+                            logger.exception(
+                                f"on_suspension_expired handler error: {e}"
+                            )
+
+                    if effective_fallback == "fail":
+                        raise InputTimeoutError(
+                            f"Suspension {suspension_id} exhausted all {max_attempts} re-notification attempts",
+                            suspension_id=suspension_id,
+                            fallback_policy=effective_fallback,
+                        )
+                    return fallback_value
+
+            # Check if expired by time without server update (single-attempt path)
+            if (
+                effective_retry_policy is None
+                and expires_at is not None
+                and datetime.utcnow() > expires_at
+            ):
+                for handler in self._handlers.get("suspension_expired", []):
+                    try:
+                        await self._call_handler(handler, current, suspension)
+                    except Exception as e:
+                        logger.exception(f"on_suspension_expired handler error: {e}")
+
+                if effective_fallback == "fail":
+                    raise InputTimeoutError(
+                        f"Suspension {suspension_id} expired (client-side timeout)",
+                        suspension_id=suspension_id,
+                        fallback_policy=effective_fallback,
+                    )
+                return fallback_value
+
+    async def should_request_input(
+        self,
+        intent_id: str,
+        signals: Optional[EngagementSignals] = None,
+        confidence: Optional[float] = None,
+        risk: Optional[float] = None,
+        reversibility: Optional[float] = None,
+    ) -> EngagementDecision:
+        """
+        Decide whether to ask for human input or act autonomously (RFC-0025).
+
+        Implements the default rule-based engagement logic:
+        - ``autonomous``: high confidence, low risk, reversible — act now.
+        - ``request_input``: moderate uncertainty — ask but don't block.
+        - ``require_input``: high risk or low confidence — must ask.
+        - ``defer``: risk too high to act, escalate to coordinator.
+
+        The decision is emitted as an ``engagement.decision`` event and
+        ``@on_engagement_decision`` handlers are fired before returning.
+
+        Args:
+            intent_id: The intent context.
+            signals: Pre-built EngagementSignals object (takes priority).
+            confidence: Agent confidence in autonomous action (0.0–1.0).
+            risk: Estimated risk of acting autonomously (0.0–1.0).
+            reversibility: How reversible the action is (0.0–1.0).
+
+        Returns:
+            An EngagementDecision indicating the recommended mode.
+        """
+        if signals is None:
+            signals = EngagementSignals(
+                confidence=confidence if confidence is not None else 1.0,
+                risk=risk if risk is not None else 0.0,
+                reversibility=reversibility if reversibility is not None else 1.0,
+            )
+
+        c = signals.confidence
+        r = signals.risk
+        rev = signals.reversibility
+
+        # Default rule-based engagement logic
+        if c >= 0.85 and r <= 0.2 and rev >= 0.5:
+            mode = "autonomous"
+            should_ask = False
+            rationale = (
+                f"High confidence ({c:.2f}), low risk ({r:.2f}), "
+                f"reversible ({rev:.2f}) — acting autonomously."
+            )
+        elif r >= 0.8 or rev <= 0.1:
+            mode = "defer"
+            should_ask = False
+            rationale = (
+                f"Risk ({r:.2f}) or irreversibility ({rev:.2f}) exceeds safe threshold "
+                f"— deferring to coordinator."
+            )
+        elif c < 0.5 or r > 0.5:
+            mode = "require_input"
+            should_ask = True
+            rationale = (
+                f"Low confidence ({c:.2f}) or elevated risk ({r:.2f}) "
+                f"— operator input required before proceeding."
+            )
+        else:
+            mode = "request_input"
+            should_ask = True
+            rationale = (
+                f"Moderate confidence ({c:.2f}) with manageable risk ({r:.2f}) "
+                f"— requesting operator input but can proceed without it."
+            )
+
+        decision = EngagementDecision(
+            mode=mode,
+            should_ask=should_ask,
+            rationale=rationale,
+            signals=signals,
+        )
+
+        # Emit engagement.decision event
+        try:
+            await self.async_client.log_event(
+                intent_id,
+                EventType.ENGAGEMENT_DECISION,
+                decision.to_dict(),
+            )
+        except Exception as e:
+            logger.warning(f"Could not emit engagement.decision event: {e}")
+
+        # Fire @on_engagement_decision hooks
+        try:
+            intent = await self.async_client.get_intent(intent_id)
+            for handler in self._handlers.get("engagement_decision", []):
+                try:
+                    await self._call_handler(handler, intent, decision)
+                except Exception as e:
+                    logger.exception(f"on_engagement_decision handler error: {e}")
+        except Exception:
+            pass
+
+        return decision
+
     # ==================== Event Routing ====================
 
     async def _handle_event(self, event: SSEEvent) -> None:
@@ -1073,7 +1817,21 @@ class BaseAgent(ABC):
 
         intent = await self.async_client.get_intent(intent_id)
 
-        ctx = await self._build_context(intent)
+        # RFC-0024: _build_context raises UnresolvableInputError if declared
+        # inputs cannot be resolved from upstream deps.  This is a hard
+        # rejection — the handler is not invoked.
+        try:
+            ctx = await self._build_context(intent)
+        except Exception as build_err:
+            from .workflow import UnresolvableInputError
+
+            if isinstance(build_err, UnresolvableInputError):
+                logger.warning(
+                    f"RFC-0024: rejecting assignment for intent {intent_id}: "
+                    f"{build_err}"
+                )
+                return
+            raise
         delegated_by = event.data.get("delegated_by")
         if delegated_by:
             ctx.delegated_by = delegated_by
@@ -1129,30 +1887,190 @@ class BaseAgent(ABC):
             try:
                 result = await self._call_handler(handler, intent)
                 if result and isinstance(result, dict):
-                    for guardrail in self._handlers["output_guardrail"]:
-                        try:
-                            check = await self._call_handler(guardrail, intent, result)
-                            if check is False:
+                    # RFC-0024: validate output against declared _io_outputs
+                    # schema before passing through output guardrails or
+                    # patching state.  Raises MissingOutputError /
+                    # OutputTypeMismatchError on failure which is caught
+                    # below; result is dropped so the agent can be retried.
+                    try:
+                        self._validate_io_outputs(intent_id, intent, result)
+                    except Exception as io_err:
+                        from .workflow import (
+                            MissingOutputError,
+                            OutputTypeMismatchError,
+                        )
+
+                        if isinstance(
+                            io_err, (MissingOutputError, OutputTypeMismatchError)
+                        ):
+                            logger.warning(
+                                f"RFC-0024 output validation failed for "
+                                f"{intent_id}: {io_err}"
+                            )
+                        else:
+                            logger.warning(
+                                f"RFC-0024 output validation error for "
+                                f"{intent_id}: {io_err}"
+                            )
+                        result = None
+
+                    if result is not None:
+                        for guardrail in self._handlers["output_guardrail"]:
+                            try:
+                                check = await self._call_handler(
+                                    guardrail, intent, result
+                                )
+                                if check is False:
+                                    logger.warning(
+                                        f"Output guardrail rejected result for {intent_id}"
+                                    )
+                                    result = None
+                                    break
+                            except GuardrailError as e:
                                 logger.warning(
-                                    f"Output guardrail rejected result for {intent_id}"
+                                    f"Output guardrail rejected result for {intent_id}: {e}"
                                 )
                                 result = None
                                 break
-                        except GuardrailError as e:
-                            logger.warning(
-                                f"Output guardrail rejected result for {intent_id}: {e}"
-                            )
-                            result = None
-                            break
-                        except Exception as e:
-                            logger.exception(f"Output guardrail error: {e}")
-                            result = None
-                            break
+                            except Exception as e:
+                                logger.exception(f"Output guardrail error: {e}")
+                                result = None
+                                break
 
                     if result and self._config.auto_complete:
                         await self.patch_state(intent_id, result)
             except Exception as e:
                 logger.exception(f"Assignment handler error: {e}")
+
+    def _validate_io_outputs(
+        self,
+        intent_id: str,
+        intent: Any,
+        result: dict[str, Any],
+    ) -> bool:
+        """Validate an agent's result dict against RFC-0024 declared outputs.
+
+        Reads the ``_io_outputs`` schema stored in the intent's state
+        (populated by the executor via ``to_portfolio_spec``).  Raises
+        ``MissingOutputError`` or ``OutputTypeMismatchError`` on failure.
+        Returns ``True`` if validation passes or if no schema is declared.
+
+        Type primitives supported: ``string``, ``number``, ``boolean``,
+        ``object``, ``array``.  Named types from the ``_io_types`` block are
+        validated structurally (key presence + enum membership).
+        Optional outputs (``required: false``) are allowed to be absent.
+        """
+        from .workflow import MissingOutputError, OutputTypeMismatchError
+
+        try:
+            try:
+                state_dict = intent.state.to_dict()
+            except Exception:
+                return True  # Cannot read state — skip validation
+
+            io_outputs: dict[str, Any] = state_dict.get("_io_outputs") or {}
+            if not io_outputs:
+                return True
+
+            # Named type schemas may be stored alongside _io_outputs as
+            # _io_types if the WorkflowSpec stored them (future extension).
+            # For now, look up type schemas from _io_types if present.
+            io_types: dict[str, Any] = state_dict.get("_io_types") or {}
+
+            primitive_type_map: dict[str, type] = {
+                "string": str,
+                "number": (int, float),  # type: ignore[dict-item]
+                "boolean": bool,
+                "object": dict,
+                "array": list,
+            }
+
+            missing: list[str] = []
+
+            for output_key, type_decl in io_outputs.items():
+                required = True
+                expected_type = "any"
+
+                if isinstance(type_decl, dict):
+                    required = type_decl.get("required", True)
+                    expected_type = str(type_decl.get("type", "any"))
+                elif isinstance(type_decl, str):
+                    expected_type = type_decl
+
+                if output_key not in result:
+                    if required:
+                        missing.append(output_key)
+                    continue
+
+                value = result[output_key]
+                if expected_type in ("any", ""):
+                    continue
+
+                # Primitive type check
+                if expected_type in primitive_type_map:
+                    expected_python_type = primitive_type_map[expected_type]
+                    if not isinstance(value, expected_python_type):
+                        raise OutputTypeMismatchError(
+                            task_id=intent_id,
+                            phase_name=getattr(intent, "title", intent_id),
+                            key=output_key,
+                            expected_type=expected_type,
+                            actual_type=type(value).__name__,
+                        )
+                    continue
+
+                # Named type check from _io_types
+                type_schema = io_types.get(expected_type)
+                if type_schema is None:
+                    # Unknown type — accept without validation (incremental adoption)
+                    continue
+
+                # Enum type
+                if isinstance(type_schema, dict) and "enum" in type_schema:
+                    enum_values = type_schema["enum"]
+                    if isinstance(enum_values, list) and value not in enum_values:
+                        raise OutputTypeMismatchError(
+                            task_id=intent_id,
+                            phase_name=getattr(intent, "title", intent_id),
+                            key=output_key,
+                            expected_type=f"{expected_type}(enum:{enum_values})",
+                            actual_type=repr(value),
+                        )
+                    continue
+
+                # Struct type — value must be a dict with declared keys
+                if not isinstance(value, dict):
+                    raise OutputTypeMismatchError(
+                        task_id=intent_id,
+                        phase_name=getattr(intent, "title", intent_id),
+                        key=output_key,
+                        expected_type=expected_type,
+                        actual_type=type(value).__name__,
+                    )
+                if isinstance(type_schema, dict):
+                    for schema_key in type_schema:
+                        if schema_key not in value:
+                            raise OutputTypeMismatchError(
+                                task_id=intent_id,
+                                phase_name=getattr(intent, "title", intent_id),
+                                key=output_key,
+                                expected_type=expected_type,
+                                actual_type=f"dict missing required field '{schema_key}'",
+                            )
+
+            if missing:
+                raise MissingOutputError(
+                    task_id=intent_id,
+                    phase_name=getattr(intent, "title", intent_id),
+                    missing_keys=missing,
+                )
+
+        except (MissingOutputError, OutputTypeMismatchError):
+            raise
+        except Exception as e:
+            logger.debug(f"RFC-0024 output validation error for {intent_id}: {e}")
+
+        return True
 
     async def _on_status_change(self, event: SSEEvent) -> None:
         """Handle status change events."""
@@ -1210,12 +2128,52 @@ class BaseAgent(ABC):
                     logger.exception(f"State change handler error: {e}")
 
     async def _on_generic_event(self, event: SSEEvent) -> None:
-        """Handle generic events via @on_event decorators."""
+        """Handle generic events via @on_event decorators and HITL hooks."""
         intent_id = event.data.get("intent_id")
         if not intent_id:
             return
 
         intent = await self.async_client.get_intent(intent_id)
+
+        # Route HITL events (RFC-0025)
+        if event.type in (EventType.INTENT_SUSPENDED, "intent.suspended"):
+            suspension = SuspensionRecord.from_dict(event.data)
+            for handler in self._handlers["input_requested"]:
+                try:
+                    await self._call_handler(handler, intent, suspension)
+                except Exception as e:
+                    logger.exception(f"on_input_requested handler error: {e}")
+            return
+
+        if event.type in (EventType.INTENT_RESUMED, "intent.resumed"):
+            input_response = InputResponse.from_dict(event.data)
+            for handler in self._handlers["input_received"]:
+                try:
+                    await self._call_handler(handler, intent, input_response)
+                except Exception as e:
+                    logger.exception(f"on_input_received handler error: {e}")
+            return
+
+        if event.type in (
+            EventType.INTENT_SUSPENSION_EXPIRED,
+            "intent.suspension_expired",
+        ):
+            suspension = SuspensionRecord.from_dict(event.data)
+            for handler in self._handlers["suspension_expired"]:
+                try:
+                    await self._call_handler(handler, intent, suspension)
+                except Exception as e:
+                    logger.exception(f"on_suspension_expired handler error: {e}")
+            return
+
+        if event.type in (EventType.ENGAGEMENT_DECISION, "engagement.decision"):
+            decision = EngagementDecision.from_dict(event.data)
+            for handler in self._handlers["engagement_decision"]:
+                try:
+                    await self._call_handler(handler, intent, decision)
+                except Exception as e:
+                    logger.exception(f"on_engagement_decision handler error: {e}")
+            return
 
         for handler in self._handlers["event"]:
             handler_type = getattr(handler, "_openintent_event_type", None)
@@ -1932,10 +2890,32 @@ def Coordinator(  # noqa: N802
 
         cls._topological_sort = _topological_sort
 
-        async def execute(self, spec: PortfolioSpec) -> dict[str, Any]:
-            """Execute a portfolio and wait for completion."""
+        async def execute(
+            self,
+            spec: PortfolioSpec,
+            workflow_spec: Optional[Any] = None,
+        ) -> dict[str, Any]:
+            """Execute a portfolio and wait for completion.
+
+            Args:
+                spec: The portfolio specification to execute.
+                workflow_spec: Optional ``WorkflowSpec`` for RFC-0024 I/O
+                    contract enforcement.  When provided the executor calls
+                    ``validate_claim_inputs`` when an intent becomes claimable
+                    and ``validate_task_outputs`` when it completes.
+
+            Returns:
+                Merged results from all completed intents.
+            """
+            from .workflow import WorkflowSpec
+
             portfolio = await self.create_portfolio(spec)
             await self._subscribe_portfolio(portfolio.id)
+
+            # RFC-0024: track which intents we have already validated so we
+            # don't re-validate on every poll cycle.
+            _claim_validated: set[str] = set()
+            _completion_validated: set[str] = set()
 
             while True:
                 portfolio_with_intents = await self.async_client.get_portfolio(
@@ -1946,6 +2926,76 @@ def Coordinator(  # noqa: N802
                 )
                 portfolio_with_intents.intents = intents_list
                 portfolio_with_intents.aggregate_status = aggregate
+
+                # RFC-0024: executor-side I/O validation when a WorkflowSpec is
+                # provided.  We resolve phase names from intent titles via the
+                # name→title mapping stored in the WorkflowSpec.
+                if isinstance(workflow_spec, WorkflowSpec):
+                    title_to_name = {p.title: p.name for p in workflow_spec.phases}
+                    # Build upstream outputs from all completed intents
+                    upstream_outputs: dict[str, dict[str, Any]] = {}
+                    for intent in intents_list:
+                        if intent.status == IntentStatus.COMPLETED:
+                            phase_name = title_to_name.get(intent.title, intent.title)
+                            try:
+                                upstream_outputs[phase_name] = intent.state.to_dict()
+                            except Exception:
+                                upstream_outputs[phase_name] = {}
+
+                    for intent in intents_list:
+                        phase_name = title_to_name.get(intent.title, intent.title)
+
+                        # Claim-time validation: validate inputs for intents
+                        # that are PENDING with all deps satisfied.  Raises
+                        # UnresolvableInputError / InputWiringError to the
+                        # caller if inputs cannot be resolved — this blocks
+                        # the entire portfolio (RFC-0024 §3.1).
+                        # Note: intent.depends_on contains intent IDs (not
+                        # titles), so we compare against i2.id.
+                        # Intents start in DRAFT and transition to ACTIVE
+                        # when ready; validate claim when still in DRAFT
+                        # with all deps complete.
+                        if (
+                            intent.id not in _claim_validated
+                            and intent.status == IntentStatus.DRAFT
+                        ):
+                            deps_complete = all(
+                                any(
+                                    i2.id == dep and i2.status == IntentStatus.COMPLETED
+                                    for i2 in intents_list
+                                )
+                                for dep in (intent.depends_on or [])
+                            )
+                            if deps_complete:
+                                # Raises UnresolvableInputError if unresolvable
+                                workflow_spec.validate_claim_inputs(
+                                    phase_name=phase_name,
+                                    upstream_outputs=upstream_outputs,
+                                    task_id=intent.id,
+                                )
+                                _claim_validated.add(intent.id)
+
+                        # Completion-time validation: validate outputs for
+                        # intents that just completed.  Raises
+                        # MissingOutputError / OutputTypeMismatchError to the
+                        # caller if outputs violate the declared schema
+                        # (RFC-0024 §3.3).
+                        if (
+                            intent.id not in _completion_validated
+                            and intent.status == IntentStatus.COMPLETED
+                        ):
+                            agent_output: dict[str, Any] = {}
+                            try:
+                                agent_output = intent.state.to_dict()
+                            except Exception:
+                                pass
+                            # Raises MissingOutputError / OutputTypeMismatchError
+                            workflow_spec.validate_task_outputs(
+                                phase_name=phase_name,
+                                agent_output=agent_output,
+                                task_id=intent.id,
+                            )
+                            _completion_validated.add(intent.id)
 
                 all_complete = all(
                     i.status == IntentStatus.COMPLETED for i in intents_list

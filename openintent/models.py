@@ -14,6 +14,7 @@ class IntentStatus(str, Enum):
     DRAFT = "draft"
     ACTIVE = "active"
     BLOCKED = "blocked"
+    SUSPENDED_AWAITING_INPUT = "suspended_awaiting_input"
     COMPLETED = "completed"
     ABANDONED = "abandoned"
 
@@ -187,6 +188,18 @@ class EventType(str, Enum):
     FEDERATION_BUDGET_WARNING = "federation.budget_warning"
     FEDERATION_COMPLETED = "federation.completed"
     FEDERATION_FAILED = "federation.failed"
+
+    # HITL events (RFC-0025)
+    INTENT_SUSPENDED = "intent.suspended"
+    INTENT_RESUMED = "intent.resumed"
+    INTENT_SUSPENSION_EXPIRED = "intent.suspension_expired"
+    ENGAGEMENT_DECISION = "engagement.decision"
+
+    # RFC-0026: Suspension container interaction & human retry
+    INTENT_SUSPENSION_RENOTIFIED = "intent.suspension_renotified"
+    INTENT_SUSPENSION_ESCALATED = "intent.suspension_escalated"
+    PORTFOLIO_MEMBER_SUSPENDED = "portfolio.member_suspended"
+    PORTFOLIO_MEMBER_RESUMED = "portfolio.member_resumed"
 
     # Legacy aliases for backward compatibility
     CREATED = "intent_created"
@@ -1956,6 +1969,11 @@ class IntentContext:
 
     What you see depends on your permission level. The SDK automatically
     filters context based on the agent's access.
+
+    RFC-0024 addition: ``input`` is pre-populated by the executor from resolved
+    upstream phase outputs before the agent handler is called.  Agents should
+    read from ``intent.ctx.input`` rather than reaching into
+    ``intent.ctx.dependencies`` directly.
     """
 
     parent: Optional[Intent] = None
@@ -1966,6 +1984,10 @@ class IntentContext:
     attachments: list[IntentAttachment] = field(default_factory=list)
     peers: list[PeerInfo] = field(default_factory=list)
     delegated_by: Optional[str] = None
+    # RFC-0024: executor-wired task inputs. Pre-populated from upstream phase
+    # outputs by the executor before the agent handler is called.  Read-only
+    # from the agent's perspective.
+    input: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
@@ -1982,6 +2004,10 @@ class IntentContext:
             result["my_permission"] = self.my_permission.value
         if self.delegated_by:
             result["delegated_by"] = self.delegated_by
+        # RFC-0024: include executor-wired input so serialized context
+        # round-trips correctly without losing pre-populated values.
+        if self.input:
+            result["input"] = self.input
         return result
 
     @classmethod
@@ -2003,6 +2029,8 @@ class IntentContext:
             attachments=attachments,
             peers=peers,
             delegated_by=data.get("delegated_by"),
+            # RFC-0024: restore executor-wired input from serialized context
+            input=data.get("input", {}),
         )
 
 
@@ -4034,4 +4062,410 @@ class ChannelMessage:
             created_at=created_at,
             expires_at=expires_at,
             read_at=read_at,
+        )
+
+
+# ---------------------------------------------------------------------------
+# RFC-0025: Human-in-the-Loop Intent Suspension
+# ---------------------------------------------------------------------------
+
+
+class ResponseType(str, Enum):
+    """Type of response expected from the operator (RFC-0025).
+
+    Values:
+        CHOICE: Operator must select one of the predefined choices.
+        CONFIRM: Binary yes/no confirmation.
+        TEXT: Free-form text input.
+        FORM: Structured key/value form (context keys define the fields).
+    """
+
+    CHOICE = "choice"
+    CONFIRM = "confirm"
+    TEXT = "text"
+    FORM = "form"
+
+
+@dataclass
+class SuspensionChoice:
+    """A single selectable choice presented to the operator (RFC-0025).
+
+    Fields:
+        value: The machine-readable value returned to the agent when selected.
+        label: Human-readable label displayed to the operator.
+        description: Optional longer description providing additional context.
+        style: Optional visual hint for the channel UI (e.g. "primary",
+            "danger", "default").
+        metadata: Arbitrary extra data attached to this choice.
+    """
+
+    value: str
+    label: str
+    description: str = ""
+    style: str = "default"
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "value": self.value,
+            "label": self.label,
+        }
+        if self.description:
+            result["description"] = self.description
+        if self.style != "default":
+            result["style"] = self.style
+        if self.metadata:
+            result["metadata"] = self.metadata
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SuspensionChoice":
+        return cls(
+            value=data.get("value", ""),
+            label=data.get("label", ""),
+            description=data.get("description", ""),
+            style=data.get("style", "default"),
+            metadata=data.get("metadata", {}),
+        )
+
+
+@dataclass
+class SuspensionRecord:
+    """A suspension record capturing the full context of an intent suspension (RFC-0025/RFC-0026).
+
+    Fields:
+        id: Unique identifier for this suspension record.
+        question: The specific question or prompt presented to the operator.
+        response_type: Expected response type (choice, confirm, text, form).
+        choices: Available choices when response_type is "choice" or "confirm".
+            For "confirm", auto-populated with yes/no if not supplied.
+        context: Structured context dict to help the operator decide.
+        channel_hint: Preferred delivery channel (e.g. "slack", "email").
+        suspended_at: ISO-8601 timestamp when the intent was suspended.
+        timeout_seconds: Per-attempt expiry window (None = no timeout).
+            When retry_policy is set, this is per-attempt; total expiry is
+            retry_policy.interval_seconds * retry_policy.max_attempts.
+        expires_at: Total deadline. When retry_policy is set:
+            suspended_at + (interval_seconds × max_attempts).
+            When retry_policy is absent: suspended_at + timeout_seconds.
+        fallback_value: Value to use if fallback_policy is "complete_with_fallback".
+        fallback_policy: One of "fail", "complete_with_fallback", "use_default_and_continue".
+            Alias for retry_policy.final_fallback_policy when retry_policy is set.
+        retry_policy: Optional RFC-0026 HumanRetryPolicy for re-notification & escalation.
+        confidence_at_suspension: Agent confidence score at time of suspension (0.0–1.0).
+        decision_record: Optional dict capturing the engagement decision rationale.
+        response: The operator's response value (populated on resume).
+        responded_at: ISO-8601 timestamp when the operator responded.
+        resolution: Final resolution: "responded", "expired", or "cancelled".
+    """
+
+    id: str
+    question: str
+    response_type: str = ResponseType.CHOICE.value
+    choices: list["SuspensionChoice"] = field(default_factory=list)
+    context: dict[str, Any] = field(default_factory=dict)
+    channel_hint: Optional[str] = None
+    suspended_at: Optional[datetime] = None
+    timeout_seconds: Optional[int] = None
+    expires_at: Optional[datetime] = None
+    fallback_value: Optional[Any] = None
+    fallback_policy: str = "fail"
+    retry_policy: Optional["HumanRetryPolicy"] = None
+    confidence_at_suspension: Optional[float] = None
+    decision_record: Optional[dict[str, Any]] = None
+    response: Optional[Any] = None
+    responded_at: Optional[datetime] = None
+    resolution: Optional[str] = None
+
+    def valid_values(self) -> list[str] | None:
+        if self.response_type in (
+            ResponseType.CHOICE.value,
+            ResponseType.CONFIRM.value,
+        ):
+            if self.choices:
+                return [c.value for c in self.choices]
+        return None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "id": self.id,
+            "question": self.question,
+            "response_type": self.response_type,
+            "context": self.context,
+            "fallback_policy": self.fallback_policy,
+        }
+        if self.choices:
+            result["choices"] = [c.to_dict() for c in self.choices]
+        if self.channel_hint is not None:
+            result["channel_hint"] = self.channel_hint
+        if self.suspended_at is not None:
+            result["suspended_at"] = self.suspended_at.isoformat()
+        if self.timeout_seconds is not None:
+            result["timeout_seconds"] = self.timeout_seconds
+        if self.expires_at is not None:
+            result["expires_at"] = self.expires_at.isoformat()
+        if self.fallback_value is not None:
+            result["fallback_value"] = self.fallback_value
+        if self.retry_policy is not None:
+            result["retry_policy"] = self.retry_policy.to_dict()
+        if self.confidence_at_suspension is not None:
+            result["confidence_at_suspension"] = self.confidence_at_suspension
+        if self.decision_record is not None:
+            result["decision_record"] = self.decision_record
+        if self.response is not None:
+            result["response"] = self.response
+        if self.responded_at is not None:
+            result["responded_at"] = self.responded_at.isoformat()
+        if self.resolution is not None:
+            result["resolution"] = self.resolution
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SuspensionRecord":
+        suspended_at = None
+        if data.get("suspended_at"):
+            suspended_at = datetime.fromisoformat(data["suspended_at"])
+        expires_at = None
+        if data.get("expires_at"):
+            expires_at = datetime.fromisoformat(data["expires_at"])
+        responded_at = None
+        if data.get("responded_at"):
+            responded_at = datetime.fromisoformat(data["responded_at"])
+        choices_raw = data.get("choices", [])
+        choices = [SuspensionChoice.from_dict(c) for c in choices_raw]
+        retry_policy = None
+        if data.get("retry_policy"):
+            retry_policy = HumanRetryPolicy.from_dict(data["retry_policy"])
+        return cls(
+            id=data.get("id", ""),
+            question=data.get("question", ""),
+            response_type=data.get("response_type", ResponseType.CHOICE.value),
+            choices=choices,
+            context=data.get("context", {}),
+            channel_hint=data.get("channel_hint"),
+            suspended_at=suspended_at,
+            timeout_seconds=data.get("timeout_seconds"),
+            expires_at=expires_at,
+            fallback_value=data.get("fallback_value"),
+            fallback_policy=data.get("fallback_policy", "fail"),
+            retry_policy=retry_policy,
+            confidence_at_suspension=data.get("confidence_at_suspension"),
+            decision_record=data.get("decision_record"),
+            response=data.get("response"),
+            responded_at=responded_at,
+            resolution=data.get("resolution"),
+        )
+
+
+@dataclass
+class EngagementSignals:
+    """Signals that inform the engagement decision for HITL (RFC-0025).
+
+    Fields:
+        confidence: Agent's confidence in its autonomous answer (0.0–1.0).
+        risk: Estimated risk of acting autonomously (0.0–1.0).
+        reversibility: How reversible the action is (0.0=irreversible, 1.0=fully reversible).
+        context: Additional key/value context for the decision engine.
+    """
+
+    confidence: float = 1.0
+    risk: float = 0.0
+    reversibility: float = 1.0
+    context: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "confidence": self.confidence,
+            "risk": self.risk,
+            "reversibility": self.reversibility,
+            "context": self.context,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EngagementSignals":
+        return cls(
+            confidence=data.get("confidence", 1.0),
+            risk=data.get("risk", 0.0),
+            reversibility=data.get("reversibility", 1.0),
+            context=data.get("context", {}),
+        )
+
+
+@dataclass
+class EngagementDecision:
+    """The output of should_request_input() (RFC-0025).
+
+    Fields:
+        mode: One of "autonomous", "request_input", "require_input", "defer".
+        should_ask: True if the agent should call request_input().
+        rationale: Human-readable explanation of the decision.
+        signals: The EngagementSignals that drove this decision.
+    """
+
+    mode: str
+    should_ask: bool
+    rationale: str = ""
+    signals: Optional[EngagementSignals] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "mode": self.mode,
+            "should_ask": self.should_ask,
+            "rationale": self.rationale,
+        }
+        if self.signals is not None:
+            result["signals"] = self.signals.to_dict()
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EngagementDecision":
+        signals = None
+        if data.get("signals"):
+            signals = EngagementSignals.from_dict(data["signals"])
+        return cls(
+            mode=data.get("mode", "autonomous"),
+            should_ask=data.get("should_ask", False),
+            rationale=data.get("rationale", ""),
+            signals=signals,
+        )
+
+
+@dataclass
+class InputResponse:
+    """The operator's response to a HITL suspension (RFC-0025).
+
+    Fields:
+        suspension_id: ID of the SuspensionRecord this responds to.
+        value: The operator's answer or decision value.
+        responded_by: Identifier of the operator who responded.
+        responded_at: Timestamp of the response.
+        metadata: Optional additional metadata from the channel.
+    """
+
+    suspension_id: str
+    value: Any
+    responded_by: str = ""
+    responded_at: Optional[datetime] = None
+    metadata: Optional[dict[str, Any]] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "suspension_id": self.suspension_id,
+            "value": self.value,
+            "responded_by": self.responded_by,
+        }
+        if self.responded_at is not None:
+            result["responded_at"] = self.responded_at.isoformat()
+        if self.metadata is not None:
+            result["metadata"] = self.metadata
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "InputResponse":
+        responded_at = None
+        if data.get("responded_at"):
+            responded_at = datetime.fromisoformat(data["responded_at"])
+        return cls(
+            suspension_id=data.get("suspension_id", ""),
+            value=data.get("value"),
+            responded_by=data.get("responded_by", ""),
+            responded_at=responded_at,
+            metadata=data.get("metadata"),
+        )
+
+
+@dataclass
+class EscalationStep:
+    """A single step in a HumanRetryPolicy escalation ladder (RFC-0026).
+
+    Fields:
+        attempt: Trigger this escalation at this attempt number (RFC-0026 field name).
+            Alias ``after_attempt`` is accepted on deserialisation for backwards compatibility.
+        channel_hint: Delivery channel to use at this step (e.g. "pagerduty", "email").
+            Alias ``channel`` is accepted on deserialisation for backwards compatibility.
+        notify_to: Identifier of the human or group to notify at this step.
+            Alias ``notify`` is accepted on deserialisation for backwards compatibility.
+    """
+
+    attempt: int
+    channel_hint: str = ""
+    notify_to: str = ""
+
+    @property
+    def after_attempt(self) -> int:
+        """Backwards-compatible alias for ``attempt``."""
+        return self.attempt
+
+    @property
+    def channel(self) -> str:
+        """Backwards-compatible alias for ``channel_hint``."""
+        return self.channel_hint
+
+    @property
+    def notify(self) -> str:
+        """Backwards-compatible alias for ``notify_to``."""
+        return self.notify_to
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "attempt": self.attempt,
+            "channel_hint": self.channel_hint,
+            "notify_to": self.notify_to,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EscalationStep":
+        attempt = data.get("attempt") or data.get("after_attempt", 1)
+        channel_hint = data.get("channel_hint") or data.get("channel", "")
+        notify_to = data.get("notify_to") or data.get("notify", "")
+        return cls(
+            attempt=attempt,
+            channel_hint=channel_hint,
+            notify_to=notify_to,
+        )
+
+
+@dataclass
+class HumanRetryPolicy:
+    """Re-notification and escalation policy for suspended intents (RFC-0026).
+
+    When attached to a SuspensionRecord, the server will re-notify the operator
+    up to `max_attempts` times, waiting `interval_seconds` between each attempt.
+    After all attempts are exhausted, `final_fallback_policy` is applied.
+
+    Fields:
+        max_attempts: Maximum number of notification attempts (including first). Default 3.
+        interval_seconds: Seconds to wait between re-notification attempts. Default 3600.
+        strategy: Back-off strategy — "fixed" | "linear" | "exponential". Default "fixed".
+        escalation_ladder: Ordered list of escalation steps triggered at specific attempts.
+        final_fallback_policy: Fallback policy after all attempts exhausted.
+            One of "fail", "complete_with_fallback", "use_default_and_continue".
+    """
+
+    max_attempts: int = 3
+    interval_seconds: int = 3600
+    strategy: str = "fixed"
+    escalation_ladder: list[EscalationStep] = field(default_factory=list)
+    final_fallback_policy: str = "fail"
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "max_attempts": self.max_attempts,
+            "interval_seconds": self.interval_seconds,
+            "strategy": self.strategy,
+            "final_fallback_policy": self.final_fallback_policy,
+        }
+        if self.escalation_ladder:
+            result["escalation_ladder"] = [s.to_dict() for s in self.escalation_ladder]
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "HumanRetryPolicy":
+        ladder_raw = data.get("escalation_ladder", [])
+        return cls(
+            max_attempts=data.get("max_attempts", 3),
+            interval_seconds=data.get("interval_seconds", 3600),
+            strategy=data.get("strategy", "fixed"),
+            escalation_ladder=[EscalationStep.from_dict(s) for s in ladder_raw],
+            final_fallback_policy=data.get("final_fallback_policy", "fail"),
         )

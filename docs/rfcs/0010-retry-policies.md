@@ -124,3 +124,4 @@ curl -X POST http://localhost:8000/api/v1/intents/{id}/failures \
 | RFC-0003 (Leasing) | Lease released on fallback; new lease acquired by fallback agent |
 | RFC-0009 (Costs) | Failed attempts still record costs |
 | RFC-0012 (Tasks) | Task-level retry policies override intent-level policies |
+| RFC-0026 (Suspension Containers) | Parallel construct: RFC-0010 retries when the *agent* fails; RFC-0026 (`HumanRetryPolicy`) retries when the *human* fails to respond. The server SHOULD use the same scheduled-job infrastructure for both. |

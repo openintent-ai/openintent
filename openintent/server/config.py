@@ -4,7 +4,7 @@ Server configuration for OpenIntent.
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional, Set
+from typing import Any, Optional, Set
 
 
 @dataclass
@@ -31,6 +31,14 @@ class ServerConfig:
     log_level: str = "info"
 
     protocol_version: str = "0.1"
+
+    suspension_default_retry_policy: Optional[dict[str, Any]] = None
+    """RFC-0026: platform-level default HumanRetryPolicy (serialised dict).
+
+    When set, agents that have neither a call-site ``retry_policy`` argument nor a
+    ``default_human_retry_policy`` class attribute will inherit this policy for
+    every ``request_input()`` call.  Exposed read-only via ``GET /api/v1/server/config``.
+    """
 
     def __post_init__(self):
         if self.database_url is None:

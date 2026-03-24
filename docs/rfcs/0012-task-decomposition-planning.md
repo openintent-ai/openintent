@@ -588,6 +588,39 @@ New event types added to the intent event log:
 | RFC-0009 (Cost Tracking) | Task-level cost tracking. Plan aggregates costs across tasks. |
 | RFC-0010 (Retry Policies) | Task retry uses existing retry policy definitions. |
 | RFC-0011 (Access Control) | Tasks inherit permissions from intents. Task-level overrides supported. |
+| RFC-0025 (HITL) | `request_input()` is the canonical mechanism for checkpoint human approval. |
+| RFC-0026 (Suspension Containers) | Bidirectional task/intent suspension mirror; `blocked_reason: "intent_suspended"`; `suspended_tasks` in plan progress. |
+
+### 9. RFC-0026 Patch: Task/Intent Suspension Mirror
+
+When an intent transitions to `suspended_awaiting_input` (via `request_input()`), its corresponding plan task MUST transition to `blocked`:
+
+```json
+{
+  "state": "blocked",
+  "blocked_reason": "intent_suspended",
+  "suspended_intent_id": "<intent_id>"
+}
+```
+
+On `intent.resumed`, the task transitions back to `running`.
+
+**Plan progress gains `suspended_tasks`:**
+
+```json
+{
+  "suspended_tasks": [
+    {
+      "task_id": "task_01XYZ",
+      "intent_id": "intent_01ABC",
+      "suspended_since": "2026-03-24T10:00:00Z",
+      "expires_at": "2026-03-24T13:00:00Z"
+    }
+  ]
+}
+```
+
+**Checkpoints as `request_input()` triggers:** RFC-0012 plan checkpoints that `require_approval: true` SHOULD be implemented by the assigned agent calling `request_input()`. This is the canonical pattern for human-in-the-loop gates within plans. The plan transitions to `paused` and the task to `blocked` (via the mirror rule above) until the operator responds.
 
 ## Open Questions
 
@@ -597,7 +630,7 @@ New event types added to the intent event log:
 
 3. **Cross-portfolio task dependencies**: Should tasks be allowed to depend on tasks from intents in different portfolios, or should portfolio boundaries be strict?
 
-4. **Task output schema**: Should task definitions include expected output schemas for validation, or is this left to the agent?
+4. ~~**Task output schema**: Should task definitions include expected output schemas for validation, or is this left to the agent?~~ **Resolved by RFC-0024.** Output schemas are declared in the workflow definition (in the phase's `outputs` field), and all validation responsibility belongs to the executor. An agent receives a pre-populated `ctx.input` wired by the executor from upstream phase outputs and returns a plain dict. The executor validates that dict against declared outputs before recording task completion. See [RFC-0024: Workflow I/O Contracts](./0024-workflow-io-contracts.md).
 
 ## References
 

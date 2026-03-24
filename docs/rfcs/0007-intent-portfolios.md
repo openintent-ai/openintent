@@ -59,6 +59,34 @@ Portfolios serve as namespaces for organizing work:
 }
 ```
 
+## Suspension-Aware Aggregate Status (RFC-0026)
+
+When one or more portfolio members are `suspended_awaiting_input`, the portfolio GET response includes:
+
+```json
+{
+  "has_suspended_members": true,
+  "suspended_member_count": 1
+}
+```
+
+**Aggregate status algorithm:**
+
+| Condition | Aggregate status |
+|---|---|
+| All members `completed` | `completed` |
+| Any member `failed` or `abandoned` | `failed` |
+| Otherwise (including any suspended members) | `in_progress` |
+
+**New portfolio events (RFC-0026):**
+
+| Event | When emitted |
+|---|---|
+| `portfolio.member_suspended` | A member intent transitions to `suspended_awaiting_input` |
+| `portfolio.member_resumed` | A suspended member intent resumes |
+
+**Portfolio deadline precedence:** If `governance.deadline` fires while a member intent is `suspended_awaiting_input`, the server MUST abandon that intent with `abandonment_reason: "portfolio_deadline_exceeded"`, bypassing `fallback_policy`. See RFC-0026 §2 Rule 5.
+
 ## Cross-RFC Interactions
 
 | RFC | Interaction |
@@ -69,6 +97,8 @@ Portfolios serve as namespaces for organizing work:
 | RFC-0009 (Costs) | Aggregate cost tracking across portfolio intents |
 | RFC-0012 (Planning) | Plans can scope to portfolio intents |
 | RFC-0013 (Coordinators) | Coordinator lease can scope to a portfolio |
+| RFC-0025 (HITL) | Member intents may suspend awaiting operator input |
+| RFC-0026 (Suspension Containers) | Aggregate algorithm, `has_suspended_members`, `suspended_member_count`, portfolio member events |
 
 ## Endpoints
 

@@ -171,6 +171,13 @@ class OpenAIAdapter(BaseAdapter):
             return True
         return is_codex_model(model)
 
+    @staticmethod
+    def _requires_max_completion_tokens(model: str) -> bool:
+        """Return True for models that require max_completion_tokens instead of max_tokens."""
+        import re
+
+        return bool(re.search(r"(^o1|^o3|gpt-5)", model))
+
     def _create_completion(self, **kwargs: Any) -> Any:
         """Create a completion with automatic event logging."""
         stream = kwargs.get("stream", False)
@@ -179,6 +186,10 @@ class OpenAIAdapter(BaseAdapter):
         messages = kwargs.get("messages", [])
         tools = kwargs.get("tools", [])
         temperature = kwargs.get("temperature")
+
+        if self._requires_max_completion_tokens(model):
+            if "max_tokens" in kwargs and "max_completion_tokens" not in kwargs:
+                kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
 
         request_id = self._generate_id()
 

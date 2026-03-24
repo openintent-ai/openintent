@@ -5,6 +5,82 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-03-24
+
+### Added
+
+- **RFC-0026: Suspension Propagation & Retry** — Closes three gaps left by RFC-0025.
+
+  - **Container propagation rules (5 normative rules)** — Intent graph: suspended child blocks dependents; parent aggregate status becomes `suspended_awaiting_input` when any child is suspended. Portfolio: aggregate gains `has_suspended_members`/`suspended_member_count`; `portfolio.member_suspended` / `portfolio.member_resumed` events. Plan/Task: bidirectional mirror — when an intent suspends, its task transitions to `blocked` with `blocked_reason: "intent_suspended"` and `suspended_intent_id`; plan progress gains `suspended_tasks`. Workflow: downstream phases receive `UpstreamIntentSuspendedError` at claim time; workflow progress gains `suspended_phases`. Deadline: suspension deadline governs expiry and MUST NOT exceed portfolio `due_before` constraint.
+  - **`HumanRetryPolicy` dataclass** — Re-notification and escalation policy with `max_attempts`, `interval_seconds`, `strategy` ("fixed"/"linear"/"exponential"), `escalation_ladder` (list of `EscalationStep`), and `final_fallback_policy`. Serialises to/from dict via `to_dict()` / `from_dict()`.
+  - **`EscalationStep` dataclass** — A single escalation step: `after_attempt`, `channel`, `notify`. Triggers `intent.suspension_escalated` event.
+  - **`UpstreamIntentSuspendedError`** — Raised by `WorkflowSpec.validate_claim_inputs()` when a declared input references an upstream phase whose intent is currently `suspended_awaiting_input`. Carries `task_id`, `phase_name`, `suspended_intent_id`, `expected_resume_at`. Subclass of `WorkflowError`.
+  - **`BaseAgent.default_human_retry_policy`** — Class-level or instance-level attribute (`None` by default). Applied to all `request_input()` calls that do not supply an explicit `retry_policy` argument.
+  - **`request_input(retry_policy=…)` parameter** — Accepts a `HumanRetryPolicy`. When supplied, the SDK re-fires `@on_input_requested` hooks on each attempt, emits `intent.suspension_renotified` per attempt, emits `intent.suspension_escalated` for escalation steps, and applies `final_fallback_policy` after all attempts are exhausted.
+  - **Three-level policy cascade** — call-site policy → `default_human_retry_policy` on the agent → server-configured platform default.
+  - **Four new `EventType` constants** — `intent.suspension_renotified`, `intent.suspension_escalated`, `portfolio.member_suspended`, `portfolio.member_resumed`.
+  - **`retry_policy` field on `SuspensionRecord`** — Optional; additive; existing single-attempt behaviour preserved when absent.
+  - **RFC-0026 protocol document** — `docs/rfcs/0026-suspension-container-interaction.md` with five container rules, HumanRetryPolicy schema, three-level cascade, coordinator policy, RFC-0010 relationship, end-to-end example, and cross-RFC patch summary.
+  - **Cross-RFC patches** — RFC-0002 (aggregate `suspended_awaiting_input` status), RFC-0007 (portfolio suspension-aware aggregate), RFC-0010 (RFC-0026 relationship note), RFC-0012 (task/intent suspension mirror, `suspended_tasks`), RFC-0024 (`UpstreamIntentSuspendedError`, `suspended_phases`), RFC-0025 (`retry_policy` on `SuspensionRecord`, `timeout_seconds` per-attempt semantics, `fallback_policy` alias note, Cross-RFC table).
+  - **41 new tests** — `tests/test_hitl.py` (HumanRetryPolicy, EscalationStep, SuspensionRecord.retry_policy, EventType, request_input signature, BaseAgent.default_human_retry_policy, package exports) and `tests/test_workflow_io.py` (UpstreamIntentSuspendedError construction, attributes, hierarchy, package export).
+  - **Package exports** — `HumanRetryPolicy`, `EscalationStep`, `UpstreamIntentSuspendedError` exported from `openintent` top-level.
+
+### Updated
+
+- `SuspensionRecord.fallback_policy` documented as alias for `retry_policy.final_fallback_policy` when retry_policy is set.
+- `SuspensionRecord.timeout_seconds` documented as per-attempt window when `retry_policy` is set.
+- `BaseAgent.request_input()` docstring updated to describe retry_policy and default_human_retry_policy.
+
+---
+
+## [0.16.0] - 2026-03-23
+
+### Added
+
+- **RFC-0024: Workflow I/O Contracts** — Typed input/output contracts at the task and phase level, with executor-owned wiring (resolves RFC-0012 Open Question #4).
+
+  - **`outputs` schema on `PhaseConfig`** — Each phase can declare `outputs` as a mapping from key name to type (`string`, `number`, `boolean`, `object`, `array`, a named type from the `types` block, or an inline `{type, required}` dict for optional fields). Legacy list-of-strings form is normalised automatically.
+  - **`inputs` wiring on `PhaseConfig`** — Each phase can declare `inputs` as a mapping from local key name to a mapping expression: `phase_name.key`, `$trigger.key`, or `$initial_state.key`. The executor resolves these before invoking the agent handler and places the resolved dict in `ctx.input`.
+  - **Parse-time validation** — `WorkflowSpec._validate_io_wiring()` is called on every `from_yaml()` / `from_string()`. Checks that every `phase_name.key` reference names a phase in `depends_on`, that the phase exists, and that the key appears in the upstream phase's declared outputs (if it has any). Raises `InputWiringError` on failure.
+  - **`WorkflowSpec.resolve_task_inputs()`** — Executor pre-handoff step. Pre-populates `ctx.input` from upstream phase outputs, trigger payload, or initial state. Raises `UnresolvableInputError` if any declared input cannot be resolved.
+  - **`WorkflowSpec.validate_claim_inputs()`** — Executor claim-time gate. Rejects a task claim early if declared inputs are not yet resolvable from completed upstream phases.
+  - **`WorkflowSpec.validate_task_outputs()`** — Executor completion-time gate. Validates the agent's return dict against declared `outputs`. Raises `MissingOutputError` for absent required keys; raises `OutputTypeMismatchError` for type mismatches. Supports primitive types, named struct types (top-level key presence), and enum types (`{enum: [...]}`).
+  - **`MissingOutputError`** — Raised when one or more required output keys are absent. Carries `task_id`, `phase_name`, `missing_keys`.
+  - **`OutputTypeMismatchError`** — Raised when an output value does not match its declared type. Carries `task_id`, `phase_name`, `key`, `expected_type`, `actual_type`.
+  - **`UnresolvableInputError`** — Raised when one or more declared inputs cannot be resolved from available upstream outputs. Carries `task_id`, `phase_name`, `unresolvable_refs`.
+  - **`InputWiringError`** — Raised at parse time when an input mapping expression is structurally invalid. Subclass of `WorkflowValidationError`. Carries `phase_name`, `invalid_refs`, `suggestion`.
+  - **`types` block in YAML** — Top-level `types:` map defines named struct and enum types reusable across output schemas. Persisted into `intent.state._io_types` so agent-side validation works without a `WorkflowSpec` reference at runtime.
+  - **Incremental adoption** — Phases without `outputs` or `inputs` are fully unaffected. Parse-time and runtime validation only applies to phases that declare contracts.
+  - **Package exports** — `MissingOutputError`, `OutputTypeMismatchError`, `UnresolvableInputError`, `InputWiringError` all exported from `openintent` top-level.
+  - **RFC-0024 protocol document** — `docs/rfcs/0024-workflow-io-contracts.md` covering output schema declaration, input wiring, executor semantics, named error types, `TaskContext` API, parse-time validation, incremental adoption, and a complete example.
+
+- **RFC-0025: Human-in-the-Loop Intent Suspension** — First-class protocol primitive for suspending an intent mid-execution and awaiting operator input before proceeding.
+
+  - **`suspended_awaiting_input` lifecycle state** — New `IntentStatus` value. Reaper and lease-expiry workers skip intents in this state; lease renewal succeeds for suspended intents so agents retain ownership across the suspension period.
+  - **Four new `EventType` constants** — `intent.suspended`, `intent.resumed`, `intent.suspension_expired`, `engagement.decision`. All events are stored in the intent event log and emitted via the SSE bus.
+  - **`ResponseType` enum** — `choice`, `confirm`, `text`, `form` — specifies what kind of response is expected from the operator. Agents set this when calling `request_input()`.
+  - **`SuspensionChoice` dataclass** — A single operator-facing option with `value` (machine-readable), `label` (human-readable), optional `description`, `style` hint (`"primary"` / `"danger"` / `"default"`), and arbitrary `metadata`. Channels render these as buttons, dropdowns, or radio options.
+  - **`SuspensionRecord` dataclass** — Captures the full context of a suspension: question, `response_type`, list of `SuspensionChoice` objects, structured context, channel hint, timeout, fallback policy, confidence at suspension time, and response metadata. Stored in `intent.state._suspension`. Includes `valid_values()` helper that returns the allowed values for `choice`/`confirm` types.
+  - **`EngagementSignals` dataclass** — Carries `confidence`, `risk`, and `reversibility` scores (all float [0, 1]) used by the engagement-decision engine.
+  - **`EngagementDecision` dataclass** — Output of `should_request_input()`. Has `mode` (one of `autonomous`, `request_input`, `require_input`, `defer`), `should_ask` bool, `rationale` string, and embedded `EngagementSignals`.
+  - **`InputResponse` dataclass** — Represents an operator's response: `suspension_id`, `value`, `responded_by`, `responded_at`, and optional `metadata`.
+  - **`InputTimeoutError` exception** — Raised when `fallback_policy="fail"` and the suspension expires. Carries `suspension_id` and `fallback_policy` attributes.
+  - **`InputCancelledError` exception** — Raised when a suspension is explicitly cancelled. Carries `suspension_id`.
+  - **`BaseAgent.request_input()`** — Suspends the intent, fires `@on_input_requested` hooks, polls `intent.state._suspension.resolution` every 2 seconds, and returns the operator's response value. Accepts `response_type` and `choices` parameters; for `confirm` type auto-populates yes/no choices if none are supplied. Also supports `timeout_seconds`, `fallback_policy`, `fallback_value`, `channel_hint`, and `confidence`.
+  - **`BaseAgent.should_request_input()`** — Implements the default rule-based engagement-decision logic (high-confidence/low-risk → autonomous; moderate uncertainty → request_input; low confidence or high risk → require_input; extreme risk/irreversibility → defer). Emits `engagement.decision` event and fires `@on_engagement_decision` hooks.
+  - **Four new lifecycle decorators** — `@on_input_requested`, `@on_input_received`, `@on_suspension_expired`, `@on_engagement_decision`. Auto-discovered by `_discover_handlers()` and routed via `_on_generic_event()`.
+  - **`POST /api/v1/intents/{id}/suspend/respond`** — REST endpoint for operators (or bots) to submit a response. Validates `suspension_id` matches the active suspension, validates response value against defined choices (for `choice`/`confirm` types — returns 422 with `valid_choices` on mismatch), patches `state._suspension` with the response, transitions the intent to `active`, emits `intent.resumed`, and broadcasts via SSE. Response includes `choice_label` and `choice_description` for matched choices.
+  - **RFC-0025 protocol document** — `docs/rfcs/0025-human-in-the-loop.md` covering lifecycle state, event types, SuspensionRecord schema, fallback policies, engagement decision modes, REST endpoint, and security considerations.
+  - **HITL user guide** — `docs/guide/human-in-the-loop.md` with quick-start, `request_input()` reference, fallback policies, engagement decisions, decorator reference, operator response example, exception reference, and a full refund-agent example.
+  - **62 new tests** — `tests/test_hitl.py` covers all new models, exceptions, decorators, engagement-decision modes, and the suspend/respond endpoint.
+
+### Updated
+
+- `mkdocs.yml` — RFC-0024 and RFC-0025 entries added to the RFCs nav; Human-in-the-Loop guide added to the User Guide nav; announcement bar updated to v0.16.0.
+- All version references updated to 0.16.0 across Python SDK and changelog.
+
+---
+
 ## [0.15.1] - 2026-03-06
 
 ### Changed
@@ -26,13 +102,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **RFC-0010 Retry Policy MCP Tools** — 4 new MCP tools for retry policy management and failure tracking:
-  - `set_retry_policy` — Set or update retry policy on an intent (admin tier).
-  - `get_retry_policy` — Retrieve the current retry policy for an intent (reader tier).
-  - `record_failure` — Record a failure event against an intent for retry tracking (operator tier).
-  - `get_failures` — List recorded failures for an intent (reader tier).
-- **`build_retry_failure_tools()`** — New helper in the Python MCP bridge (`openintent.mcp`) that builds the 4 retry/failure tool definitions for use with `MCPToolProvider` and `MCPToolExporter`.
-- **MCP Tool Surface Expansion** — MCP tool surface expanded from 66 to 70 tools; RBAC counts: reader=25, operator=43, admin=70.
+- **RFC-0010 Retry Policy MCP Tools** — 4 new MCP tools: `set_retry_policy` (admin), `get_retry_policy` (read), `record_failure` (write), `get_failures` (read). MCP tool surface expanded from 66 to 70 tools; RBAC counts: reader=25, operator=43, admin=70.
+- **`build_retry_failure_tools()`** — New helper in the Python MCP bridge (`openintent.mcp`) that constructs retry policy and failure-tracking tool definitions for MCP integration, enabling agents to manage retry policies and record/query failures through MCP.
 
 ### Changed
 
@@ -243,29 +314,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **RFC-0021: Agent-to-Agent Messaging** — Structured channels for direct agent-to-agent communication within intent scope.
-  - `Channel`, `ChannelMessage`, `MessageType`, `ChannelStatus`, `MemberPolicy`, `MessageStatus` data models.
-  - 11 server endpoints (10 REST + 1 SSE) under `/api/v1/intents/{id}/channels/`.
-  - `@on_message` lifecycle decorator for reactive message handling.
-  - `_ChannelsProxy` / `_ChannelHandle` agent abstractions with `ask()`, `notify()`, `broadcast()`.
-- **YAML `channels:` block** — Declarative channel definitions in workflow specifications.
+- **Declarative Messaging (RFC-0021)**
+  - YAML `channels:` block for declarative agent-to-agent messaging configuration.
+  - `@on_message` decorator for zero-boilerplate, reactive message handling with auto-reply.
+  - Channel proxy (`self.channels`) with `ask()`, `notify()`, and `broadcast()` convenience methods.
+  - Three messaging patterns: request/response, fire-and-forget, and broadcast.
 
 ---
 
-## [0.10.1] - 2026-02-12
+## [0.10.1] - 2026-02-13
 
 ### Added
 
-- **Tool Execution Adapters** — Pluggable adapter system for real external API execution through `POST /api/v1/tools/invoke`. Three built-in adapters: `RestToolAdapter` (API key, Bearer, Basic Auth), `OAuth2ToolAdapter` (automatic token refresh on 401), `WebhookToolAdapter` (HMAC-SHA256 signed dispatch).
-- **Adapter Registry** — Resolves adapters from credential metadata via explicit `adapter` key, `auth_type` mapping, or placeholder fallback.
-- **Security Controls** — URL validation (blocks private IPs, metadata endpoints, non-HTTP schemes), timeout bounds (1–120s), response size limits (1 MB), secret sanitization, request fingerprinting, redirect blocking.
-- **Custom Adapter Registration** — `register_adapter(name, adapter)` for non-standard protocols.
-- **OAuth2 Integration Guide** — Documentation for integrating OAuth2 services: platform handles authorization code flow, stores tokens in vault, SDK manages refresh and execution. Templates for Salesforce, Google APIs, Microsoft Graph, HubSpot.
+- **Tool Execution Adapters** — Pluggable adapter system for real external API execution through the Tool Proxy (`POST /api/v1/tools/invoke`). Three built-in adapters:
+  - `RestToolAdapter` — API key (header/query), Bearer token, and Basic Auth for standard REST APIs.
+  - `OAuth2ToolAdapter` — OAuth2 with automatic token refresh on 401 responses using `refresh_token` + `token_url`.
+  - `WebhookToolAdapter` — HMAC-SHA256 signed dispatch for webhook receivers.
+- **Adapter Registry** — `AdapterRegistry` resolves the correct adapter from credential metadata: explicit `adapter` key, `auth_type` mapping, or placeholder fallback for backward compatibility.
+- **Security Controls** — All outbound tool execution requests enforce:
+  - URL validation blocking private IPs (RFC-1918, loopback, link-local), cloud metadata endpoints (`169.254.169.254`), and non-HTTP schemes.
+  - Timeout bounds clamped to 1–120 seconds (default 30s).
+  - Response size limit of 1 MB.
+  - Secret sanitization replacing API keys, tokens, and passwords with `[REDACTED]` in all outputs.
+  - Request fingerprinting via SHA-256 hash stored per invocation for audit correlation.
+  - HTTP redirect blocking to prevent SSRF via redirect chains.
+- **Custom Adapter Registration** — `register_adapter(name, adapter)` to add adapters for services with non-standard protocols (e.g., GraphQL).
+- **OAuth2 Integration Guide** — Comprehensive documentation for integrating OAuth2 services: platform handles the authorization code flow, stores tokens in the vault, SDK manages refresh and execution. Includes ready-to-use metadata templates for Salesforce, Google APIs, Microsoft Graph, and HubSpot.
 
 ### Changed
 
-- Credential `metadata` supports execution config (`base_url`, `endpoints`, `auth`) for real API calls. Backward compatible — credentials without execution config return placeholder responses.
-- 57 new tests covering security utilities, all three adapters, and the registry.
+- Credential `metadata` field now supports execution config (`base_url`, `endpoints`, `auth`) to enable real API calls. Credentials without execution config continue to return placeholder responses (backward compatible).
+- 57 new tests covering security utilities, all three adapters, and the adapter registry.
 - Documentation updated across guide, RFC-0014, examples, API reference, and website.
 
 ---
@@ -274,20 +353,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **RFC-0018: Cryptographic Agent Identity** — Ed25519 key pairs, `did:key` decentralized identifiers, challenge-response registration, signed events with non-repudiation, key rotation, and portable identity across servers.
-- **RFC-0019: Verifiable Event Logs** — SHA-256 hash chains linking every event to its predecessor, Merkle tree checkpoints with compact inclusion proofs, consistency verification between checkpoints, and optional external timestamp anchoring.
-- **RFC-0020: Distributed Tracing** — `trace_id` and `parent_event_id` fields on IntentEvent, `TracingContext` dataclass for automatic propagation through agent-tool-agent call chains, W3C-aligned 128-bit trace identifiers.
-- **`@Identity` decorator** — Declarative cryptographic identity with `auto_sign=True` and `auto_register=True`.
-- **`TracingContext`** — New dataclass with `new_root()`, `child()`, `to_dict()`, `from_dict()` for trace propagation.
-- **11 new client methods** — `register_identity()`, `complete_identity_challenge()`, `verify_signature()`, `rotate_key()`, `get_agent_keys()`, `revoke_key()`, `resolve_did()`, `verify_event_chain()`, `list_checkpoints()`, `get_merkle_proof()`, `verify_consistency()`.
-- **13 new server endpoint stubs** — Identity key management, challenge-response, DID resolution, hash chain verification, checkpoint management, Merkle proofs, consistency verification.
-- **Automatic tracing in `_emit_tool_event`** — Tool invocation events include `trace_id` and `parent_event_id` from the agent's active `TracingContext`.
-- **Tracing injection in `_execute_tool`** — Tool handlers that accept a `tracing` keyword argument receive the current `TracingContext` automatically.
+- **RFC-0018: Cryptographic Agent Identity**
+  - `AgentIdentity`, `IdentityChallenge`, `IdentityVerification` data models for key-based agent identity.
+  - Ed25519 key pairs with `did:key:z6Mk...` decentralized identifiers.
+  - Challenge-response identity registration via `register_identity()` and `complete_identity_challenge()`.
+  - Key rotation with `rotate_key()` preserving previous key history.
+  - Signature verification with `verify_signature()`.
+  - `@Identity` decorator for zero-boilerplate identity setup on agents.
+  - `@on_identity_registered` lifecycle hook.
+  - `IdentityConfig` for YAML workflow configuration.
+  - `AgentRecord` extended with `public_key`, `did`, `key_algorithm`, `key_registered_at`, `key_expires_at`, `previous_keys` fields (all optional for backward compatibility).
+  - 5 new server endpoints: `POST /api/v1/agents/{id}/identity`, `POST .../identity/challenge`, `GET .../identity`, `POST .../identity/verify`, `POST .../identity/rotate`.
+
+- **RFC-0019: Verifiable Event Logs**
+  - `LogCheckpoint`, `MerkleProof`, `MerkleProofEntry`, `ChainVerification`, `ConsistencyProof`, `TimestampAnchor` data models.
+  - SHA-256 hash chains linking each event to its predecessor.
+  - Merkle tree checkpoints with `MerkleProof.verify()` for client-side inclusion verification.
+  - `verify_event_chain()` to validate an intent's full hash chain integrity.
+  - `list_checkpoints()`, `get_checkpoint()`, `get_merkle_proof()`, `verify_consistency()` client methods.
+  - `VerificationConfig` for YAML workflow configuration.
+  - `IntentEvent` extended with optional `proof`, `event_hash`, `previous_event_hash`, `sequence` fields.
+  - 8 new server endpoints for checkpoints, Merkle proofs, chain verification, and optional external anchoring.
+
+- **RFC-0020: Distributed Tracing**
+  - `TracingContext` dataclass for propagating trace state through agent → tool → agent call chains.
+  - `IntentEvent` extended with optional `trace_id` (128-bit hex) and `parent_event_id` fields.
+  - `log_event()` on both sync and async clients accepts `trace_id` and `parent_event_id` parameters.
+  - `_emit_tool_event()` automatically includes tracing context in tool invocation events.
+  - `_execute_tool()` passes `tracing` keyword argument to local tool handlers that accept it.
+  - `TracingContext.new_root()` generates fresh 128-bit trace IDs (W3C-aligned format).
+  - `TracingContext.child()` creates child contexts with updated parent references.
+  - Cross-intent tracing via `trace_id` in event payloads.
+
+- **Sync & Async Client Parity** — All new RFC-0018/0019/0020 methods available on both `OpenIntentClient` and `AsyncOpenIntentClient`.
 
 ### Changed
 
-- All documentation, READMEs, and examples updated from 17 to 20 RFCs.
-- `log_event()` on both sync and async clients now accepts optional `trace_id` and `parent_event_id` parameters.
+- Version bumped to 0.10.0.
+- `__all__` exports updated with all new public symbols including `TracingContext`.
 - 690+ tests passing across all 20 RFCs (104 model tests + 26 server tests for RFC-0018/0019/0020).
 
 ---
@@ -296,11 +399,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Streaming token usage capture** — All 7 LLM provider adapters (OpenAI, DeepSeek, Gemini, Anthropic, Azure OpenAI, OpenRouter, Grok) now capture actual `prompt_tokens`, `completion_tokens`, and `total_tokens` during streaming responses.
-- **OpenAI-compatible adapters** — OpenAI, DeepSeek, Azure OpenAI, OpenRouter, and Grok adapters inject `stream_options={"include_usage": True}` to receive usage data in the final stream chunk.
-- **Gemini adapter** — Captures `usage_metadata` from stream chunks and maps to standard token count fields.
-- **Anthropic adapter** — Extracts usage from the stream's internal message snapshot automatically.
-- **`tokens_streamed` field** — Reports actual completion token counts, falling back to character count only when unavailable.
+- **Streaming token usage capture** — All 7 LLM provider adapters (OpenAI, DeepSeek, Gemini, Anthropic, Azure OpenAI, OpenRouter, Grok) now capture actual `prompt_tokens`, `completion_tokens`, and `total_tokens` during streaming responses. Previously, `tokens_streamed` used character count instead of real token counts.
+- **OpenAI-compatible adapters** — OpenAI, DeepSeek, Azure OpenAI, OpenRouter, and Grok adapters now inject `stream_options={"include_usage": True}` to receive usage data in the final stream chunk. Token counts are extracted and passed through to `complete_stream()` and `log_llm_request_completed()`.
+- **Gemini adapter** — Captures `usage_metadata` from stream chunks (`prompt_token_count`, `candidates_token_count`, `total_token_count`) and maps to standard fields.
+- **Anthropic adapter** — Extracts usage from the stream's internal message snapshot in `__exit__`, removing the need for a manual `get_final_message()` call.
+- **`tokens_streamed` field** — Now reports actual completion token counts from provider APIs, falling back to character count only when usage data is unavailable.
 
 ---
 
@@ -309,27 +412,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Server-Side Tool Invocation** — `POST /api/v1/tools/invoke` endpoint enables agents to invoke tools through the server proxy without ever accessing raw credentials. The server resolves the appropriate grant, injects credentials from the vault, enforces rate limits, and records the invocation for audit.
-- **3-Tier Grant Resolution** — Tool invocations are matched to grants using a three-tier resolution strategy: (1) `grant.scopes` contains the tool name, (2) `grant.context["tools"]` contains the tool name, (3) `credential.service` matches the tool name.
+- **3-Tier Grant Resolution** — Tool invocations are matched to grants using a three-tier resolution strategy: (1) `grant.scopes` contains the tool name, (2) `grant.context["tools"]` contains the tool name, (3) `credential.service` matches the tool name. This resolves the common mismatch where tool names differ from credential service names.
 - **Client `invoke_tool()` Methods** — `OpenIntentClient.invoke_tool(tool_name, agent_id, parameters)` (sync) and `AsyncOpenIntentClient.invoke_tool(tool_name, agent_id, parameters)` (async) for programmatic server-side tool invocation.
-- **Agent `self.tools.invoke()` via Server Proxy** — `_ToolsProxy` on agents delegates string tool names to `client.invoke_tool()`, completing the server-side invocation chain.
-- **Invocation Audit Trail** — Every server-side tool invocation is recorded with agent ID, tool name, parameters, result, duration, and timestamp.
+- **Agent `self.tools.invoke()` via Server Proxy** — `_ToolsProxy` on agents delegates string tool names to `client.invoke_tool()`, completing the chain: `self.tools.invoke("web_search", {...})` → server resolves grant → injects credentials → executes → returns result.
+- **Invocation Audit Trail** — Every server-side tool invocation is recorded with agent ID, tool name, parameters, result, duration, and timestamp for compliance and debugging.
 
-- **`@on_handoff` Decorator** — Lifecycle hook for delegated assignments. Handler receives intent and delegating agent's ID.
-- **`@on_retry` Decorator** — Lifecycle hook for retry assignments (RFC-0010). Handler receives intent, attempt number, and last error.
-- **`@input_guardrail` / `@output_guardrail` Decorators** — Validation pipeline: input guardrails reject before processing, output guardrails validate before commit. Raise `GuardrailError` to reject.
-- **Built-in Coordinator Guardrails** — `guardrails=` on `@Coordinator` is now active: `"require_approval"`, `"budget_limit"`, `"agent_allowlist"`.
+- **`@on_handoff` Decorator** — Lifecycle hook that fires when an agent receives work delegated from another agent. The handler receives the intent and the delegating agent's ID, allowing context-aware handoff processing distinct from fresh assignments.
+- **`@on_retry` Decorator** — Lifecycle hook that fires when an intent is reassigned after a previous failure (RFC-0010). The handler receives the intent, attempt number, and last error, allowing agents to adapt retry strategy.
+- **`@input_guardrail` / `@output_guardrail` Decorators** — Validation pipeline for agent processing. Input guardrails run before `@on_assignment` handlers and can reject intents. Output guardrails validate handler results before they are committed to state. Both support `GuardrailError` for rejection.
+- **Built-in Coordinator Guardrails** — The `guardrails=` parameter on `@Coordinator` is now active. Supported policies: `"require_approval"` (logs decision records before assignment), `"budget_limit"` (rejects intents exceeding cost constraints), `"agent_allowlist"` (rejects delegation to agents outside the managed list).
 
 ### Fixed
 
-- **`_ToolsProxy` duplicate class** — Removed duplicate `_ToolsProxy` definition that caused agent tool proxy to silently fail.
-- **Dead proxy code** — Removed shadowed `_MemoryProxy` and `_TasksProxy` duplicate definitions.
-- **Grant matching for mismatched tool/service names** — `find_agent_grant_for_tool()` now correctly resolves grants where tool name differs from credential service name.
-- **Inert `guardrails=` parameter** — `guardrails=` on `@Coordinator` was accepted but unused. Now wires into guardrail pipeline.
+- **`_ToolsProxy` duplicate class** — Removed duplicate `_ToolsProxy` definition that caused agent tool proxy to silently fail. Single definition at top of `agents.py`, constructor takes `agent` only.
+- **Dead proxy code** — Removed shadowed `_MemoryProxy` and `_TasksProxy` definitions (originally at lines 47-79, shadowed by full implementations later in the file).
+- **Grant matching for mismatched tool/service names** — `find_agent_grant_for_tool()` in Database class now correctly resolves grants where the tool name (e.g. `"web_search"`) differs from the credential service name (e.g. `"serpapi"`).
+- **Inert `guardrails=` parameter** — The `guardrails=` parameter on `@Coordinator` was accepted but completely unused. Now wires into the input/output guardrail pipeline.
 
 ### Changed
 
-- Tool execution priority enforced: protocol tools > local `ToolDef` handlers > remote RFC-0014 server grants.
-- 556+ tests passing across all 17 RFCs.
+- Tool execution priority clarified and enforced: protocol tools (remember, recall, clarify, escalate, update_status) > local `ToolDef` handlers > remote RFC-0014 server grants.
+- 556+ tests passing across test_llm, test_agents, test_server suites.
 
 ---
 
@@ -337,18 +440,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Tool → ToolDef rename** — `Tool` is now `ToolDef`, `@tool` is now `@define_tool` for clarity. The old names remain as backwards-compatible aliases.
-- **Type annotations** — `llm.py` fully type-annotated, passes mypy strict mode.
+- **Tool → ToolDef rename** — `Tool` is now `ToolDef`, `@tool` is now `@define_tool` for clarity. The old names remain as backwards-compatible aliases and will not be removed.
+- **Type annotations** — `llm.py` is now fully type-annotated and passes mypy strict mode (previously suppressed via `# mypy: disable-error-code`).
 
 ### Added
 
-- **LLM-Powered Agents** — `model=` on `@Agent`/`@Coordinator` for agentic tool loops with `self.think()`, `self.think_stream()`, `self.reset_conversation()`, and protocol-native tools.
-- **Custom Tools with ToolDef** — `ToolDef(name, description, parameters, handler)` and `@define_tool` decorator.
-- **Automatic Tool Tracing** — Local `ToolDef` invocations emit `tool_invocation` protocol events (best-effort, never blocks).
+- **LLM-Powered Agents** — Add `model=` to `@Agent` or `@Coordinator` to enable agentic tool loops with `self.think(prompt)`, streaming via `self.think_stream(prompt)`, conversation reset via `self.reset_conversation()`, and protocol-native tools (remember, recall, clarify, escalate, update_status, delegate, record_decision, create_plan).
+- **Custom Tools with ToolDef** — `ToolDef(name, description, parameters, handler)` for rich tool definitions with local execution, and `@define_tool(description=, parameters=)` decorator to turn functions into `ToolDef` objects.
+- **Mixed tool sources** — `tools=` on `@Agent`/`@Coordinator` accepts both `ToolDef` objects (local handlers with rich schemas) and plain strings (RFC-0014 protocol grants).
+- **Automatic Tool Tracing** — Every local `ToolDef` handler invocation is automatically traced as a `tool_invocation` protocol event when the agent is connected to an OpenIntent server. Each event records tool name, arguments, result, and execution duration. Tracing is best-effort and never blocks tool execution.
+- **Backwards-compatible aliases** — `Tool` = `ToolDef`, `@tool` = `@define_tool`.
 
 ### Fixed
 
-- Unified tool execution model documentation.
+- Unified tool execution model documentation to clarify the three-tier priority: protocol tools > local handlers (`ToolDef`) > remote protocol grants (RFC-0014 strings).
 
 ---
 

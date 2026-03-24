@@ -55,6 +55,144 @@ class WorkflowNotFoundError(WorkflowError):
     pass
 
 
+# ---------------------------------------------------------------------------
+# RFC-0024: Workflow I/O Contract Errors
+# ---------------------------------------------------------------------------
+
+
+class MissingOutputError(WorkflowError):
+    """Raised when a task completion is rejected because one or more declared
+    output keys are absent from the agent's returned dict.
+
+    Attributes:
+        task_id: The ID of the task whose completion was rejected.
+        phase_name: The name of the phase definition.
+        missing_keys: The declared output keys that were not returned.
+    """
+
+    def __init__(self, task_id: str, phase_name: str, missing_keys: list[str]):
+        self.task_id = task_id
+        self.phase_name = phase_name
+        self.missing_keys = missing_keys
+        keys = ", ".join(repr(k) for k in missing_keys)
+        super().__init__(
+            f"Task completion rejected for task '{task_id}' (phase '{phase_name}'): "
+            f"declared output key(s) {keys} were not present in agent return value"
+        )
+
+
+class OutputTypeMismatchError(WorkflowError):
+    """Raised when a returned output key's value does not match the declared type.
+
+    No type coercion is performed — the executor validates and rejects only.
+
+    Attributes:
+        task_id: The ID of the task whose completion was rejected.
+        phase_name: The name of the phase definition.
+        key: The output key with the type mismatch.
+        expected_type: The type declared in the workflow definition.
+        actual_type: The Python type name of the value returned by the agent.
+    """
+
+    def __init__(
+        self,
+        task_id: str,
+        phase_name: str,
+        key: str,
+        expected_type: str,
+        actual_type: str,
+    ):
+        self.task_id = task_id
+        self.phase_name = phase_name
+        self.key = key
+        self.expected_type = expected_type
+        self.actual_type = actual_type
+        super().__init__(
+            f"Task completion rejected for task '{task_id}' (phase '{phase_name}'): "
+            f"output key '{key}' expected type '{expected_type}' "
+            f"but got '{actual_type}'"
+        )
+
+
+class UnresolvableInputError(WorkflowError):
+    """Raised at claim time when one or more declared inputs cannot be resolved
+    from completed upstream task outputs.
+
+    Attributes:
+        task_id: The ID of the task whose claim was rejected.
+        phase_name: The name of the phase definition.
+        unresolvable_refs: Input mapping expressions that could not be resolved
+            (e.g. ["research.findings"]).
+    """
+
+    def __init__(self, task_id: str, phase_name: str, unresolvable_refs: list[str]):
+        self.task_id = task_id
+        self.phase_name = phase_name
+        self.unresolvable_refs = unresolvable_refs
+        refs = ", ".join(repr(r) for r in unresolvable_refs)
+        super().__init__(
+            f"Task claim rejected for task '{task_id}' (phase '{phase_name}'): "
+            f"input reference(s) {refs} could not be resolved from upstream outputs"
+        )
+
+
+class UpstreamIntentSuspendedError(WorkflowError):
+    """Raised at claim time when a declared input references an upstream phase
+    whose intent is currently ``suspended_awaiting_input``.
+
+    Per RFC-0026 §4, an agent MUST NOT proceed with task execution while an
+    upstream producer intent is suspended — the executor should defer the claim
+    until the upstream intent resumes.
+
+    Attributes:
+        task_id: The ID of the task whose claim was rejected.
+        phase_name: The name of the phase definition.
+        suspended_intent_id: The intent ID of the upstream suspended producer.
+        expected_resume_at: ISO-8601 string estimate of when the upstream intent
+            will resume, or None if unknown.
+    """
+
+    def __init__(
+        self,
+        task_id: str,
+        phase_name: str,
+        suspended_intent_id: str,
+        expected_resume_at: Optional[str] = None,
+    ):
+        self.task_id = task_id
+        self.phase_name = phase_name
+        self.suspended_intent_id = suspended_intent_id
+        self.expected_resume_at = expected_resume_at
+        msg = (
+            f"Task claim deferred for task '{task_id}' (phase '{phase_name}'): "
+            f"upstream intent '{suspended_intent_id}' is suspended_awaiting_input"
+        )
+        if expected_resume_at:
+            msg = f"{msg} (expected resume: {expected_resume_at})"
+        super().__init__(msg)
+
+
+class InputWiringError(WorkflowValidationError):
+    """Raised at workflow validation time when an inputs declaration is
+    structurally invalid — e.g. referencing a phase not in depends_on,
+    referencing a non-existent phase, or using malformed mapping syntax.
+
+    Attributes:
+        phase_name: The phase with the invalid inputs declaration.
+        invalid_refs: The malformed or invalid mapping expressions.
+    """
+
+    def __init__(self, phase_name: str, invalid_refs: list[str], suggestion: str = ""):
+        self.phase_name = phase_name
+        self.invalid_refs = invalid_refs
+        refs = ", ".join(repr(r) for r in invalid_refs)
+        super().__init__(
+            f"Phase '{phase_name}' has invalid input wiring: {refs}",
+            path=f"workflow.{phase_name}.inputs",
+            suggestion=suggestion,
+        )
+
+
 class PermissionLevel(str, Enum):
     READ = "read"
     WRITE = "write"
@@ -181,9 +319,14 @@ class PhaseConfig:
     # RFC-0011: Unified permissions
     permissions: Optional[PermissionsConfig] = None
 
-    # Inputs/outputs for interpolation
+    # RFC-0024: I/O contracts
+    # inputs: mapping from local key name -> upstream reference
+    #   e.g. {"revenue": "fetch_financials.revenue", "q": "$trigger.quarter"}
+    # outputs: mapping from output key name -> type declaration
+    #   e.g. {"revenue": "number", "findings": "Finding",
+    #          "warnings": {"type": "array", "required": False}}
     inputs: dict[str, str] = field(default_factory=dict)
-    outputs: list[str] = field(default_factory=list)
+    outputs: dict[str, Any] = field(default_factory=dict)
 
     # Conditional
     skip_when: Optional[str] = None
@@ -517,6 +660,15 @@ class WorkflowSpec:
                 else None
             )  # noqa: E501
 
+            # RFC-0024: outputs may be a legacy list[str] or new dict form.
+            # Normalise to dict[str, Any] so the rest of the code is uniform.
+            raw_outputs = phase_data.get("outputs", {})
+            if isinstance(raw_outputs, list):
+                # Legacy form: ["key1", "key2"] -> {"key1": "any", "key2": "any"}
+                raw_outputs = {k: "any" for k in raw_outputs}
+            elif not isinstance(raw_outputs, dict):
+                raw_outputs = {}
+
             phase = PhaseConfig(
                 name=phase_name,
                 title=title,
@@ -531,7 +683,7 @@ class WorkflowSpec:
                 attachments=phase_data.get("attachments"),
                 permissions=permissions,
                 inputs=phase_data.get("inputs", {}),
-                outputs=phase_data.get("outputs", []),
+                outputs=raw_outputs,
                 skip_when=phase_data.get("skip_when"),
             )
             phases.append(phase)
@@ -604,6 +756,101 @@ class WorkflowSpec:
         # Check for circular dependencies
         self._check_circular_deps()
 
+        # RFC-0024: Validate input wiring declarations
+        self._validate_io_wiring()
+
+    def _validate_io_wiring(self) -> None:
+        """Validate RFC-0024 input/output wiring declarations at parse time.
+
+        Checks performed:
+        1. Every phase reference in an input mapping (``phase.key``) names a
+           phase that exists in the workflow.
+        2. Every such reference names a phase that appears in this phase's
+           ``depends_on`` list.
+        3. If the referenced upstream phase declares ``outputs``, the key must
+           appear there (incremental adoption: skip if upstream has no outputs).
+        4. Input mapping syntax is valid (``phase.key``, ``$trigger.key``, or
+           ``$initial_state.key``).
+        """
+        phase_map: dict[str, PhaseConfig] = {p.name: p for p in self.phases}
+        # Also build a title -> name map for depends_on that use titles
+        title_to_name: dict[str, str] = {p.title: p.name for p in self.phases}
+
+        for phase in self.phases:
+            if not phase.inputs:
+                continue
+
+            # Resolve depends_on to canonical phase names
+            resolved_deps: set[str] = set()
+            for dep in phase.depends_on:
+                if dep in phase_map:
+                    resolved_deps.add(dep)
+                elif dep in title_to_name:
+                    resolved_deps.add(title_to_name[dep])
+
+            invalid_refs: list[str] = []
+
+            for local_key, mapping_expr in phase.inputs.items():
+                if not isinstance(mapping_expr, str):
+                    invalid_refs.append(
+                        f"{local_key}: {mapping_expr!r} (must be a string)"
+                    )
+                    continue
+
+                # Static references are valid by definition at parse time
+                if mapping_expr.startswith("$trigger.") or mapping_expr.startswith(
+                    "$initial_state."
+                ):
+                    continue
+
+                # Must be "phase_name.key"
+                parts = mapping_expr.split(".", 1)
+                if len(parts) != 2 or not parts[0] or not parts[1]:
+                    invalid_refs.append(
+                        f"{local_key}: {mapping_expr!r} "
+                        f"(invalid syntax; expected 'phase_name.key' or "
+                        f"'$trigger.key' or '$initial_state.key')"
+                    )
+                    continue
+
+                ref_phase_name, ref_key = parts[0], parts[1]
+
+                # Check phase exists
+                if ref_phase_name not in phase_map:
+                    invalid_refs.append(
+                        f"{local_key}: {mapping_expr!r} "
+                        f"(phase '{ref_phase_name}' does not exist)"
+                    )
+                    continue
+
+                # Check phase is in depends_on
+                if ref_phase_name not in resolved_deps:
+                    invalid_refs.append(
+                        f"{local_key}: {mapping_expr!r} "
+                        f"(phase '{ref_phase_name}' is not in depends_on)"
+                    )
+                    continue
+
+                # Check upstream output key exists if upstream declares outputs
+                upstream = phase_map[ref_phase_name]
+                if upstream.outputs and ref_key not in upstream.outputs:
+                    invalid_refs.append(
+                        f"{local_key}: {mapping_expr!r} "
+                        f"(upstream phase '{ref_phase_name}' does not declare "
+                        f"output key '{ref_key}')"
+                    )
+
+            if invalid_refs:
+                raise InputWiringError(
+                    phase_name=phase.name,
+                    invalid_refs=invalid_refs,
+                    suggestion=(
+                        "Input mappings must use the form 'phase_name.key' "
+                        "where phase_name appears in depends_on, or "
+                        "'$trigger.key' / '$initial_state.key' for static values."
+                    ),
+                )
+
     def _check_circular_deps(self) -> None:
         """Check for circular dependencies in the workflow."""
         # Build dependency graph
@@ -667,6 +914,31 @@ class WorkflowSpec:
             if phase.cost_tracking:
                 initial_state["cost_tracking"] = phase.cost_tracking
 
+            # RFC-0024: persist I/O contract declarations in the intent's
+            # initial_state so that the running agent can resolve ctx.input
+            # and validate outputs at completion time without needing a
+            # direct reference to the WorkflowSpec.
+            if phase.inputs:
+                initial_state["_io_inputs"] = phase.inputs
+            if phase.outputs:
+                initial_state["_io_outputs"] = phase.outputs
+            # Persist the workflow-level types block so that agent-side
+            # _validate_io_outputs can do named-type (struct/enum) checks
+            # without needing a reference to the WorkflowSpec at runtime.
+            if self.types:
+                initial_state["_io_types"] = self.types
+            # Store a mapping from dependency title -> phase name so that
+            # _build_context can resolve upstream outputs by phase name
+            # (as used in input mapping expressions) rather than by title.
+            # This is essential because titles and names can differ.
+            if phase.depends_on:
+                name_to_title = {p.name: p.title for p in self.phases}
+                dep_title_to_name: dict[str, str] = {}
+                for dep_name in phase.depends_on:
+                    dep_title = name_to_title.get(dep_name, dep_name)
+                    dep_title_to_name[dep_title] = dep_name
+                initial_state["_io_dep_title_to_name"] = dep_title_to_name
+
             if phase.permissions:
                 perm = phase.permissions
                 perm_state: dict[str, Any] = {
@@ -703,6 +975,9 @@ class WorkflowSpec:
                 depends_on=depends_on,
                 constraints=phase.constraints,
                 initial_state=initial_state,
+                # RFC-0024: preserve I/O contracts for executor wiring
+                inputs=phase.inputs,
+                outputs=phase.outputs,
             )
             intents.append(intent)
 
@@ -772,14 +1047,314 @@ class WorkflowSpec:
             api_key=api_key,
         )
 
-        # Execute (timeout is managed internally by Coordinator)
+        # Execute with RFC-0024 I/O contract enforcement — pass self so the
+        # Coordinator can call validate_claim_inputs/validate_task_outputs.
         portfolio_spec = self.to_portfolio_spec()
-        result = await coordinator.execute(portfolio_spec)
+        result = await coordinator.execute(portfolio_spec, workflow_spec=self)
 
         if verbose:
             print(f"\nWorkflow complete: {self.name}")
 
         return result
+
+    # ------------------------------------------------------------------
+    # RFC-0024: Executor I/O wiring helpers
+    # ------------------------------------------------------------------
+
+    def resolve_task_inputs(
+        self,
+        phase_name: str,
+        upstream_outputs: dict[str, dict[str, Any]],
+        trigger_payload: Optional[dict[str, Any]] = None,
+        initial_state: Optional[dict[str, Any]] = None,
+        task_id: str = "",
+    ) -> dict[str, Any]:
+        """Pre-populate ctx.input for a task from its declared inputs mapping.
+
+        This is the executor's pre-handoff step (RFC-0024 §3.2).  Call this
+        before dispatching a task to an agent handler.  The returned dict
+        should be placed in ``ctx.input``.
+
+        Args:
+            phase_name: The name of the phase being started.
+            upstream_outputs: Map of ``{phase_name: {key: value}}`` for all
+                phases that have already completed.  Keys are canonical phase
+                names (not titles).
+            trigger_payload: Optional trigger payload for ``$trigger.*`` refs.
+            initial_state: Optional initial state for ``$initial_state.*`` refs.
+            task_id: Optional task ID for error messages.
+
+        Returns:
+            Resolved ``ctx.input`` dict guaranteed to contain all declared
+            input keys.
+
+        Raises:
+            UnresolvableInputError: If any declared input cannot be resolved.
+            KeyError: If ``phase_name`` is not found in this workflow.
+        """
+        phase = next((p for p in self.phases if p.name == phase_name), None)
+        if phase is None:
+            raise KeyError(f"Phase '{phase_name}' not found in workflow '{self.name}'")
+
+        if not phase.inputs:
+            return {}
+
+        trigger_payload = trigger_payload or {}
+        initial_state = initial_state or {}
+        resolved: dict[str, Any] = {}
+        unresolvable: list[str] = []
+
+        for local_key, mapping_expr in phase.inputs.items():
+            if not isinstance(mapping_expr, str):
+                unresolvable.append(f"{local_key}: {mapping_expr!r}")
+                continue
+
+            if mapping_expr.startswith("$trigger."):
+                key = mapping_expr[len("$trigger.") :]
+                if key in trigger_payload:
+                    resolved[local_key] = trigger_payload[key]
+                else:
+                    unresolvable.append(mapping_expr)
+            elif mapping_expr.startswith("$initial_state."):
+                key = mapping_expr[len("$initial_state.") :]
+                if key in initial_state:
+                    resolved[local_key] = initial_state[key]
+                else:
+                    unresolvable.append(mapping_expr)
+            else:
+                parts = mapping_expr.split(".", 1)
+                if len(parts) != 2:
+                    unresolvable.append(mapping_expr)
+                    continue
+                ref_phase, ref_key = parts[0], parts[1]
+                phase_output = upstream_outputs.get(ref_phase, {})
+                if ref_key in phase_output:
+                    resolved[local_key] = phase_output[ref_key]
+                else:
+                    unresolvable.append(mapping_expr)
+
+        if unresolvable:
+            raise UnresolvableInputError(
+                task_id=task_id,
+                phase_name=phase_name,
+                unresolvable_refs=unresolvable,
+            )
+
+        return resolved
+
+    def validate_claim_inputs(
+        self,
+        phase_name: str,
+        upstream_outputs: dict[str, dict[str, Any]],
+        trigger_payload: Optional[dict[str, Any]] = None,
+        initial_state: Optional[dict[str, Any]] = None,
+        task_id: str = "",
+        upstream_intents_status: Optional[dict[str, dict[str, Any]]] = None,
+    ) -> None:
+        """Validate that all declared inputs are resolvable at claim time.
+
+        This is the executor's claim-time check (RFC-0024 §3.1 / RFC-0026 §4).
+        Call this when an agent attempts to claim a task.  Raises a typed error
+        if the claim should be rejected; returns ``None`` if the claim is safe.
+
+        RFC-0026: If ``upstream_intents_status`` is provided, this method checks
+        whether any upstream phase whose outputs are referenced by the current
+        phase's inputs has a corresponding intent that is currently
+        ``suspended_awaiting_input``.  When such a phase is found,
+        ``UpstreamIntentSuspendedError`` is raised **before** the resolvability
+        check, because the upstream outputs may exist but the producer intent is
+        paused and may mutate its outputs upon resume.
+
+        Args:
+            phase_name: The name of the phase being claimed.
+            upstream_outputs: Map of ``{phase_name: {key: value}}`` for all
+                completed upstream phases.
+            trigger_payload: Optional trigger payload for ``$trigger.*`` refs.
+            initial_state: Optional initial state for ``$initial_state.*`` refs.
+            task_id: Optional task ID for error messages.
+            upstream_intents_status: Optional map of
+                ``{phase_name: {"status": str, "intent_id": str,
+                "expected_resume_at": str | None}}`` describing the current
+                intent status for each upstream phase.  When a referenced
+                upstream phase's status is ``"suspended_awaiting_input"``,
+                ``UpstreamIntentSuspendedError`` is raised.
+
+        Raises:
+            UpstreamIntentSuspendedError: If any referenced upstream phase's
+                intent is currently suspended (RFC-0026).
+            UnresolvableInputError: If any declared input cannot be resolved.
+        """
+        # RFC-0026: Check for upstream suspension before resolvability
+        if upstream_intents_status:
+            phase = next((p for p in self.phases if p.name == phase_name), None)
+            if phase and phase.inputs:
+                for _local_key, mapping_expr in phase.inputs.items():
+                    if not isinstance(mapping_expr, str):
+                        continue
+                    parts = mapping_expr.split(".", 1)
+                    if len(parts) != 2 or parts[0].startswith("$"):
+                        continue
+                    upstream_phase_name = parts[0]
+                    intent_info = upstream_intents_status.get(upstream_phase_name)
+                    if intent_info is None:
+                        continue
+                    if intent_info.get("status") == "suspended_awaiting_input":
+                        raise UpstreamIntentSuspendedError(
+                            task_id=task_id,
+                            phase_name=phase_name,
+                            suspended_intent_id=intent_info.get(
+                                "intent_id", upstream_phase_name
+                            ),
+                            expected_resume_at=intent_info.get("expected_resume_at"),
+                        )
+
+        self.resolve_task_inputs(
+            phase_name=phase_name,
+            upstream_outputs=upstream_outputs,
+            trigger_payload=trigger_payload,
+            initial_state=initial_state,
+            task_id=task_id,
+        )
+
+    def validate_task_outputs(
+        self,
+        phase_name: str,
+        agent_output: dict[str, Any],
+        task_id: str = "",
+    ) -> None:
+        """Validate an agent's output dict against the phase's declared outputs.
+
+        This is the executor's completion-time validation (RFC-0024 §3.3).
+        Call this when an agent submits a completion result.  Raises a typed
+        error if validation fails; returns ``None`` if the output is acceptable.
+
+        Args:
+            phase_name: The name of the phase that completed.
+            agent_output: The dict returned by the agent handler.
+            task_id: Optional task ID for error messages.
+
+        Raises:
+            MissingOutputError: If any required declared output key is absent.
+            OutputTypeMismatchError: If a value does not match its declared type.
+            KeyError: If ``phase_name`` is not found in this workflow.
+        """
+        phase = next((p for p in self.phases if p.name == phase_name), None)
+        if phase is None:
+            raise KeyError(f"Phase '{phase_name}' not found in workflow '{self.name}'")
+
+        if not phase.outputs:
+            return
+
+        missing: list[str] = []
+
+        for output_key, type_decl in phase.outputs.items():
+            # Determine whether this output is required
+            required = True
+            expected_type: str = "any"
+
+            if isinstance(type_decl, dict):
+                required = type_decl.get("required", True)
+                expected_type = str(type_decl.get("type", "any"))
+            elif isinstance(type_decl, str):
+                expected_type = type_decl
+
+            if output_key not in agent_output:
+                if required:
+                    missing.append(output_key)
+                continue
+
+            # Type validation (structural, no coercion)
+            value = agent_output[output_key]
+            if expected_type not in ("any", ""):
+                self._check_value_type(
+                    task_id=task_id,
+                    phase_name=phase_name,
+                    key=output_key,
+                    expected_type=expected_type,
+                    value=value,
+                )
+
+        if missing:
+            raise MissingOutputError(
+                task_id=task_id,
+                phase_name=phase_name,
+                missing_keys=missing,
+            )
+
+    def _check_value_type(
+        self,
+        task_id: str,
+        phase_name: str,
+        key: str,
+        expected_type: str,
+        value: Any,
+    ) -> None:
+        """Validate a single output value against a declared type string.
+
+        Primitive type strings are mapped to Python types.  Named types from
+        the ``types`` block are validated structurally (top-level key presence).
+        Raises ``OutputTypeMismatchError`` on mismatch.
+        """
+        primitive_type_map: dict[str, type] = {
+            "string": str,
+            "number": (int, float),  # type: ignore[dict-item]
+            "boolean": bool,
+            "object": dict,
+            "array": list,
+        }
+
+        if expected_type in primitive_type_map:
+            expected_python_type = primitive_type_map[expected_type]
+            if not isinstance(value, expected_python_type):
+                raise OutputTypeMismatchError(
+                    task_id=task_id,
+                    phase_name=phase_name,
+                    key=key,
+                    expected_type=expected_type,
+                    actual_type=type(value).__name__,
+                )
+            return
+
+        # Named type from the types block — validate structurally
+        type_schema = self.types.get(expected_type)
+        if type_schema is None:
+            # Unknown named type: accept without validation (incremental adoption)
+            return
+
+        # Enum type: schema is {"enum": [...]}.  Validate value membership
+        # before any isinstance check — enum values are scalars, not dicts.
+        if isinstance(type_schema, dict) and "enum" in type_schema:
+            enum_values = type_schema["enum"]
+            if isinstance(enum_values, list) and value not in enum_values:
+                raise OutputTypeMismatchError(
+                    task_id=task_id,
+                    phase_name=phase_name,
+                    key=key,
+                    expected_type=f"{expected_type}(enum:{enum_values})",
+                    actual_type=repr(value),
+                )
+            return
+
+        if not isinstance(value, dict):
+            raise OutputTypeMismatchError(
+                task_id=task_id,
+                phase_name=phase_name,
+                key=key,
+                expected_type=expected_type,
+                actual_type=type(value).__name__,
+            )
+
+        # Validate that all keys declared in the type schema are present
+        if isinstance(type_schema, dict):
+            for schema_key in type_schema:
+                if schema_key not in value:
+                    raise OutputTypeMismatchError(
+                        task_id=task_id,
+                        phase_name=phase_name,
+                        key=key,
+                        expected_type=expected_type,
+                        actual_type=(f"dict missing required field '{schema_key}'"),
+                    )
 
     def __repr__(self) -> str:
         return f"WorkflowSpec(name={self.name!r}, phases={len(self.phases)})"

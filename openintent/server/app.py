@@ -1171,6 +1171,192 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 },
             )
 
+    def _rfc0024_validate_io_outputs(db: Database, session, intent, actor: str) -> None:
+        """RFC-0024 §3.3 – server-side output validation before COMPLETED transition.
+
+        Reads ``_io_outputs`` and ``_io_types`` from the intent's current state
+        and validates the state against the declared output schema.  Raises
+        HTTP 422 if required keys are missing or types mismatch.
+        """
+        state: Dict[str, Any] = dict(intent.state) if intent.state else {}
+        io_outputs: Dict[str, Any] = state.get("_io_outputs") or {}
+        if not io_outputs:
+            return
+
+        io_types: Dict[str, Any] = state.get("_io_types") or {}
+
+        primitive_type_map: Dict[str, type] = {
+            "string": str,
+            "number": (int, float),
+            "boolean": bool,
+            "object": dict,
+            "array": list,
+        }
+
+        missing: List[str] = []
+        type_errors: List[str] = []
+
+        for output_key, type_decl in io_outputs.items():
+            required = True
+            expected_type = "any"
+
+            if isinstance(type_decl, dict):
+                required = type_decl.get("required", True)
+                expected_type = str(type_decl.get("type", "any"))
+            elif isinstance(type_decl, str):
+                expected_type = type_decl
+
+            if output_key not in state:
+                if required:
+                    missing.append(output_key)
+                continue
+
+            value = state[output_key]
+            if expected_type in ("any", ""):
+                continue
+
+            if expected_type in primitive_type_map:
+                expected_python_type = primitive_type_map[expected_type]
+                if not isinstance(value, expected_python_type):
+                    type_errors.append(
+                        f"'{output_key}': expected {expected_type!r}, "
+                        f"got {type(value).__name__!r}"
+                    )
+                continue
+
+            # Named type from io_types block
+            type_schema = io_types.get(expected_type)
+            if type_schema is None:
+                continue  # Unknown named type — accept (incremental adoption)
+
+            if isinstance(type_schema, dict) and "enum" in type_schema:
+                enum_values = type_schema["enum"]
+                if isinstance(enum_values, list) and value not in enum_values:
+                    type_errors.append(
+                        f"'{output_key}': expected {expected_type!r} enum "
+                        f"{enum_values!r}, got {value!r}"
+                    )
+            elif not isinstance(value, dict):
+                type_errors.append(
+                    f"'{output_key}': expected {expected_type!r} (object), "
+                    f"got {type(value).__name__!r}"
+                )
+            elif isinstance(type_schema, dict):
+                for schema_key in type_schema:
+                    if schema_key not in value:
+                        type_errors.append(
+                            f"'{output_key}': named type {expected_type!r} "
+                            f"missing required field '{schema_key}'"
+                        )
+
+        if missing or type_errors:
+            db.create_event(
+                session,
+                intent_id=intent.id,
+                event_type="governance.violation",
+                actor=actor,
+                payload={
+                    "rule": "rfc0024_io_outputs",
+                    "missing": missing,
+                    "type_errors": type_errors,
+                },
+            )
+            detail_parts: List[str] = []
+            if missing:
+                detail_parts.append(f"missing required outputs: {missing}")
+            if type_errors:
+                detail_parts.append(f"type mismatches: {type_errors}")
+            error_type = "MissingOutputError" if missing else "OutputTypeMismatchError"
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": error_type,
+                    "rule": "io_outputs",
+                    "message": (
+                        "RFC-0024: Intent output does not satisfy declared "
+                        "output schema. " + "; ".join(detail_parts)
+                    ),
+                    "missing": missing,
+                    "type_errors": type_errors,
+                },
+            )
+
+    def _rfc0024_validate_claim_inputs(
+        db: Database, session, intent, actor: str
+    ) -> None:
+        """RFC-0024 §3.1 – server-side claim-time input validation.
+
+        Checks that all declared inputs in ``_io_inputs`` can be resolved from
+        completed upstream dependency states.  Raises HTTP 422 if any declared
+        input mapping cannot be resolved.
+        """
+        state: Dict[str, Any] = dict(intent.state) if intent.state else {}
+        io_inputs: Dict[str, Any] = state.get("_io_inputs") or {}
+        if not io_inputs:
+            return
+
+        dep_title_to_name: Dict[str, str] = state.get("_io_dep_title_to_name") or {}
+
+        # Build upstream outputs by fetching completed dependencies
+        upstream_outputs: Dict[str, Dict[str, Any]] = {}
+        for dep_id in intent.depends_on or []:
+            dep = db.get_intent(session, dep_id)
+            if dep and dep.status == "completed":
+                dep_state = dict(dep.state) if dep.state else {}
+                # Index by phase name (via dep_title_to_name) and by title
+                dep_name = dep_title_to_name.get(dep.title, dep.title)
+                upstream_outputs[dep_name] = dep_state
+                upstream_outputs[dep.title] = dep_state
+
+        unresolvable: List[str] = []
+        for local_key, mapping_expr in io_inputs.items():
+            if not isinstance(mapping_expr, str):
+                unresolvable.append(f"{local_key}: {mapping_expr!r}")
+                continue
+
+            if mapping_expr.startswith("$trigger."):
+                key = mapping_expr[len("$trigger.") :]
+                if key not in state:
+                    unresolvable.append(mapping_expr)
+            elif mapping_expr.startswith("$initial_state."):
+                key = mapping_expr[len("$initial_state.") :]
+                if key not in state:
+                    unresolvable.append(mapping_expr)
+            else:
+                parts = mapping_expr.split(".", 1)
+                if len(parts) != 2:
+                    unresolvable.append(mapping_expr)
+                    continue
+                ref_phase, ref_key = parts[0], parts[1]
+                phase_out = upstream_outputs.get(ref_phase, {})
+                if ref_key not in phase_out:
+                    unresolvable.append(mapping_expr)
+
+        if unresolvable:
+            db.create_event(
+                session,
+                intent_id=intent.id,
+                event_type="governance.violation",
+                actor=actor,
+                payload={
+                    "rule": "rfc0024_io_inputs",
+                    "unresolvable": unresolvable,
+                },
+            )
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "UnresolvableInputError",
+                    "rule": "io_inputs",
+                    "message": (
+                        "RFC-0024: Cannot resolve declared input mappings at "
+                        "claim time — upstream outputs are missing or dependencies "
+                        "are not yet complete. Unresolvable: " + str(unresolvable)
+                    ),
+                    "unresolvable": unresolvable,
+                },
+            )
+
     @app.get("/.well-known/openintent.json")
     async def discovery():
         return {
@@ -1208,6 +1394,20 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
                 "federation",
             ],
             "openApiUrl": "/openapi.json",
+        }
+
+    @app.get("/api/v1/server/config")
+    async def get_server_config():
+        """RFC-0026: Read-only introspection endpoint for platform-level server config.
+
+        Returns the platform-level suspension default retry policy (if configured) so
+        that clients can implement the three-level cascade without hard-coding defaults.
+        """
+        return {
+            "protocol_version": config.protocol_version,
+            "suspension": {
+                "default_retry_policy": config.suspension_default_retry_policy,
+            },
         }
 
     @app.get("/.well-known/openintent-compat.json")
@@ -1809,6 +2009,8 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
 
             if request.status == "completed":
                 _enforce_completion_gate(db, session, intent, api_key)
+                # RFC-0024: validate declared output schema before transition
+                _rfc0024_validate_io_outputs(db, session, intent, api_key)
 
             updated = db.update_intent_status(
                 session, intent_id, if_match, request.status
@@ -1843,6 +2045,180 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             )
 
             return IntentResponse.model_validate(updated)
+        finally:
+            session.close()
+
+    @app.post("/api/v1/intents/{intent_id}/suspend/respond")
+    async def respond_to_suspension(
+        intent_id: str,
+        request: Request,
+        db: Database = Depends(get_db),
+        api_key: str = Depends(validate_api_key),
+    ):
+        """
+        RFC-0025: Respond to a suspended intent's input request.
+
+        Body:
+            suspension_id: str — ID of the SuspensionRecord being answered.
+            value: Any — the operator's response value.
+            responded_by: str (optional) — identifier of the responding operator.
+            metadata: dict (optional) — additional channel metadata.
+
+        Validates:
+            - Intent is in ``suspended_awaiting_input`` status.
+            - ``suspension_id`` matches the active suspension on the intent.
+            - If the suspension defines ``choices``, ``value`` must be one of
+              the defined choice values.
+
+        Transitions the intent from suspended_awaiting_input → active, persists
+        the response in state, and broadcasts intent.resumed.  The response
+        body includes the matching choice's label and description (if present)
+        so callers receive structured feedback.
+        """
+        from datetime import datetime
+
+        body = await request.json()
+        suspension_id = body.get("suspension_id", "")
+        value = body.get("value")
+        responded_by = body.get("responded_by", api_key or "operator")
+        metadata = body.get("metadata")
+
+        if not suspension_id:
+            raise HTTPException(
+                status_code=422,
+                detail="suspension_id is required",
+            )
+
+        session = db.get_session()
+        try:
+            intent = db.get_intent(session, intent_id)
+            if not intent:
+                raise HTTPException(status_code=404, detail="Intent not found")
+
+            if intent.status != "suspended_awaiting_input":
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Intent is not suspended (status={intent.status})",
+                )
+
+            current_state = intent.state or {}
+            susp_data = current_state.get("_suspension", {})
+
+            active_susp_id = susp_data.get("id")
+            if active_susp_id and active_susp_id != suspension_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"suspension_id mismatch: expected {active_susp_id}, "
+                        f"got {suspension_id}"
+                    ),
+                )
+
+            choices_raw = susp_data.get("choices", [])
+            response_type = susp_data.get("response_type", "choice")
+            valid_response_types = ("choice", "confirm", "text", "form")
+            if response_type not in valid_response_types:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Unknown response_type {response_type!r}. "
+                        f"Expected one of: {list(valid_response_types)}"
+                    ),
+                )
+
+            matched_choice = None
+            if response_type in ("choice", "confirm"):
+                if choices_raw:
+                    valid_vals = [c.get("value") for c in choices_raw]
+                elif response_type == "confirm":
+                    valid_vals = ["yes", "no"]
+                else:
+                    valid_vals = None
+
+                if valid_vals is not None and value not in valid_vals:
+                    raise HTTPException(
+                        status_code=422,
+                        detail={
+                            "error": "invalid_choice",
+                            "message": (
+                                f"Value {value!r} is not a valid choice. "
+                                f"Expected one of: {valid_vals}"
+                            ),
+                            "valid_choices": choices_raw
+                            or [{"value": v, "label": v.title()} for v in valid_vals],
+                        },
+                    )
+                if choices_raw:
+                    matched_choice = next(
+                        (c for c in choices_raw if c.get("value") == value), None
+                    )
+
+            now_str = datetime.utcnow().isoformat()
+
+            susp_data["response"] = value
+            susp_data["responded_by"] = responded_by
+            susp_data["responded_at"] = now_str
+            susp_data["resolution"] = "responded"
+            if metadata:
+                susp_data["metadata"] = metadata
+            current_state["_suspension"] = susp_data
+
+            susp_patch = [{"op": "set", "path": "/_suspension", "value": susp_data}]
+            updated_state = db.update_intent_state(
+                session, intent_id, intent.version, susp_patch
+            )
+            if not updated_state:
+                raise HTTPException(status_code=409, detail="Version conflict")
+
+            resumed = db.update_intent_status(
+                session, intent_id, updated_state.version, "active"
+            )
+            if not resumed:
+                raise HTTPException(
+                    status_code=409, detail="Version conflict on resume"
+                )
+
+            db.create_event(
+                session,
+                intent_id=intent_id,
+                event_type="intent.resumed",
+                actor=responded_by,
+                payload={
+                    "intent_id": intent_id,
+                    "suspension_id": suspension_id or active_susp_id,
+                    "value": value,
+                    "responded_by": responded_by,
+                    "responded_at": now_str,
+                },
+            )
+
+            _broadcast_event(
+                "intents",
+                {
+                    "type": "intent.resumed",
+                    "intent_id": intent_id,
+                    "data": {
+                        "intent_id": intent_id,
+                        "suspension_id": suspension_id or active_susp_id,
+                        "value": value,
+                        "responded_by": responded_by,
+                        "responded_at": now_str,
+                    },
+                },
+            )
+
+            result: dict = {
+                "intent_id": intent_id,
+                "suspension_id": suspension_id or active_susp_id,
+                "resolution": "responded",
+                "value": value,
+                "responded_by": responded_by,
+                "responded_at": now_str,
+            }
+            if matched_choice:
+                result["choice_label"] = matched_choice.get("label", "")
+                result["choice_description"] = matched_choice.get("description", "")
+            return result
         finally:
             session.close()
 
@@ -1981,6 +2357,12 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             intent = db.get_intent(session, intent_id)
             if not intent:
                 raise HTTPException(status_code=404, detail="Intent not found")
+
+            # RFC-0024 §3.1: validate that all declared input mappings are
+            # resolvable from completed upstream dependency states at the
+            # true claim boundary (lease acquisition).  This is the earliest
+            # point where the executor can guarantee inputs are available.
+            _rfc0024_validate_claim_inputs(db, session, intent, api_key)
 
             lease = db.acquire_lease(
                 session,
