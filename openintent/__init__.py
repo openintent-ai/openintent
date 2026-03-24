@@ -127,12 +127,15 @@ from .models import (
     Escalation,
     EscalationPriority,
     EscalationStatus,
+    # RFC-0026: Suspension Container Interaction & Human Retry
+    EscalationStep,
     EventProof,
     EventType,
     GrantConstraints,
     Guardrails,
     Heartbeat,
     HeartbeatConfig,
+    HumanRetryPolicy,
     IdentityChallenge,
     IdentityVerification,
     InputResponse,
@@ -228,6 +231,7 @@ from .workflow import (
     PermissionsConfig,  # noqa: F401
     PhaseConfig,
     UnresolvableInputError,
+    UpstreamIntentSuspendedError,
     VerificationConfig,
     WorkflowError,
     WorkflowNotFoundError,
@@ -250,7 +254,7 @@ def get_server() -> tuple[Any, Any, Any]:
         )
 
 
-__version__ = "0.16.0"
+__version__ = "0.17.0"
 __all__ = [
     "OpenIntentClient",
     "AsyncOpenIntentClient",
@@ -407,6 +411,7 @@ __all__ = [
     "MissingOutputError",
     "OutputTypeMismatchError",
     "UnresolvableInputError",
+    "UpstreamIntentSuspendedError",
     "InputWiringError",
     # RFC-0025: HITL Models
     "ResponseType",
@@ -415,6 +420,9 @@ __all__ = [
     "EngagementSignals",
     "EngagementDecision",
     "InputResponse",
+    # RFC-0026: Suspension Container Interaction & Human Retry
+    "EscalationStep",
+    "HumanRetryPolicy",
     "WorkflowSpec",
     "WorkflowError",
     "WorkflowValidationError",

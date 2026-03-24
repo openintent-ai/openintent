@@ -1,5 +1,5 @@
 site_name: OpenIntent SDK
-site_description: "The Python SDK for structured multi-agent coordination. 25 RFCs. Decorator-first agents. Built-in server. Federation. MCP integration."
+site_description: "The Python SDK for structured multi-agent coordination. 26 RFCs. Decorator-first agents. Built-in server. Federation. MCP integration."
 site_url: https://openintent-ai.github.io/openintent/
 repo_url: https://github.com/openintent-ai/openintent
 repo_name: openintent-ai/openintent
@@ -172,6 +172,7 @@ nav:
     - "0023 \u2014 Federation Security": rfcs/0023-federation-security.md
     - "0024 \u2014 Workflow I/O Contracts": rfcs/0024-workflow-io-contracts.md
     - "0025 \u2014 Human-in-the-Loop": rfcs/0025-human-in-the-loop.md
+    - "0026 \u2014 Suspension Containers": rfcs/0026-suspension-container-interaction.md
   - Changelog: changelog.md
   - Examples:
     - Multi-Agent Workflow: examples/multi-agent.md
@@ -207,10 +208,10 @@ extra:
       link: https://pypi.org/project/openintent/
   version:
     provider: mike
-  announcement: "<strong>v0.16.0</strong> is here &mdash; RFC-0025 Human-in-the-Loop intent suspension: request_input(), engagement decisions, fallback policies, and lifecycle hooks. <a href='changelog/'>Read the changelog &rarr;</a>"
+  announcement: "<strong>v0.17.0</strong> is here &mdash; RFC-0026 Intent Suspension: container interaction, HumanRetryPolicy with escalation ladders, UpstreamIntentSuspendedError, and platform-level default policies. <a href='changelog/'>Read the changelog &rarr;</a>"
   meta:
     - name: description
-      content: "OpenIntent Python SDK — structured multi-agent coordination protocol with decorator-first agents, 25 RFCs, 7 LLM adapters, HITL suspension, federation, MCP integration, and built-in FastAPI server."
+      content: "OpenIntent Python SDK — structured multi-agent coordination protocol with decorator-first agents, 26 RFCs, 7 LLM adapters, HITL suspension, federation, MCP integration, and built-in FastAPI server."
     - name: og:title
       content: "OpenIntent SDK — Multi-Agent Coordination Protocol"
     - name: og:description
@@ -224,7 +225,7 @@ extra:
     - name: twitter:title
       content: "OpenIntent SDK"
     - name: twitter:description
-      content: "The Python SDK for structured multi-agent coordination. 25 RFCs. Decorator-first agents. Federation. MCP integration. Built-in server."
+      content: "The Python SDK for structured multi-agent coordination. 26 RFCs. Decorator-first agents. Federation. MCP integration. Built-in server."
 
 extra_css:
   - stylesheets/extra.css

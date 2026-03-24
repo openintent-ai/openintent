@@ -3682,6 +3682,21 @@ class AsyncOpenIntentClient:
         items = data if isinstance(data, list) else data.get("portfolios", [])
         return [IntentPortfolio.from_dict(p) for p in items]
 
+    async def get_server_config(self) -> dict[str, Any]:
+        """RFC-0026: Fetch read-only server configuration for client introspection.
+
+        Returns a dict with ``protocol_version`` and a ``suspension`` key that
+        contains ``default_retry_policy`` (serialised HumanRetryPolicy dict or
+        ``None`` when no platform default is configured).
+
+        Example::
+
+            cfg = await client.get_server_config()
+            policy_dict = cfg["suspension"]["default_retry_policy"]
+        """
+        response = await self._client.get("/api/v1/server/config")
+        return self._handle_response(response)
+
     # ==================== Attachments ====================
 
     async def add_attachment(

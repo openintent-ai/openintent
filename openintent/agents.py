@@ -35,6 +35,7 @@ from .models import (
     EngagementSignals,
     Escalation,
     EventType,
+    HumanRetryPolicy,
     InputResponse,
     Intent,
     IntentContext,
@@ -790,6 +791,57 @@ class AgentConfig:
 
 T = TypeVar("T", bound="BaseAgent")
 
+_SENTINEL = object()
+
+
+def _merge_retry_policies(
+    *,
+    call_site: "Optional[HumanRetryPolicy]",
+    agent_default: "Optional[HumanRetryPolicy]",
+    platform_default: "Optional[HumanRetryPolicy]",
+) -> "Optional[HumanRetryPolicy]":
+    """RFC-0026 §5.3: field-level merge of retry policy levels.
+
+    Merge precedence: call_site overrides agent_default overrides platform_default.
+    Each level only contributes a field when its value differs from the HumanRetryPolicy
+    class default, so the highest-priority level that explicitly sets a field wins.
+
+    If all three are ``None``, returns ``None`` (single-attempt semantics).
+    """
+    levels = [p for p in (platform_default, agent_default, call_site) if p is not None]
+    if not levels:
+        return None
+    if len(levels) == 1:
+        return levels[0]
+
+    _class_defaults = HumanRetryPolicy()
+    _scalar_fields = (
+        "max_attempts",
+        "interval_seconds",
+        "strategy",
+        "final_fallback_policy",
+    )
+
+    merged: dict = {}
+    merged_ladder: list | None = None
+
+    for policy in levels:
+        for field_name in _scalar_fields:
+            val = getattr(policy, field_name)
+            class_default = getattr(_class_defaults, field_name)
+            if val != class_default:
+                merged[field_name] = val
+        if policy.escalation_ladder:
+            merged_ladder = [s.to_dict() for s in policy.escalation_ladder]
+
+    for field_name in _scalar_fields:
+        merged.setdefault(field_name, getattr(_class_defaults, field_name))
+
+    if merged_ladder:
+        merged["escalation_ladder"] = merged_ladder
+
+    return HumanRetryPolicy.from_dict(merged)
+
 
 class BaseAgent(ABC):
     """
@@ -802,6 +854,24 @@ class BaseAgent(ABC):
     _agent_id: str = ""
     _config: AgentConfig = field(default_factory=AgentConfig)
     _handlers: dict[str, list[Callable]] = field(default_factory=dict)
+
+    default_human_retry_policy: Optional["HumanRetryPolicy"] = None
+    """Class-level or instance-level default re-notification policy (RFC-0026).
+
+    When set, this policy is applied to all ``request_input()`` calls that do
+    not supply an explicit ``retry_policy`` argument.  Subclasses may override
+    at class level:
+
+    .. code-block:: python
+
+        class MyAgent(BaseAgent):
+            default_human_retry_policy = HumanRetryPolicy(
+                max_attempts=3,
+                interval_seconds=900,
+                strategy="linear",
+                final_fallback_policy="complete_with_fallback",
+            )
+    """
 
     def __init__(
         self,
@@ -820,6 +890,9 @@ class BaseAgent(ABC):
         self._subscription: Optional[SSESubscription] = None
         self._running = False
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._platform_retry_policy_cache: Optional["HumanRetryPolicy | None"] = (
+            _SENTINEL
+        )
 
         self._discover_handlers()
 
@@ -1206,14 +1279,32 @@ class BaseAgent(ABC):
         fallback_policy: str = "fail",
         fallback_value: Optional[Any] = None,
         confidence: Optional[float] = None,
+        retry_policy: Optional["HumanRetryPolicy"] = None,
     ) -> Any:
         """
-        Suspend the intent and request operator input (RFC-0025).
+        Suspend the intent and request operator input (RFC-0025 / RFC-0026).
 
         Transitions the intent to ``suspended_awaiting_input``, fires
         ``@on_input_requested`` hooks, and polls for a response. When the
         operator responds (via POST /intents/{id}/suspend/respond), the
         suspension is resolved and the operator's response value is returned.
+
+        When ``retry_policy`` is supplied (RFC-0026), the agent re-notifies the
+        operator up to ``retry_policy.max_attempts`` times, waiting
+        ``retry_policy.interval_seconds`` between each attempt, firing
+        ``@on_input_requested`` hooks and emitting
+        ``intent.suspension_renotified`` events on each re-attempt.
+        Escalation steps in ``retry_policy.escalation_ladder`` cause an
+        ``intent.suspension_escalated`` event to be emitted. After all
+        attempts are exhausted, ``retry_policy.final_fallback_policy`` is
+        applied.
+
+        If ``retry_policy`` is omitted, single-attempt behaviour is preserved
+        (original RFC-0025 semantics).
+
+        The class attribute ``default_human_retry_policy`` can be set on a
+        ``BaseAgent`` subclass or instance to apply a retry policy to all
+        ``request_input()`` calls that do not supply an explicit one.
 
         Args:
             intent_id: The intent to suspend.
@@ -1231,6 +1322,9 @@ class BaseAgent(ABC):
                 ``"complete_with_fallback"``, or ``"use_default_and_continue"``.
             fallback_value: Value to use for ``"complete_with_fallback"`` policy.
             confidence: Agent confidence score at suspension time (0.0–1.0).
+            retry_policy: Optional re-notification / escalation policy
+                (RFC-0026). When omitted, falls back to
+                ``self.default_human_retry_policy`` (if set), then single-attempt.
 
         Returns:
             The operator's response value.
@@ -1243,10 +1337,43 @@ class BaseAgent(ABC):
         from datetime import datetime, timedelta
         from uuid import uuid4
 
+        # RFC-0026 §5.3: three-level cascade with field-level merge.
+        # Fetch platform default once per agent instance (_SENTINEL = not yet fetched).
+        if self._platform_retry_policy_cache is _SENTINEL:
+            try:
+                cfg = await self.async_client.get_server_config()
+                policy_dict = (cfg.get("suspension") or {}).get("default_retry_policy")
+                if policy_dict:
+                    self._platform_retry_policy_cache = HumanRetryPolicy.from_dict(
+                        policy_dict
+                    )
+                else:
+                    self._platform_retry_policy_cache = None
+            except Exception:
+                self._platform_retry_policy_cache = None
+
+        effective_retry_policy = _merge_retry_policies(
+            call_site=retry_policy,
+            agent_default=getattr(self, "default_human_retry_policy", None),
+            platform_default=self._platform_retry_policy_cache,
+        )
+
         suspension_id = str(uuid4())
         now = datetime.utcnow()
         expires_at = None
-        if timeout_seconds is not None:
+        if effective_retry_policy is not None:
+            # RFC-0026: total expiry = interval_seconds × max_attempts.
+            # Safeguard: if interval_seconds is 0 (e.g. max_attempts=1 single-shot)
+            # fall back to timeout_seconds so the suspension doesn't hang indefinitely.
+            total_seconds = (
+                effective_retry_policy.interval_seconds
+                * effective_retry_policy.max_attempts
+            )
+            if total_seconds > 0:
+                expires_at = now + timedelta(seconds=total_seconds)
+            elif timeout_seconds is not None:
+                expires_at = now + timedelta(seconds=timeout_seconds)
+        elif timeout_seconds is not None:
             expires_at = now + timedelta(seconds=timeout_seconds)
 
         resolved_choices: list[SuspensionChoice] = []
@@ -1274,6 +1401,7 @@ class BaseAgent(ABC):
             expires_at=expires_at,
             fallback_value=fallback_value,
             fallback_policy=fallback_policy,
+            retry_policy=effective_retry_policy,
             confidence_at_suspension=confidence,
         )
 
@@ -1307,6 +1435,9 @@ class BaseAgent(ABC):
                 "timeout_seconds": timeout_seconds,
                 "fallback_policy": fallback_policy,
                 "confidence_at_suspension": confidence,
+                "retry_policy": effective_retry_policy.to_dict()
+                if effective_retry_policy
+                else None,
             },
         )
 
@@ -1318,8 +1449,28 @@ class BaseAgent(ABC):
             except Exception as e:
                 logger.exception(f"on_input_requested handler error: {e}")
 
-        # Poll for operator response
+        # Resolve effective fallback policy (RFC-0026: retry_policy takes precedence)
+        effective_fallback = fallback_policy
+        if effective_retry_policy is not None:
+            effective_fallback = effective_retry_policy.final_fallback_policy
+
+        # Poll for operator response, with optional re-notification (RFC-0026)
         poll_interval = 2.0
+        attempt = 1
+        max_attempts = 1
+        interval_seconds = 0
+        if effective_retry_policy is not None:
+            max_attempts = effective_retry_policy.max_attempts
+            interval_seconds = effective_retry_policy.interval_seconds
+
+        next_renotify_at: Optional[datetime] = None
+        if (
+            effective_retry_policy is not None
+            and interval_seconds > 0
+            and max_attempts > 1
+        ):
+            next_renotify_at = now + timedelta(seconds=interval_seconds)
+
         while True:
             await asyncio.sleep(poll_interval)
             try:
@@ -1365,13 +1516,13 @@ class BaseAgent(ABC):
                     except Exception as e:
                         logger.exception(f"on_suspension_expired handler error: {e}")
 
-                if fallback_policy == "fail":
+                if effective_fallback == "fail":
                     raise InputTimeoutError(
                         f"Suspension {suspension_id} expired without operator response",
                         suspension_id=suspension_id,
-                        fallback_policy=fallback_policy,
+                        fallback_policy=effective_fallback,
                     )
-                elif fallback_policy == "complete_with_fallback":
+                elif effective_fallback == "complete_with_fallback":
                     return fallback_value
                 else:
                     return fallback_value
@@ -1382,19 +1533,137 @@ class BaseAgent(ABC):
                     suspension_id=suspension_id,
                 )
 
-            # Check if expired by time without server update
-            if expires_at is not None and datetime.utcnow() > expires_at:
+            # RFC-0026: re-notification loop
+            if (
+                effective_retry_policy is not None
+                and next_renotify_at is not None
+                and datetime.utcnow() >= next_renotify_at
+            ):
+                if attempt < max_attempts:
+                    attempt += 1
+                    logger.info(
+                        f"Re-notifying operator for suspension {suspension_id} "
+                        f"(attempt {attempt}/{max_attempts})"
+                    )
+
+                    # Check escalation ladder for this attempt
+                    escalation_steps = effective_retry_policy.escalation_ladder
+                    triggered_steps = [
+                        s for s in escalation_steps if s.attempt == attempt
+                    ]
+                    escalation_channel_hint: Optional[str] = None
+                    escalation_notify_to: Optional[str] = None
+                    for step in triggered_steps:
+                        escalation_channel_hint = (
+                            step.channel_hint or escalation_channel_hint
+                        )
+                        escalation_notify_to = step.notify_to or escalation_notify_to
+                        try:
+                            await self.async_client.log_event(
+                                intent_id,
+                                EventType.INTENT_SUSPENSION_ESCALATED,
+                                {
+                                    "suspension_id": suspension_id,
+                                    "attempt": attempt,
+                                    "escalated_to": step.notify_to or None,
+                                    "channel_hint": step.channel_hint or None,
+                                },
+                            )
+                        except Exception as e:
+                            logger.exception(f"suspension_escalated event error: {e}")
+
+                    # Compute when the next attempt fires (for telemetry)
+                    next_attempt_at = (
+                        datetime.utcnow() + timedelta(seconds=interval_seconds)
+                    ).isoformat() + "Z"
+
+                    # Emit re-notification event with RFC-0026 field names
+                    try:
+                        await self.async_client.log_event(
+                            intent_id,
+                            EventType.INTENT_SUSPENSION_RENOTIFIED,
+                            {
+                                "suspension_id": suspension_id,
+                                "attempt": attempt,
+                                "max_attempts": max_attempts,
+                                "channel_hint": escalation_channel_hint
+                                or suspension.channel_hint,
+                                "notify_to": escalation_notify_to,
+                                "next_attempt_at": next_attempt_at
+                                if attempt < max_attempts
+                                else None,
+                            },
+                        )
+                    except Exception as e:
+                        logger.exception(f"suspension_renotified event error: {e}")
+
+                    # Build a re-notification SuspensionRecord that carries attempt
+                    # metadata in its context using RFC-0026 key names (_attempt,
+                    # _max_attempts) so @on_input_requested handlers can read them
+                    # without a signature change.
+                    import dataclasses
+
+                    renotify_context = dict(suspension.context)
+                    renotify_context["_attempt"] = attempt
+                    renotify_context["_max_attempts"] = max_attempts
+                    if escalation_notify_to:
+                        renotify_context["_notify_to"] = escalation_notify_to
+
+                    renotify_suspension = dataclasses.replace(
+                        suspension,
+                        context=renotify_context,
+                        channel_hint=escalation_channel_hint or suspension.channel_hint,
+                    )
+
+                    # Re-fire @on_input_requested hooks with the enriched suspension
+                    for handler in self._handlers.get("input_requested", []):
+                        try:
+                            await self._call_handler(
+                                handler, current, renotify_suspension
+                            )
+                        except Exception as e:
+                            logger.exception(
+                                f"on_input_requested (renotify) handler error: {e}"
+                            )
+
+                    next_renotify_at = datetime.utcnow() + timedelta(
+                        seconds=interval_seconds
+                    )
+                else:
+                    # All attempts exhausted — apply final fallback
+                    for handler in self._handlers.get("suspension_expired", []):
+                        try:
+                            await self._call_handler(handler, current, suspension)
+                        except Exception as e:
+                            logger.exception(
+                                f"on_suspension_expired handler error: {e}"
+                            )
+
+                    if effective_fallback == "fail":
+                        raise InputTimeoutError(
+                            f"Suspension {suspension_id} exhausted all {max_attempts} re-notification attempts",
+                            suspension_id=suspension_id,
+                            fallback_policy=effective_fallback,
+                        )
+                    return fallback_value
+
+            # Check if expired by time without server update (single-attempt path)
+            if (
+                effective_retry_policy is None
+                and expires_at is not None
+                and datetime.utcnow() > expires_at
+            ):
                 for handler in self._handlers.get("suspension_expired", []):
                     try:
                         await self._call_handler(handler, current, suspension)
                     except Exception as e:
                         logger.exception(f"on_suspension_expired handler error: {e}")
 
-                if fallback_policy == "fail":
+                if effective_fallback == "fail":
                     raise InputTimeoutError(
                         f"Suspension {suspension_id} expired (client-side timeout)",
                         suspension_id=suspension_id,
-                        fallback_policy=fallback_policy,
+                        fallback_policy=effective_fallback,
                     )
                 return fallback_value
 

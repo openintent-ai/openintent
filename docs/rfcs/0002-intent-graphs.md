@@ -71,15 +71,16 @@ Dependencies affect status transitions:
 
 - **Blocked by dependencies:** An intent with incomplete dependencies is automatically `blocked`
 - **Auto-unblock:** When all dependencies complete, intent transitions from `blocked` to `active`
-- **Completion gate:** Cannot transition to `completed` until all dependencies are `completed`
+- **Completion gate:** Cannot transition to `completed` until all dependencies are `completed`. `suspended_awaiting_input` (RFC-0026) does **not** satisfy this gate.
 - **Parent completion:** Parent intent cannot complete until all children complete
 - **Cascade abandonment:** Abandoning a parent MAY cascade to children (configurable)
+- **Upstream suspension (RFC-0026):** When an active dependency transitions to `suspended_awaiting_input`, any dependent that is `active` transitions to `blocked`. Auto-unblock fires when the dependency *resumes and subsequently completes*, not on resume alone.
 
 ```
 draft → active (if no unmet dependencies, else → blocked)
 blocked → active (when dependencies resolve)
 active → completed (if all dependencies + children completed)
-active → blocked (if dependency becomes incomplete)
+active → blocked (if dependency becomes incomplete OR upstream suspends)
 any → abandoned
 ```
 
@@ -94,7 +95,8 @@ Parent intents track aggregate status of their children:
     "by_status": {
       "completed": 3,
       "active": 2,
-      "blocked": 1
+      "blocked": 1,
+      "suspended_awaiting_input": 0
     },
     "completion_percentage": 50,
     "blocking_intents": ["intent-uuid-1"],
@@ -102,6 +104,8 @@ Parent intents track aggregate status of their children:
   }
 }
 ```
+
+`suspended_awaiting_input` (RFC-0026) is included in `by_status` but does **not** satisfy the completion gate. A suspended child does not count toward aggregate completion.
 
 ## Endpoints
 
@@ -170,3 +174,12 @@ ready = client.get_ready_intents(parent.id)  # Unblocked intents
 - **Progress visibility:** Aggregate status shows overall completion percentage
 - **Multi-agent orchestration:** Different agents can work on different branches in parallel
 - **Audit trail:** Parent-child relationships provide clear provenance for all work
+
+## Cross-RFC Interactions
+
+| RFC | Interaction |
+|-----|------------|
+| RFC-0001 (Intents) | Extends intent objects with parent_intent_id and depends_on |
+| RFC-0006 (Subscriptions) | Parent intent events include aggregate status changes |
+| RFC-0025 (HITL) | `suspended_awaiting_input` is a valid child status |
+| RFC-0026 (Suspension Containers) | `suspended_awaiting_input` in aggregate `by_status`; `active → blocked` trigger for upstream suspension; completion gate clarification |

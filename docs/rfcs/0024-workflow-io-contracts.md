@@ -640,11 +640,52 @@ This RFC does not modify:
 
 ---
 
+## RFC-0026 Patch: Upstream Suspension Rejection
+
+When an agent attempts to claim a task whose declared inputs reference an upstream phase that is currently `suspended_awaiting_input`, `validate_claim_inputs()` MUST reject with `UpstreamIntentSuspendedError`:
+
+```python
+from openintent.workflow import UpstreamIntentSuspendedError
+
+try:
+    spec.validate_claim_inputs(phase_name, upstream_outputs, task_id=task_id)
+except UpstreamIntentSuspendedError as e:
+    # e.suspended_intent_id — the upstream intent that is suspended
+    # e.expected_resume_at  — ISO-8601 estimate or None
+    logger.info(f"Claim deferred: upstream intent {e.suspended_intent_id} is suspended")
+```
+
+**Workflow progress gains `suspended_phases`:**
+
+```json
+{
+  "suspended_phases": [
+    {
+      "phase_name": "compliance_review",
+      "intent_id": "intent_01ABC",
+      "suspended_since": "2026-03-24T10:00:00Z",
+      "expires_at": "2026-03-24T13:00:00Z"
+    }
+  ]
+}
+```
+
+## Cross-RFC Interactions
+
+| RFC | Interaction |
+|-----|------------|
+| RFC-0012 (Planning) | Addendum to RFC-0012; resolves Open Question #4 |
+| RFC-0001 (Intents) | Intent state holds _io_inputs/_io_outputs for executor wiring |
+| RFC-0004 (Portfolios) | Portfolios scope workflows |
+| RFC-0025 (HITL) | Agents calling request_input() affect claim-time validation |
+| RFC-0026 (Suspension Containers) | `upstream_intent_suspended` rejection reason; `suspended_phases` in workflow progress |
+
 ## References
 
 - [RFC-0012: Task Decomposition & Planning](./0012-task-decomposition-planning.md) — parent RFC; defines Task, Plan, TaskContext
 - [RFC-0001: Intent Objects](./0001-intent-objects.md) — intent state model
 - [RFC-0004: Intent Portfolios](./0004-governance-arbitration.md) — portfolio boundaries
 - [RFC-0021: Agent-to-Agent Messaging](./0021-agent-to-agent-messaging.md) — channel messaging (out of scope for this RFC)
+- [RFC-0026: Suspension Propagation & Retry](./0026-suspension-container-interaction.md) — upstream suspension rejection
 - [Temporal Activity Input/Output](https://docs.temporal.io/activities) — reference design for typed activity I/O
 - [Prefect Task Parameters](https://docs.prefect.io/concepts/tasks/) — reference for task input contracts

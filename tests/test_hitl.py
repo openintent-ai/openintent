@@ -1151,7 +1151,635 @@ class TestHITLExports:
         assert hasattr(openintent, "on_suspension_expired")
         assert hasattr(openintent, "on_engagement_decision")
 
-    def test_version_is_0_16_0(self):
+    def test_version_is_0_17_0(self):
         import openintent
 
-        assert openintent.__version__ == "0.16.0"
+        assert openintent.__version__ == "0.17.0"
+
+
+# ===========================================================================
+# RFC-0026: Suspension Container Interaction & Human Retry
+# ===========================================================================
+
+
+class TestHumanRetryPolicyConstruction:
+    """HumanRetryPolicy dataclass — construction and defaults."""
+
+    def test_defaults(self):
+        from openintent.models import HumanRetryPolicy
+
+        p = HumanRetryPolicy()
+        assert p.max_attempts == 3
+        assert p.interval_seconds == 3600
+        assert p.strategy == "fixed"
+        assert p.escalation_ladder == []
+        assert p.final_fallback_policy == "fail"
+
+    def test_custom_values(self):
+        from openintent.models import HumanRetryPolicy
+
+        p = HumanRetryPolicy(
+            max_attempts=5,
+            interval_seconds=900,
+            strategy="exponential",
+            final_fallback_policy="complete_with_fallback",
+        )
+        assert p.max_attempts == 5
+        assert p.interval_seconds == 900
+        assert p.strategy == "exponential"
+        assert p.final_fallback_policy == "complete_with_fallback"
+
+    def test_to_dict_no_ladder(self):
+        from openintent.models import HumanRetryPolicy
+
+        p = HumanRetryPolicy(max_attempts=2, interval_seconds=600)
+        d = p.to_dict()
+        assert d["max_attempts"] == 2
+        assert d["interval_seconds"] == 600
+        assert "escalation_ladder" not in d
+
+    def test_from_dict_round_trip(self):
+        from openintent.models import HumanRetryPolicy
+
+        raw = {
+            "max_attempts": 4,
+            "interval_seconds": 1800,
+            "strategy": "linear",
+            "final_fallback_policy": "complete_with_fallback",
+        }
+        p = HumanRetryPolicy.from_dict(raw)
+        assert p.max_attempts == 4
+        assert p.interval_seconds == 1800
+        assert p.strategy == "linear"
+        assert p.final_fallback_policy == "complete_with_fallback"
+
+    def test_from_dict_defaults_on_empty(self):
+        from openintent.models import HumanRetryPolicy
+
+        p = HumanRetryPolicy.from_dict({})
+        assert p.max_attempts == 3
+        assert p.interval_seconds == 3600
+        assert p.strategy == "fixed"
+        assert p.final_fallback_policy == "fail"
+
+
+class TestEscalationStep:
+    """EscalationStep dataclass — construction and serialization."""
+
+    def test_construction(self):
+        from openintent.models import EscalationStep
+
+        s = EscalationStep(
+            attempt=2, channel_hint="pagerduty", notify_to="on-call-team"
+        )
+        assert s.attempt == 2
+        assert s.channel_hint == "pagerduty"
+        assert s.notify_to == "on-call-team"
+        assert s.after_attempt == 2
+        assert s.channel == "pagerduty"
+        assert s.notify == "on-call-team"
+
+    def test_to_dict(self):
+        from openintent.models import EscalationStep
+
+        s = EscalationStep(attempt=3, channel_hint="slack", notify_to="#ops")
+        d = s.to_dict()
+        assert d == {"attempt": 3, "channel_hint": "slack", "notify_to": "#ops"}
+
+    def test_from_dict_round_trip(self):
+        from openintent.models import EscalationStep
+
+        raw = {
+            "attempt": 2,
+            "channel_hint": "email",
+            "notify_to": "manager@example.com",
+        }
+        s = EscalationStep.from_dict(raw)
+        assert s.attempt == 2
+        assert s.channel_hint == "email"
+        assert s.notify_to == "manager@example.com"
+
+    def test_from_dict_legacy_field_names(self):
+        """from_dict accepts legacy after_attempt/channel/notify for backwards compat."""
+        from openintent.models import EscalationStep
+
+        raw = {"after_attempt": 2, "channel": "email", "notify": "manager@example.com"}
+        s = EscalationStep.from_dict(raw)
+        assert s.attempt == 2
+        assert s.channel_hint == "email"
+        assert s.notify_to == "manager@example.com"
+
+
+class TestHumanRetryPolicyWithLadder:
+    """HumanRetryPolicy with an escalation_ladder."""
+
+    def test_with_ladder(self):
+        from openintent.models import EscalationStep, HumanRetryPolicy
+
+        p = HumanRetryPolicy(
+            max_attempts=3,
+            interval_seconds=300,
+            escalation_ladder=[
+                EscalationStep(attempt=2, channel_hint="pagerduty", notify_to="ops"),
+            ],
+        )
+        d = p.to_dict()
+        assert "escalation_ladder" in d
+        assert d["escalation_ladder"][0]["attempt"] == 2
+        assert d["escalation_ladder"][0]["channel_hint"] == "pagerduty"
+
+    def test_from_dict_with_ladder(self):
+        from openintent.models import HumanRetryPolicy
+
+        raw = {
+            "max_attempts": 3,
+            "interval_seconds": 300,
+            "strategy": "fixed",
+            "final_fallback_policy": "fail",
+            "escalation_ladder": [
+                {"attempt": 2, "channel_hint": "slack", "notify_to": "#ops"},
+            ],
+        }
+        p = HumanRetryPolicy.from_dict(raw)
+        assert len(p.escalation_ladder) == 1
+        assert p.escalation_ladder[0].attempt == 2
+        assert p.escalation_ladder[0].channel_hint == "slack"
+
+
+class TestSuspensionRecordRetryPolicy:
+    """SuspensionRecord.retry_policy field (RFC-0026)."""
+
+    def test_retry_policy_none_by_default(self):
+        from openintent.models import SuspensionRecord
+
+        s = SuspensionRecord(id="x", question="q?")
+        assert s.retry_policy is None
+
+    def test_retry_policy_set(self):
+        from openintent.models import HumanRetryPolicy, SuspensionRecord
+
+        p = HumanRetryPolicy(max_attempts=2, interval_seconds=120)
+        s = SuspensionRecord(id="x", question="q?", retry_policy=p)
+        assert s.retry_policy is p
+
+    def test_to_dict_includes_retry_policy(self):
+        from openintent.models import HumanRetryPolicy, SuspensionRecord
+
+        p = HumanRetryPolicy(max_attempts=2)
+        s = SuspensionRecord(id="abc", question="Approve?", retry_policy=p)
+        d = s.to_dict()
+        assert "retry_policy" in d
+        assert d["retry_policy"]["max_attempts"] == 2
+
+    def test_to_dict_no_retry_policy_omits_key(self):
+        from openintent.models import SuspensionRecord
+
+        s = SuspensionRecord(id="abc", question="Approve?")
+        d = s.to_dict()
+        assert "retry_policy" not in d
+
+    def test_from_dict_with_retry_policy(self):
+        from openintent.models import SuspensionRecord
+
+        raw = {
+            "id": "abc",
+            "question": "Approve?",
+            "fallback_policy": "fail",
+            "retry_policy": {
+                "max_attempts": 3,
+                "interval_seconds": 600,
+                "strategy": "fixed",
+                "final_fallback_policy": "complete_with_fallback",
+            },
+        }
+        s = SuspensionRecord.from_dict(raw)
+        assert s.retry_policy is not None
+        assert s.retry_policy.max_attempts == 3
+        assert s.retry_policy.final_fallback_policy == "complete_with_fallback"
+
+    def test_from_dict_without_retry_policy(self):
+        from openintent.models import SuspensionRecord
+
+        raw = {"id": "abc", "question": "Approve?", "fallback_policy": "fail"}
+        s = SuspensionRecord.from_dict(raw)
+        assert s.retry_policy is None
+
+
+class TestEventTypeRFC0026:
+    """RFC-0026 EventType constants."""
+
+    def test_renotified_event(self):
+        from openintent.models import EventType
+
+        assert EventType.INTENT_SUSPENSION_RENOTIFIED == "intent.suspension_renotified"
+
+    def test_escalated_event(self):
+        from openintent.models import EventType
+
+        assert EventType.INTENT_SUSPENSION_ESCALATED == "intent.suspension_escalated"
+
+    def test_portfolio_member_suspended(self):
+        from openintent.models import EventType
+
+        assert EventType.PORTFOLIO_MEMBER_SUSPENDED == "portfolio.member_suspended"
+
+    def test_portfolio_member_resumed(self):
+        from openintent.models import EventType
+
+        assert EventType.PORTFOLIO_MEMBER_RESUMED == "portfolio.member_resumed"
+
+    def test_rfc0026_events_in_enum(self):
+        from openintent.models import EventType
+
+        values = {e.value for e in EventType}
+        assert "intent.suspension_renotified" in values
+        assert "intent.suspension_escalated" in values
+        assert "portfolio.member_suspended" in values
+        assert "portfolio.member_resumed" in values
+
+
+class TestRequestInputRetryPolicy:
+    """request_input() accepts retry_policy parameter (RFC-0026)."""
+
+    def test_request_input_signature_accepts_retry_policy(self):
+        import inspect
+
+        from openintent.agents import BaseAgent
+
+        sig = inspect.signature(BaseAgent.request_input)
+        assert "retry_policy" in sig.parameters
+
+    def test_retry_policy_default_is_none(self):
+        import inspect
+
+        from openintent.agents import BaseAgent
+
+        sig = inspect.signature(BaseAgent.request_input)
+        p = sig.parameters["retry_policy"]
+        assert p.default is None
+
+
+class TestBaseAgentDefaultHumanRetryPolicy:
+    """BaseAgent.default_human_retry_policy class attribute (RFC-0026)."""
+
+    def test_default_is_none(self):
+        from openintent.agents import BaseAgent
+
+        assert BaseAgent.default_human_retry_policy is None
+
+    def test_can_set_on_subclass(self):
+        from openintent.agents import BaseAgent
+        from openintent.models import HumanRetryPolicy
+
+        class MyAgent(BaseAgent):
+            default_human_retry_policy = HumanRetryPolicy(
+                max_attempts=4, interval_seconds=600
+            )
+
+        assert MyAgent.default_human_retry_policy is not None
+        assert MyAgent.default_human_retry_policy.max_attempts == 4
+
+    def test_subclass_policy_does_not_affect_base(self):
+        from openintent.agents import BaseAgent
+        from openintent.models import HumanRetryPolicy
+
+        class MyAgent(BaseAgent):
+            default_human_retry_policy = HumanRetryPolicy(max_attempts=2)
+
+        assert BaseAgent.default_human_retry_policy is None
+
+
+class TestRFC0026PackageExports:
+    """RFC-0026 symbols are exported from the openintent top-level package."""
+
+    def test_human_retry_policy_exported(self):
+        import openintent
+
+        assert hasattr(openintent, "HumanRetryPolicy")
+
+    def test_escalation_step_exported(self):
+        import openintent
+
+        assert hasattr(openintent, "EscalationStep")
+
+    def test_upstream_intent_suspended_error_exported(self):
+        import openintent
+
+        assert hasattr(openintent, "UpstreamIntentSuspendedError")
+
+    def test_human_retry_policy_instantiable_from_package(self):
+        import openintent
+
+        p = openintent.HumanRetryPolicy(max_attempts=2, interval_seconds=300)
+        assert p.max_attempts == 2
+
+    def test_event_types_renotified_exported(self):
+        import openintent
+
+        assert (
+            openintent.EventType.INTENT_SUSPENSION_RENOTIFIED
+            == "intent.suspension_renotified"
+        )
+
+    def test_event_types_escalated_exported(self):
+        import openintent
+
+        assert (
+            openintent.EventType.INTENT_SUSPENSION_ESCALATED
+            == "intent.suspension_escalated"
+        )
+
+
+class TestRenotificationHandlerInvocation:
+    """RFC-0026: re-notification fires @on_input_requested with attempt data in suspension.context."""
+
+    def test_suspension_context_attempt_key_structure(self):
+        """Verify _attempt/_max_attempts context keys match RFC-0026 spec (not _renotify dict)."""
+        from openintent.models import HumanRetryPolicy, SuspensionRecord
+
+        p = HumanRetryPolicy(max_attempts=3, interval_seconds=60)
+        s = SuspensionRecord(
+            id="x", question="q?", retry_policy=p, context={"foo": "bar"}
+        )
+
+        import dataclasses
+
+        renotify_context = dict(s.context)
+        renotify_context["_attempt"] = 2
+        renotify_context["_max_attempts"] = 3
+        renotify_suspension = dataclasses.replace(s, context=renotify_context)
+
+        assert renotify_suspension.context["_attempt"] == 2
+        assert renotify_suspension.context["_max_attempts"] == 3
+        assert renotify_suspension.context["foo"] == "bar"
+
+    def test_escalation_channel_hint_applied_to_suspension(self):
+        """Escalation step channel_hint is applied on re-notification suspension."""
+        from openintent.models import EscalationStep, HumanRetryPolicy, SuspensionRecord
+
+        p = HumanRetryPolicy(
+            max_attempts=3,
+            interval_seconds=60,
+            escalation_ladder=[
+                EscalationStep(
+                    attempt=2, channel_hint="pagerduty", notify_to="on-call"
+                ),
+            ],
+        )
+        s = SuspensionRecord(id="x", question="q?", retry_policy=p)
+
+        import dataclasses
+
+        step = p.escalation_ladder[0]
+        renotify_context = dict(s.context)
+        renotify_context["_attempt"] = 2
+        renotify_context["_max_attempts"] = 3
+        renotify_context["_notify_to"] = step.notify_to
+        renotify_suspension = dataclasses.replace(
+            s,
+            context=renotify_context,
+            channel_hint=step.channel_hint,
+        )
+
+        assert renotify_suspension.channel_hint == "pagerduty"
+        assert renotify_suspension.context["_notify_to"] == "on-call"
+        assert renotify_suspension.context["_attempt"] == 2
+
+    def test_original_suspension_context_unchanged(self):
+        """The original suspension.context should not be mutated during re-notification."""
+        from openintent.models import HumanRetryPolicy, SuspensionRecord
+
+        original_ctx = {"original_key": "original_value"}
+        p = HumanRetryPolicy(max_attempts=2, interval_seconds=10)
+        s = SuspensionRecord(
+            id="x", question="q?", retry_policy=p, context=original_ctx
+        )
+
+        import dataclasses
+
+        renotify_context = dict(s.context)
+        renotify_context["_attempt"] = 2
+        renotify_context["_max_attempts"] = 2
+        _renotify_suspension = dataclasses.replace(s, context=renotify_context)
+
+        assert s.context == {"original_key": "original_value"}
+        assert "_attempt" not in s.context
+
+    def test_handler_receives_same_signature_on_renotify(self):
+        """Handlers receive (intent, suspension) — same signature for first call and re-notifies."""
+        from openintent.models import HumanRetryPolicy, SuspensionRecord
+
+        received_args = []
+
+        async def my_handler(intent, suspension_record):
+            received_args.append((intent, suspension_record))
+
+        p = HumanRetryPolicy(max_attempts=3, interval_seconds=60)
+        s = SuspensionRecord(id="x", question="q?", retry_policy=p)
+
+        import asyncio
+        import dataclasses
+
+        renotify_suspension = dataclasses.replace(
+            s, context={"_attempt": 2, "_max_attempts": 3}
+        )
+
+        asyncio.run(my_handler("mock_intent", renotify_suspension))
+
+        assert len(received_args) == 1
+        _intent, susp = received_args[0]
+        assert susp.context["_attempt"] == 2
+
+    def test_handler_can_read_attempt_from_context_rfc0026_example(self):
+        """Handlers can read _attempt from context per RFC-0026 example code."""
+        from openintent.models import HumanRetryPolicy, SuspensionRecord
+
+        p = HumanRetryPolicy(max_attempts=3, interval_seconds=60)
+        s = SuspensionRecord(id="x", question="q?", retry_policy=p)
+
+        import dataclasses
+
+        renotify_suspension = dataclasses.replace(
+            s, context={"_attempt": 2, "_max_attempts": 3}
+        )
+
+        attempt = renotify_suspension.context.get("_attempt", 1)
+        max_att = renotify_suspension.context.get("_max_attempts", 1)
+        assert attempt == 2
+        assert max_att == 3
+
+
+class TestPlatformLevelCascade:
+    """RFC-0026 §5.3: three-level retry policy cascade: call-site > agent > platform."""
+
+    def test_server_config_suspension_field(self):
+        """ServerConfig supports suspension_default_retry_policy field."""
+        from openintent.server.config import ServerConfig
+
+        cfg = ServerConfig(
+            suspension_default_retry_policy={
+                "max_attempts": 3,
+                "interval_seconds": 1800,
+                "strategy": "linear",
+                "escalation_ladder": [],
+                "final_fallback_policy": "fail",
+            }
+        )
+        assert cfg.suspension_default_retry_policy["max_attempts"] == 3
+        assert cfg.suspension_default_retry_policy["interval_seconds"] == 1800
+
+    def test_server_config_suspension_default_none(self):
+        """ServerConfig.suspension_default_retry_policy is None by default."""
+        from openintent.server.config import ServerConfig
+
+        cfg = ServerConfig()
+        assert cfg.suspension_default_retry_policy is None
+
+    def test_human_retry_policy_from_dict_roundtrip(self):
+        """HumanRetryPolicy.from_dict can deserialise a ServerConfig policy dict."""
+        from openintent.models import HumanRetryPolicy
+
+        raw = {
+            "max_attempts": 4,
+            "interval_seconds": 900,
+            "strategy": "linear",
+            "escalation_ladder": [
+                {
+                    "after_attempt": 3,
+                    "channel": "pagerduty",
+                    "notify": "ops@example.com",
+                },
+            ],
+            "final_fallback_policy": "fail",
+        }
+        policy = HumanRetryPolicy.from_dict(raw)
+        assert policy.max_attempts == 4
+        assert policy.interval_seconds == 900
+        assert len(policy.escalation_ladder) == 1
+        assert policy.escalation_ladder[0].channel == "pagerduty"
+
+    def test_expires_at_safeguard_interval_zero(self):
+        """When interval_seconds=0 and max_attempts=1, timeout_seconds is used for expiry."""
+        from datetime import datetime, timedelta
+
+        from openintent.models import HumanRetryPolicy
+
+        p = HumanRetryPolicy(max_attempts=1, interval_seconds=0)
+        timeout_seconds = 300
+        now = datetime.utcnow()
+        total_seconds = p.interval_seconds * p.max_attempts
+        if total_seconds > 0:
+            expires_at = now + timedelta(seconds=total_seconds)
+        elif timeout_seconds is not None:
+            expires_at = now + timedelta(seconds=timeout_seconds)
+        else:
+            expires_at = None
+
+        assert expires_at is not None
+        delta = (expires_at - now).total_seconds()
+        assert abs(delta - 300) < 2
+
+    def test_renotification_event_payload_fields(self):
+        """intent.suspension_renotified payload uses RFC-0026 field names."""
+        payload = {
+            "suspension_id": "susp-123",
+            "attempt": 2,
+            "max_attempts": 3,
+            "channel_hint": "email",
+            "notify_to": None,
+            "next_attempt_at": "2026-03-24T11:00:00Z",
+        }
+        assert "channel_hint" in payload
+        assert "notify_to" in payload
+        assert "next_attempt_at" in payload
+        assert "channel" not in payload
+
+    def test_escalation_event_payload_fields(self):
+        """intent.suspension_escalated payload uses RFC-0026 field names."""
+        payload = {
+            "suspension_id": "susp-123",
+            "attempt": 3,
+            "escalated_to": "supervisor@example.com",
+            "channel_hint": "pagerduty",
+        }
+        assert "escalated_to" in payload
+        assert "channel_hint" in payload
+        assert "notify" not in payload
+
+
+class TestMergeRetryPolicies:
+    """RFC-0026: _merge_retry_policies field-level merge logic."""
+
+    def test_all_none_returns_none(self):
+        from openintent.agents import _merge_retry_policies
+
+        result = _merge_retry_policies(
+            call_site=None, agent_default=None, platform_default=None
+        )
+        assert result is None
+
+    def test_single_policy_returned_as_is(self):
+        from openintent.agents import _merge_retry_policies
+        from openintent.models import HumanRetryPolicy
+
+        p = HumanRetryPolicy(max_attempts=5)
+        result = _merge_retry_policies(
+            call_site=p, agent_default=None, platform_default=None
+        )
+        assert result is p
+
+    def test_call_site_overrides_platform_max_attempts(self):
+        from openintent.agents import _merge_retry_policies
+        from openintent.models import HumanRetryPolicy
+
+        platform = HumanRetryPolicy(max_attempts=3, interval_seconds=3600)
+        call = HumanRetryPolicy(max_attempts=5)
+        result = _merge_retry_policies(
+            call_site=call, agent_default=None, platform_default=platform
+        )
+        assert result is not None
+        assert result.max_attempts == 5
+        assert result.interval_seconds == 3600
+
+    def test_agent_inherits_platform_interval(self):
+        from openintent.agents import _merge_retry_policies
+        from openintent.models import HumanRetryPolicy
+
+        platform = HumanRetryPolicy(max_attempts=3, interval_seconds=1800)
+        agent = HumanRetryPolicy(max_attempts=2)
+        result = _merge_retry_policies(
+            call_site=None, agent_default=agent, platform_default=platform
+        )
+        assert result is not None
+        assert result.max_attempts == 2
+        assert result.interval_seconds == 1800
+
+    def test_call_site_escalation_ladder_overrides_lower_levels(self):
+        from openintent.agents import _merge_retry_policies
+        from openintent.models import EscalationStep, HumanRetryPolicy
+
+        platform = HumanRetryPolicy(
+            escalation_ladder=[EscalationStep(attempt=2, channel_hint="email")]
+        )
+        call = HumanRetryPolicy(
+            escalation_ladder=[EscalationStep(attempt=3, channel_hint="pagerduty")]
+        )
+        result = _merge_retry_policies(
+            call_site=call, agent_default=None, platform_default=platform
+        )
+        assert result is not None
+        assert len(result.escalation_ladder) == 1
+        assert result.escalation_ladder[0].attempt == 3
+        assert result.escalation_ladder[0].channel_hint == "pagerduty"
+
+    def test_platform_only_returns_platform(self):
+        from openintent.agents import _merge_retry_policies
+        from openintent.models import HumanRetryPolicy
+
+        platform = HumanRetryPolicy(max_attempts=4, interval_seconds=900)
+        result = _merge_retry_policies(
+            call_site=None, agent_default=None, platform_default=platform
+        )
+        assert result is not None
+        assert result.max_attempts == 4
+        assert result.interval_seconds == 900

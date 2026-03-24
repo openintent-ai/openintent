@@ -136,6 +136,42 @@ class UnresolvableInputError(WorkflowError):
         )
 
 
+class UpstreamIntentSuspendedError(WorkflowError):
+    """Raised at claim time when a declared input references an upstream phase
+    whose intent is currently ``suspended_awaiting_input``.
+
+    Per RFC-0026 §4, an agent MUST NOT proceed with task execution while an
+    upstream producer intent is suspended — the executor should defer the claim
+    until the upstream intent resumes.
+
+    Attributes:
+        task_id: The ID of the task whose claim was rejected.
+        phase_name: The name of the phase definition.
+        suspended_intent_id: The intent ID of the upstream suspended producer.
+        expected_resume_at: ISO-8601 string estimate of when the upstream intent
+            will resume, or None if unknown.
+    """
+
+    def __init__(
+        self,
+        task_id: str,
+        phase_name: str,
+        suspended_intent_id: str,
+        expected_resume_at: Optional[str] = None,
+    ):
+        self.task_id = task_id
+        self.phase_name = phase_name
+        self.suspended_intent_id = suspended_intent_id
+        self.expected_resume_at = expected_resume_at
+        msg = (
+            f"Task claim deferred for task '{task_id}' (phase '{phase_name}'): "
+            f"upstream intent '{suspended_intent_id}' is suspended_awaiting_input"
+        )
+        if expected_resume_at:
+            msg = f"{msg} (expected resume: {expected_resume_at})"
+        super().__init__(msg)
+
+
 class InputWiringError(WorkflowValidationError):
     """Raised at workflow validation time when an inputs declaration is
     structurally invalid — e.g. referencing a phase not in depends_on,
@@ -1113,12 +1149,21 @@ class WorkflowSpec:
         trigger_payload: Optional[dict[str, Any]] = None,
         initial_state: Optional[dict[str, Any]] = None,
         task_id: str = "",
+        upstream_intents_status: Optional[dict[str, dict[str, Any]]] = None,
     ) -> None:
         """Validate that all declared inputs are resolvable at claim time.
 
-        This is the executor's claim-time check (RFC-0024 §3.1).  Call this
-        when an agent attempts to claim a task.  Raises ``UnresolvableInputError``
+        This is the executor's claim-time check (RFC-0024 §3.1 / RFC-0026 §4).
+        Call this when an agent attempts to claim a task.  Raises a typed error
         if the claim should be rejected; returns ``None`` if the claim is safe.
+
+        RFC-0026: If ``upstream_intents_status`` is provided, this method checks
+        whether any upstream phase whose outputs are referenced by the current
+        phase's inputs has a corresponding intent that is currently
+        ``suspended_awaiting_input``.  When such a phase is found,
+        ``UpstreamIntentSuspendedError`` is raised **before** the resolvability
+        check, because the upstream outputs may exist but the producer intent is
+        paused and may mutate its outputs upon resume.
 
         Args:
             phase_name: The name of the phase being claimed.
@@ -1127,10 +1172,42 @@ class WorkflowSpec:
             trigger_payload: Optional trigger payload for ``$trigger.*`` refs.
             initial_state: Optional initial state for ``$initial_state.*`` refs.
             task_id: Optional task ID for error messages.
+            upstream_intents_status: Optional map of
+                ``{phase_name: {"status": str, "intent_id": str,
+                "expected_resume_at": str | None}}`` describing the current
+                intent status for each upstream phase.  When a referenced
+                upstream phase's status is ``"suspended_awaiting_input"``,
+                ``UpstreamIntentSuspendedError`` is raised.
 
         Raises:
+            UpstreamIntentSuspendedError: If any referenced upstream phase's
+                intent is currently suspended (RFC-0026).
             UnresolvableInputError: If any declared input cannot be resolved.
         """
+        # RFC-0026: Check for upstream suspension before resolvability
+        if upstream_intents_status:
+            phase = next((p for p in self.phases if p.name == phase_name), None)
+            if phase and phase.inputs:
+                for _local_key, mapping_expr in phase.inputs.items():
+                    if not isinstance(mapping_expr, str):
+                        continue
+                    parts = mapping_expr.split(".", 1)
+                    if len(parts) != 2 or parts[0].startswith("$"):
+                        continue
+                    upstream_phase_name = parts[0]
+                    intent_info = upstream_intents_status.get(upstream_phase_name)
+                    if intent_info is None:
+                        continue
+                    if intent_info.get("status") == "suspended_awaiting_input":
+                        raise UpstreamIntentSuspendedError(
+                            task_id=task_id,
+                            phase_name=phase_name,
+                            suspended_intent_id=intent_info.get(
+                                "intent_id", upstream_phase_name
+                            ),
+                            expected_resume_at=intent_info.get("expected_resume_at"),
+                        )
+
         self.resolve_task_inputs(
             phase_name=phase_name,
             upstream_outputs=upstream_outputs,

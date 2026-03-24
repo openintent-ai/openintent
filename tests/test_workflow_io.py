@@ -1371,3 +1371,221 @@ class TestRFC0024Exports:
         import openintent
 
         assert hasattr(openintent, "PhaseConfig")
+
+
+# ===========================================================================
+# RFC-0026: UpstreamIntentSuspendedError
+# ===========================================================================
+
+
+class TestUpstreamIntentSuspendedError:
+    """UpstreamIntentSuspendedError — construction and attributes."""
+
+    def test_construction_basic(self):
+        from openintent.workflow import UpstreamIntentSuspendedError
+
+        e = UpstreamIntentSuspendedError(
+            task_id="task_01",
+            phase_name="run_analysis",
+            suspended_intent_id="intent_abc",
+        )
+        assert e.task_id == "task_01"
+        assert e.phase_name == "run_analysis"
+        assert e.suspended_intent_id == "intent_abc"
+        assert e.expected_resume_at is None
+
+    def test_construction_with_resume_estimate(self):
+        from openintent.workflow import UpstreamIntentSuspendedError
+
+        e = UpstreamIntentSuspendedError(
+            task_id="task_02",
+            phase_name="generate_report",
+            suspended_intent_id="intent_xyz",
+            expected_resume_at="2026-03-24T15:00:00Z",
+        )
+        assert e.expected_resume_at == "2026-03-24T15:00:00Z"
+
+    def test_message_contains_intent_id(self):
+        from openintent.workflow import UpstreamIntentSuspendedError
+
+        e = UpstreamIntentSuspendedError(
+            task_id="t", phase_name="p", suspended_intent_id="intent_abc"
+        )
+        assert "intent_abc" in str(e)
+
+    def test_message_contains_resume_estimate(self):
+        from openintent.workflow import UpstreamIntentSuspendedError
+
+        e = UpstreamIntentSuspendedError(
+            task_id="t",
+            phase_name="p",
+            suspended_intent_id="intent_abc",
+            expected_resume_at="2026-03-24T15:00:00Z",
+        )
+        assert "2026-03-24T15:00:00Z" in str(e)
+
+    def test_is_workflow_error(self):
+        from openintent.workflow import UpstreamIntentSuspendedError, WorkflowError
+
+        e = UpstreamIntentSuspendedError(
+            task_id="t", phase_name="p", suspended_intent_id="i"
+        )
+        assert isinstance(e, WorkflowError)
+
+    def test_is_exception(self):
+        from openintent.workflow import UpstreamIntentSuspendedError
+
+        e = UpstreamIntentSuspendedError(
+            task_id="t", phase_name="p", suspended_intent_id="i"
+        )
+        assert isinstance(e, Exception)
+
+    def test_can_be_caught_as_workflow_error(self):
+        from openintent.workflow import UpstreamIntentSuspendedError, WorkflowError
+
+        with pytest.raises(WorkflowError):
+            raise UpstreamIntentSuspendedError(
+                task_id="t", phase_name="p", suspended_intent_id="i"
+            )
+
+    def test_exported_from_openintent_package(self):
+        import openintent
+
+        assert hasattr(openintent, "UpstreamIntentSuspendedError")
+
+    def test_instantiable_from_package(self):
+        import openintent
+
+        e = openintent.UpstreamIntentSuspendedError(
+            task_id="t", phase_name="p", suspended_intent_id="i"
+        )
+        assert isinstance(e, openintent.WorkflowError)
+
+
+class TestValidateClaimInputsUpstreamSuspension:
+    """validate_claim_inputs() raises UpstreamIntentSuspendedError when upstream is suspended (RFC-0026)."""
+
+    _WORKFLOW = """\
+openintent: "1.0"
+info:
+  name: "Suspension Test"
+workflow:
+  fetch:
+    title: "Fetch"
+    assign: agent-a
+    outputs:
+      data: string
+  process:
+    title: "Process"
+    assign: agent-b
+    depends_on: [fetch]
+    inputs:
+      processed_data: fetch.data
+    outputs:
+      result: string
+"""
+
+    def test_raises_when_upstream_suspended(self, tmp_path):
+        from openintent.workflow import UpstreamIntentSuspendedError, WorkflowSpec
+
+        spec = WorkflowSpec.from_string(self._WORKFLOW)
+        with pytest.raises(UpstreamIntentSuspendedError) as exc_info:
+            spec.validate_claim_inputs(
+                phase_name="process",
+                upstream_outputs={"fetch": {"data": "hello"}},
+                task_id="task_process",
+                upstream_intents_status={
+                    "fetch": {
+                        "status": "suspended_awaiting_input",
+                        "intent_id": "intent_fetch_001",
+                        "expected_resume_at": None,
+                    }
+                },
+            )
+        e = exc_info.value
+        assert e.task_id == "task_process"
+        assert e.phase_name == "process"
+        assert e.suspended_intent_id == "intent_fetch_001"
+        assert e.expected_resume_at is None
+
+    def test_raises_with_resume_estimate(self, tmp_path):
+        from openintent.workflow import UpstreamIntentSuspendedError, WorkflowSpec
+
+        spec = WorkflowSpec.from_string(self._WORKFLOW)
+        with pytest.raises(UpstreamIntentSuspendedError) as exc_info:
+            spec.validate_claim_inputs(
+                phase_name="process",
+                upstream_outputs={"fetch": {"data": "hello"}},
+                task_id="task_process",
+                upstream_intents_status={
+                    "fetch": {
+                        "status": "suspended_awaiting_input",
+                        "intent_id": "intent_fetch_001",
+                        "expected_resume_at": "2026-03-24T15:00:00Z",
+                    }
+                },
+            )
+        assert exc_info.value.expected_resume_at == "2026-03-24T15:00:00Z"
+
+    def test_does_not_raise_when_upstream_active(self, tmp_path):
+        from openintent.workflow import WorkflowSpec
+
+        spec = WorkflowSpec.from_string(self._WORKFLOW)
+        # Should not raise — upstream is active, outputs available
+        result = spec.validate_claim_inputs(
+            phase_name="process",
+            upstream_outputs={"fetch": {"data": "hello"}},
+            task_id="task_process",
+            upstream_intents_status={
+                "fetch": {
+                    "status": "active",
+                    "intent_id": "intent_fetch_001",
+                    "expected_resume_at": None,
+                }
+            },
+        )
+        assert result is None
+
+    def test_does_not_raise_when_status_map_absent(self, tmp_path):
+        from openintent.workflow import WorkflowSpec
+
+        spec = WorkflowSpec.from_string(self._WORKFLOW)
+        # Backwards compat: if no upstream_intents_status provided, behaves as before
+        result = spec.validate_claim_inputs(
+            phase_name="process",
+            upstream_outputs={"fetch": {"data": "hello"}},
+            task_id="task_process",
+        )
+        assert result is None
+
+    def test_trigger_refs_ignored(self, tmp_path):
+        """$trigger.* references should not trigger suspension check."""
+        from openintent.workflow import WorkflowSpec
+
+        workflow_yaml = """\
+openintent: "1.0"
+info:
+  name: "Trigger Test"
+workflow:
+  process:
+    title: "Process"
+    assign: agent-b
+    inputs:
+      quarter: $trigger.quarter
+"""
+        spec = WorkflowSpec.from_string(workflow_yaml)
+        # Should not raise even if upstream_intents_status maps $trigger somehow
+        result = spec.validate_claim_inputs(
+            phase_name="process",
+            upstream_outputs={},
+            trigger_payload={"quarter": "Q1"},
+            task_id="task_process",
+            upstream_intents_status={
+                "trigger": {
+                    "status": "suspended_awaiting_input",
+                    "intent_id": "intent_trigger",
+                    "expected_resume_at": None,
+                }
+            },
+        )
+        assert result is None

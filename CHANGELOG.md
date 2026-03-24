@@ -5,6 +5,35 @@ All notable changes to the OpenIntent SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-03-24
+
+### Added
+
+- **RFC-0026: Suspension Propagation & Retry** — Closes three gaps left by RFC-0025.
+
+  - **Container propagation rules (5 normative rules)** — Intent graph: suspended child blocks dependents; parent aggregate status becomes `suspended_awaiting_input` when any child is suspended. Portfolio: aggregate gains `has_suspended_members`/`suspended_member_count`; `portfolio.member_suspended` / `portfolio.member_resumed` events. Plan/Task: bidirectional mirror — when an intent suspends, its task transitions to `blocked` with `blocked_reason: "intent_suspended"` and `suspended_intent_id`; plan progress gains `suspended_tasks`. Workflow: downstream phases receive `UpstreamIntentSuspendedError` at claim time; workflow progress gains `suspended_phases`. Deadline: suspension deadline governs expiry and MUST NOT exceed portfolio `due_before` constraint.
+  - **`HumanRetryPolicy` dataclass** — Re-notification and escalation policy with `max_attempts`, `interval_seconds`, `strategy` (`"fixed"` / `"linear"` / `"exponential"`), `escalation_ladder` (list of `EscalationStep`), and `final_fallback_policy`. Serialises to/from dict via `to_dict()` / `from_dict()`.
+  - **`EscalationStep` dataclass** — A single escalation step with `attempt`, `channel_hint`, and `notify_to`. Triggers `intent.suspension_escalated` event. Backwards-compatible aliases: `after_attempt`, `channel`, `notify`.
+  - **`UpstreamIntentSuspendedError`** — Raised by `WorkflowSpec.validate_claim_inputs()` when a declared input references an upstream phase whose intent is currently `suspended_awaiting_input`. Carries `task_id`, `phase_name`, `suspended_intent_id`, `expected_resume_at`. Subclass of `WorkflowError`.
+  - **`BaseAgent.default_human_retry_policy`** — Class-level or instance-level attribute (`None` by default). Applied to all `request_input()` calls that do not supply an explicit `retry_policy` argument.
+  - **`request_input(retry_policy=…)` parameter** — Accepts a `HumanRetryPolicy`. When supplied, the SDK re-fires `@on_input_requested` hooks on each attempt, emits `intent.suspension_renotified` per attempt, emits `intent.suspension_escalated` for escalation steps, and applies `final_fallback_policy` after all attempts are exhausted.
+  - **Three-level policy cascade** — call-site policy → `default_human_retry_policy` on the agent → server-configured platform default (`GET /api/v1/server/config` → `suspension.default_retry_policy`).
+  - **Four new `EventType` constants** — `intent.suspension_renotified`, `intent.suspension_escalated`, `portfolio.member_suspended`, `portfolio.member_resumed`.
+  - **`retry_policy` field on `SuspensionRecord`** — Optional; additive; existing single-attempt behaviour preserved when absent.
+  - **RFC-0026 protocol document** — `docs/rfcs/0026-suspension-container-interaction.md` with five container rules, `HumanRetryPolicy` schema, three-level cascade, coordinator policy extension, RFC-0010 relationship note, end-to-end example, and cross-RFC patch summary.
+  - **Cross-RFC patches** — RFC-0002 (aggregate `suspended_awaiting_input` status counter and completion-gate clarification), RFC-0007 (portfolio suspension-aware aggregate and events), RFC-0010 (RFC-0026 relationship note), RFC-0012 (task/intent suspension mirror, `suspended_tasks` plan progress field), RFC-0024 (`UpstreamIntentSuspendedError`, `suspended_phases` workflow progress field), RFC-0025 (`retry_policy` on `SuspensionRecord`, per-attempt `timeout_seconds` semantics, `fallback_policy` alias note, extended cross-RFC table).
+  - **41 new tests** — `tests/test_hitl.py` (`HumanRetryPolicy`, `EscalationStep`, `SuspensionRecord.retry_policy`, new `EventType` constants, `request_input` signature, `BaseAgent.default_human_retry_policy`, package exports) and `tests/test_workflow_io.py` (`UpstreamIntentSuspendedError` construction, attributes, hierarchy, package export).
+  - **Package exports** — `HumanRetryPolicy`, `EscalationStep`, `UpstreamIntentSuspendedError` exported from `openintent` top-level.
+
+### Updated
+
+- `SuspensionRecord.fallback_policy` documented as alias for `retry_policy.final_fallback_policy` when `retry_policy` is set.
+- `SuspensionRecord.timeout_seconds` documented as per-attempt window when `retry_policy` is set.
+- `BaseAgent.request_input()` docstring updated to describe `retry_policy` and `default_human_retry_policy`.
+- All version references updated to 0.17.0 across Python SDK, MCP server, documentation, and changelog.
+
+---
+
 ## [0.16.0] - 2026-03-23
 
 ### Added

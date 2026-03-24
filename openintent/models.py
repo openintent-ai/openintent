@@ -195,6 +195,12 @@ class EventType(str, Enum):
     INTENT_SUSPENSION_EXPIRED = "intent.suspension_expired"
     ENGAGEMENT_DECISION = "engagement.decision"
 
+    # RFC-0026: Suspension container interaction & human retry
+    INTENT_SUSPENSION_RENOTIFIED = "intent.suspension_renotified"
+    INTENT_SUSPENSION_ESCALATED = "intent.suspension_escalated"
+    PORTFOLIO_MEMBER_SUSPENDED = "portfolio.member_suspended"
+    PORTFOLIO_MEMBER_RESUMED = "portfolio.member_resumed"
+
     # Legacy aliases for backward compatibility
     CREATED = "intent_created"
     STATE_UPDATED = "state_patched"
@@ -4125,7 +4131,7 @@ class SuspensionChoice:
 
 @dataclass
 class SuspensionRecord:
-    """A suspension record capturing the full context of an intent suspension (RFC-0025).
+    """A suspension record capturing the full context of an intent suspension (RFC-0025/RFC-0026).
 
     Fields:
         id: Unique identifier for this suspension record.
@@ -4136,10 +4142,16 @@ class SuspensionRecord:
         context: Structured context dict to help the operator decide.
         channel_hint: Preferred delivery channel (e.g. "slack", "email").
         suspended_at: ISO-8601 timestamp when the intent was suspended.
-        timeout_seconds: Seconds before the suspension expires (None = no timeout).
-        expires_at: Computed expiry timestamp (None if no timeout).
+        timeout_seconds: Per-attempt expiry window (None = no timeout).
+            When retry_policy is set, this is per-attempt; total expiry is
+            retry_policy.interval_seconds * retry_policy.max_attempts.
+        expires_at: Total deadline. When retry_policy is set:
+            suspended_at + (interval_seconds × max_attempts).
+            When retry_policy is absent: suspended_at + timeout_seconds.
         fallback_value: Value to use if fallback_policy is "complete_with_fallback".
         fallback_policy: One of "fail", "complete_with_fallback", "use_default_and_continue".
+            Alias for retry_policy.final_fallback_policy when retry_policy is set.
+        retry_policy: Optional RFC-0026 HumanRetryPolicy for re-notification & escalation.
         confidence_at_suspension: Agent confidence score at time of suspension (0.0–1.0).
         decision_record: Optional dict capturing the engagement decision rationale.
         response: The operator's response value (populated on resume).
@@ -4158,6 +4170,7 @@ class SuspensionRecord:
     expires_at: Optional[datetime] = None
     fallback_value: Optional[Any] = None
     fallback_policy: str = "fail"
+    retry_policy: Optional["HumanRetryPolicy"] = None
     confidence_at_suspension: Optional[float] = None
     decision_record: Optional[dict[str, Any]] = None
     response: Optional[Any] = None
@@ -4193,6 +4206,8 @@ class SuspensionRecord:
             result["expires_at"] = self.expires_at.isoformat()
         if self.fallback_value is not None:
             result["fallback_value"] = self.fallback_value
+        if self.retry_policy is not None:
+            result["retry_policy"] = self.retry_policy.to_dict()
         if self.confidence_at_suspension is not None:
             result["confidence_at_suspension"] = self.confidence_at_suspension
         if self.decision_record is not None:
@@ -4218,6 +4233,9 @@ class SuspensionRecord:
             responded_at = datetime.fromisoformat(data["responded_at"])
         choices_raw = data.get("choices", [])
         choices = [SuspensionChoice.from_dict(c) for c in choices_raw]
+        retry_policy = None
+        if data.get("retry_policy"):
+            retry_policy = HumanRetryPolicy.from_dict(data["retry_policy"])
         return cls(
             id=data.get("id", ""),
             question=data.get("question", ""),
@@ -4230,6 +4248,7 @@ class SuspensionRecord:
             expires_at=expires_at,
             fallback_value=data.get("fallback_value"),
             fallback_policy=data.get("fallback_policy", "fail"),
+            retry_policy=retry_policy,
             confidence_at_suspension=data.get("confidence_at_suspension"),
             decision_record=data.get("decision_record"),
             response=data.get("response"),
@@ -4352,4 +4371,101 @@ class InputResponse:
             responded_by=data.get("responded_by", ""),
             responded_at=responded_at,
             metadata=data.get("metadata"),
+        )
+
+
+@dataclass
+class EscalationStep:
+    """A single step in a HumanRetryPolicy escalation ladder (RFC-0026).
+
+    Fields:
+        attempt: Trigger this escalation at this attempt number (RFC-0026 field name).
+            Alias ``after_attempt`` is accepted on deserialisation for backwards compatibility.
+        channel_hint: Delivery channel to use at this step (e.g. "pagerduty", "email").
+            Alias ``channel`` is accepted on deserialisation for backwards compatibility.
+        notify_to: Identifier of the human or group to notify at this step.
+            Alias ``notify`` is accepted on deserialisation for backwards compatibility.
+    """
+
+    attempt: int
+    channel_hint: str = ""
+    notify_to: str = ""
+
+    @property
+    def after_attempt(self) -> int:
+        """Backwards-compatible alias for ``attempt``."""
+        return self.attempt
+
+    @property
+    def channel(self) -> str:
+        """Backwards-compatible alias for ``channel_hint``."""
+        return self.channel_hint
+
+    @property
+    def notify(self) -> str:
+        """Backwards-compatible alias for ``notify_to``."""
+        return self.notify_to
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "attempt": self.attempt,
+            "channel_hint": self.channel_hint,
+            "notify_to": self.notify_to,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EscalationStep":
+        attempt = data.get("attempt") or data.get("after_attempt", 1)
+        channel_hint = data.get("channel_hint") or data.get("channel", "")
+        notify_to = data.get("notify_to") or data.get("notify", "")
+        return cls(
+            attempt=attempt,
+            channel_hint=channel_hint,
+            notify_to=notify_to,
+        )
+
+
+@dataclass
+class HumanRetryPolicy:
+    """Re-notification and escalation policy for suspended intents (RFC-0026).
+
+    When attached to a SuspensionRecord, the server will re-notify the operator
+    up to `max_attempts` times, waiting `interval_seconds` between each attempt.
+    After all attempts are exhausted, `final_fallback_policy` is applied.
+
+    Fields:
+        max_attempts: Maximum number of notification attempts (including first). Default 3.
+        interval_seconds: Seconds to wait between re-notification attempts. Default 3600.
+        strategy: Back-off strategy — "fixed" | "linear" | "exponential". Default "fixed".
+        escalation_ladder: Ordered list of escalation steps triggered at specific attempts.
+        final_fallback_policy: Fallback policy after all attempts exhausted.
+            One of "fail", "complete_with_fallback", "use_default_and_continue".
+    """
+
+    max_attempts: int = 3
+    interval_seconds: int = 3600
+    strategy: str = "fixed"
+    escalation_ladder: list[EscalationStep] = field(default_factory=list)
+    final_fallback_policy: str = "fail"
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "max_attempts": self.max_attempts,
+            "interval_seconds": self.interval_seconds,
+            "strategy": self.strategy,
+            "final_fallback_policy": self.final_fallback_policy,
+        }
+        if self.escalation_ladder:
+            result["escalation_ladder"] = [s.to_dict() for s in self.escalation_ladder]
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "HumanRetryPolicy":
+        ladder_raw = data.get("escalation_ladder", [])
+        return cls(
+            max_attempts=data.get("max_attempts", 3),
+            interval_seconds=data.get("interval_seconds", 3600),
+            strategy=data.get("strategy", "fixed"),
+            escalation_ladder=[EscalationStep.from_dict(s) for s in ladder_raw],
+            final_fallback_policy=data.get("final_fallback_policy", "fail"),
         )

@@ -98,10 +98,11 @@ A `SuspensionRecord` is created by the agent and persisted in `intent.state._sus
 | `context` | object | — | Structured context for the operator |
 | `channel_hint` | string | — | Preferred delivery channel (`"slack"`, `"email"`) |
 | `suspended_at` | ISO-8601 | — | When the suspension started |
-| `timeout_seconds` | integer | — | Expiry window (omit for no timeout) |
-| `expires_at` | ISO-8601 | — | Computed from `suspended_at + timeout_seconds` |
+| `timeout_seconds` | integer | — | Per-attempt expiry window (omit for no timeout). When `retry_policy` is set, this is the per-attempt window, not the total. Total window = `interval_seconds × max_attempts`. |
+| `expires_at` | ISO-8601 | — | Total deadline: `suspended_at + (interval_seconds × max_attempts)` when `retry_policy` is set, otherwise `suspended_at + timeout_seconds`. |
 | `fallback_value` | any | — | Value for `complete_with_fallback` policy |
-| `fallback_policy` | enum | ✓ | See §6 |
+| `fallback_policy` | enum | ✓ | See §6. Alias for `retry_policy.final_fallback_policy` when `retry_policy` is set. |
+| `retry_policy` | HumanRetryPolicy | — | Re-notification and escalation policy (RFC-0026). When absent, single-attempt behaviour (original RFC-0025 semantics). |
 | `confidence_at_suspension` | float [0,1] | — | Agent confidence at suspension time |
 | `decision_record` | object | — | EngagementDecision that triggered suspension |
 | `response` | any | — | Operator's response (set on resume) |
@@ -298,3 +299,18 @@ if decision.should_ask:
 - The `response_type` field defaults to `"choice"` — suspensions created without it behave identically to pre-0.16.0 behaviour.
 - All new event types, endpoint, decorators, and structured choice fields are additive.
 - Servers that do not implement this suspension protocol will return 404 for `POST /suspend/respond`; agents SHOULD handle this gracefully.
+- RFC-0026: `retry_policy` field on `SuspensionRecord` is optional and additive. Existing `fallback_policy` field is unchanged; when `retry_policy` is absent, single-attempt behaviour is preserved.
+
+## Cross-RFC Interactions
+
+| RFC | Interaction |
+|-----|------------|
+| RFC-0001 (Intents) | Adds `suspended_awaiting_input` to the intent lifecycle |
+| RFC-0002 (Intent Graphs) | Suspended status in aggregate counter; completion gate clarified |
+| RFC-0006 (Subscriptions) | All suspension events propagate via existing subscription infrastructure |
+| RFC-0007 (Portfolios) | Portfolio aggregate gains suspension-aware fields (RFC-0026) |
+| RFC-0010 (Retry Policies) | Parallel construct: RFC-0010 retries agent failures; RFC-0026 retries human non-response |
+| RFC-0012 (Planning) | Task blocked state mirrors intent suspension bidirectionally (RFC-0026) |
+| RFC-0019 (Verifiable Logs) | Suspension events are stored in the append-only event log |
+| RFC-0024 (Workflow I/O) | validate_claim_inputs() gains upstream_intent_suspended rejection (RFC-0026) |
+| RFC-0026 (Suspension Containers) | Defines HumanRetryPolicy, three-level cascade, container rules, UpstreamIntentSuspendedError |

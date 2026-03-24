@@ -1396,6 +1396,20 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
             "openApiUrl": "/openapi.json",
         }
 
+    @app.get("/api/v1/server/config")
+    async def get_server_config():
+        """RFC-0026: Read-only introspection endpoint for platform-level server config.
+
+        Returns the platform-level suspension default retry policy (if configured) so
+        that clients can implement the three-level cascade without hard-coding defaults.
+        """
+        return {
+            "protocol_version": config.protocol_version,
+            "suspension": {
+                "default_retry_policy": config.suspension_default_retry_policy,
+            },
+        }
+
     @app.get("/.well-known/openintent-compat.json")
     async def compatibility():
         return {
