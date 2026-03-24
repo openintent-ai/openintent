@@ -106,9 +106,145 @@ Each phase in the `workflow` section supports these fields:
 | `depends_on` | list[string] | No | Phase names that must complete first |
 | `constraints` | list[string] | No | Rules/parameters for the agent |
 | `initial_state` | object | No | Initial state values |
-| `inputs` | object | No | Input mappings from dependencies |
-| `outputs` | list[string] | No | State keys to expose to dependents |
+| `inputs` | object | No | Input mappings wired by the executor before handoff (RFC-0024) |
+| `outputs` | object | No | Declared output keys and types; executor validates on completion (RFC-0024) |
 | `skip_when` | string | No | Condition expression to skip phase |
+
+### Input/Output Contracts (RFC-0024)
+
+The `inputs` and `outputs` fields establish typed I/O contracts between phases. The **executor** — not the agent — owns the wiring: it pre-populates `ctx.input` from resolved upstream outputs before calling the agent handler, and it validates the agent's return dict against declared `outputs` before marking the task complete.
+
+#### `inputs` Field
+
+`inputs` is a mapping from local key names to upstream phase output references. The executor resolves each reference and injects the value into `ctx.input` before the agent handler is called.
+
+**Syntax for input mapping values:**
+
+| Pattern | Description |
+|---------|-------------|
+| `{phase_name}.{key}` | Output key `{key}` from completed upstream phase `{phase_name}` |
+| `$trigger.{key}` | Value from the workflow trigger payload |
+| `$initial_state.{key}` | Value from the phase's `initial_state` |
+
+**Rules:**
+- Every `{phase_name}` referenced in an input mapping must appear in the phase's `depends_on` list.
+- If the upstream phase declares `outputs`, the referenced key must appear there.
+- If any declared input cannot be resolved, the executor rejects the task claim with `UnresolvableInputError`.
+
+```yaml
+workflow:
+  run_analysis:
+    title: "Run Analysis"
+    assign: analytics-agent
+    depends_on: [fetch_financials, fetch_hr_data]
+    inputs:
+      fin_revenue: fetch_financials.revenue
+      fin_expenses: fetch_financials.expenses
+      hr_headcount: fetch_hr_data.headcount
+      quarter: $trigger.quarter
+    outputs:
+      findings: array
+      risk_level: string
+      violations_found: boolean
+```
+
+The agent for `run_analysis` reads:
+```python
+revenue = ctx.input["fin_revenue"]     # from fetch_financials output
+headcount = ctx.input["hr_headcount"]  # from fetch_hr_data output
+quarter = ctx.input["quarter"]         # from trigger
+```
+
+#### `outputs` Field
+
+`outputs` declares the keys and types that the agent must return. The executor validates the agent's output dict against this declaration at completion time.
+
+**Type values** may be:
+- Primitive strings: `string`, `number`, `boolean`, `object`, `array`
+- Type names from the workflow's `types` block
+- An object with `type` and optional `required` modifier
+
+```yaml
+types:
+  Finding:
+    source: string
+    content: string
+    confidence: number
+
+workflow:
+  research:
+    title: "Research Phase"
+    assign: researcher
+    outputs:
+      sources: array
+      findings: Finding
+      summary: string
+      warnings:
+        type: array
+        required: false    # optional output — will not fail validation if absent
+```
+
+**Validation behavior:**
+- Required keys (default) must be present in the agent's return dict, or the executor raises `MissingOutputError`.
+- If a value's type does not match the declaration, the executor raises `OutputTypeMismatchError`.
+- No type coercion is performed. Validation only.
+- Extra keys returned beyond what is declared are accepted and recorded.
+
+#### End-to-End Wiring Example
+
+```yaml
+openintent: "1.0"
+
+info:
+  name: "Research Pipeline"
+
+types:
+  Finding:
+    source: string
+    content: string
+    confidence: number
+
+workflow:
+  research:
+    title: "Gather Research"
+    assign: researcher
+    inputs:
+      topic: $trigger.topic
+    outputs:
+      sources: array
+      findings: Finding
+
+  analysis:
+    title: "Analyze Findings"
+    assign: analyst
+    depends_on: [research]
+    inputs:
+      research_findings: research.findings
+      source_list: research.sources
+    outputs:
+      insights: string
+      recommendations: array
+
+  report:
+    title: "Write Report"
+    assign: writer
+    depends_on: [analysis]
+    inputs:
+      insights: analysis.insights
+      recommendations: analysis.recommendations
+    outputs:
+      report_url: string
+      report_summary: string
+```
+
+The executor guarantees:
+1. `research` is called with `ctx.input = {"topic": <trigger value>}`
+2. `analysis` is only claimable after `research` completes with both `sources` and `findings` present
+3. `analysis` is called with `ctx.input = {"research_findings": ..., "source_list": ...}`
+4. `analysis` completion is rejected if `insights` or `recommendations` are missing
+5. `report` is called with `ctx.input = {"insights": ..., "recommendations": ...}`
+
+No agent knows about the others. No agent reads raw intent state.
 
 ### RFC-Specific Phase Fields
 

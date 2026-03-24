@@ -597,7 +597,7 @@ New event types added to the intent event log:
 
 3. **Cross-portfolio task dependencies**: Should tasks be allowed to depend on tasks from intents in different portfolios, or should portfolio boundaries be strict?
 
-4. **Task output schema**: Should task definitions include expected output schemas for validation, or is this left to the agent?
+4. ~~**Task output schema**: Should task definitions include expected output schemas for validation, or is this left to the agent?~~ **Resolved by RFC-0024.** Output schemas are declared in the workflow definition (in the phase's `outputs` field), and all validation responsibility belongs to the executor. An agent receives a pre-populated `ctx.input` wired by the executor from upstream phase outputs and returns a plain dict. The executor validates that dict against declared outputs before recording task completion. See [RFC-0024: Workflow I/O Contracts](./0024-workflow-io-contracts.md).
 
 ## References
 

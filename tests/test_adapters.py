@@ -236,6 +236,102 @@ class TestOpenAIAdapter:
         mock_client.log_llm_request_completed.assert_not_called()
 
 
+class TestOpenAIAdapterMaxTokensTranslation:
+    """Tests for max_tokens → max_completion_tokens translation."""
+
+    def test_requires_max_completion_tokens_gpt5(self):
+        assert OpenAIAdapter._requires_max_completion_tokens("gpt-5-mini") is True
+        assert OpenAIAdapter._requires_max_completion_tokens("gpt-5") is True
+
+    def test_requires_max_completion_tokens_o1(self):
+        assert OpenAIAdapter._requires_max_completion_tokens("o1") is True
+        assert OpenAIAdapter._requires_max_completion_tokens("o1-mini") is True
+
+    def test_requires_max_completion_tokens_o3(self):
+        assert OpenAIAdapter._requires_max_completion_tokens("o3") is True
+        assert OpenAIAdapter._requires_max_completion_tokens("o3-mini") is True
+
+    def test_does_not_require_for_gpt4(self):
+        assert OpenAIAdapter._requires_max_completion_tokens("gpt-4") is False
+        assert OpenAIAdapter._requires_max_completion_tokens("gpt-4o") is False
+        assert OpenAIAdapter._requires_max_completion_tokens("gpt-3.5-turbo") is False
+
+    @patch("openintent.adapters.openai_adapter._check_openai_installed")
+    def test_max_tokens_remapped_for_gpt5(self, mock_check):
+        mock_openai = MagicMock()
+        mock_client = MagicMock()
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message = MagicMock()
+        mock_response.choices[0].message.content = "Hello!"
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.choices[0].finish_reason = "stop"
+        mock_response.usage = None
+        mock_openai.chat.completions.create.return_value = mock_response
+
+        adapter = OpenAIAdapter(mock_openai, mock_client, intent_id="test-intent")
+        adapter.chat.completions.create(
+            model="gpt-5-mini",
+            messages=[{"role": "user", "content": "Hello"}],
+            max_tokens=200,
+        )
+
+        call_kwargs = mock_openai.chat.completions.create.call_args[1]
+        assert "max_tokens" not in call_kwargs
+        assert call_kwargs["max_completion_tokens"] == 200
+
+    @patch("openintent.adapters.openai_adapter._check_openai_installed")
+    def test_max_completion_tokens_not_overwritten_if_already_set(self, mock_check):
+        mock_openai = MagicMock()
+        mock_client = MagicMock()
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message = MagicMock()
+        mock_response.choices[0].message.content = "Hello!"
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.choices[0].finish_reason = "stop"
+        mock_response.usage = None
+        mock_openai.chat.completions.create.return_value = mock_response
+
+        adapter = OpenAIAdapter(mock_openai, mock_client, intent_id="test-intent")
+        adapter.chat.completions.create(
+            model="gpt-5-mini",
+            messages=[{"role": "user", "content": "Hello"}],
+            max_tokens=200,
+            max_completion_tokens=500,
+        )
+
+        call_kwargs = mock_openai.chat.completions.create.call_args[1]
+        assert call_kwargs["max_completion_tokens"] == 500
+
+    @patch("openintent.adapters.openai_adapter._check_openai_installed")
+    def test_max_tokens_not_remapped_for_gpt4(self, mock_check):
+        mock_openai = MagicMock()
+        mock_client = MagicMock()
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message = MagicMock()
+        mock_response.choices[0].message.content = "Hello!"
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.choices[0].finish_reason = "stop"
+        mock_response.usage = None
+        mock_openai.chat.completions.create.return_value = mock_response
+
+        adapter = OpenAIAdapter(mock_openai, mock_client, intent_id="test-intent")
+        adapter.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": "Hello"}],
+            max_tokens=200,
+        )
+
+        call_kwargs = mock_openai.chat.completions.create.call_args[1]
+        assert call_kwargs["max_tokens"] == 200
+        assert "max_completion_tokens" not in call_kwargs
+
+
 class TestAnthropicAdapter:
     """Tests for AnthropicAdapter."""
 

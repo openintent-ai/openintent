@@ -69,3 +69,31 @@ class AuthenticationError(OpenIntentError):
     """Raised when authentication fails or API key is invalid."""
 
     pass
+
+
+class InputTimeoutError(OpenIntentError):
+    """Raised when a HITL suspension times out before an operator responds (RFC-0025)."""
+
+    def __init__(
+        self,
+        message: str,
+        suspension_id: Optional[str] = None,
+        fallback_policy: Optional[str] = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(message, **kwargs)
+        self.suspension_id = suspension_id
+        self.fallback_policy = fallback_policy
+
+
+class InputCancelledError(OpenIntentError):
+    """Raised when a HITL suspension is cancelled before an operator responds (RFC-0025)."""
+
+    def __init__(
+        self,
+        message: str,
+        suspension_id: Optional[str] = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(message, **kwargs)
+        self.suspension_id = suspension_id
