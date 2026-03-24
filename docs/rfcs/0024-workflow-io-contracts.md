@@ -645,6 +645,6 @@ This RFC does not modify:
 - [RFC-0012: Task Decomposition & Planning](./0012-task-decomposition-planning.md) — parent RFC; defines Task, Plan, TaskContext
 - [RFC-0001: Intent Objects](./0001-intent-objects.md) — intent state model
 - [RFC-0004: Intent Portfolios](./0004-governance-arbitration.md) — portfolio boundaries
-- [RFC-0021: Agent Channels](./0021-agent-channels.md) — channel messaging (out of scope for this RFC)
+- [RFC-0021: Agent-to-Agent Messaging](./0021-agent-to-agent-messaging.md) — channel messaging (out of scope for this RFC)
 - [Temporal Activity Input/Output](https://docs.temporal.io/activities) — reference design for typed activity I/O
 - [Prefect Task Parameters](https://docs.prefect.io/concepts/tasks/) — reference for task input contracts
